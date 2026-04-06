@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gumball Machine NFT — Fully On-Chain NFTs on X1</title>
+<meta name="description" content="Mint unique SVG gumball NFTs with provably fair randomness. Burn to upgrade rarity. 100% on-chain artwork. Built on X1 blockchain.">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Gumball Machine NFT">
+<meta property="og:description" content="Mint, burn, upgrade. 10,000 unique on-chain SVG gumballs with provably fair randomness.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gumball.xnt.xyz">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Gumball Machine NFT">
+<meta name="twitter:description" content="Mint, burn, upgrade. 10,000 unique on-chain SVG gumballs with provably fair randomness.">
+
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --red:#ff2244; --gold:#ffcc00; --teal:#00ffcc;
+  --purple:#cc44ff; --white:#e8e8f8; --gray:#6666aa; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  min-height:100vh;background:var(--black);color:var(--white);
+  font-family:'Space Mono',monospace;overflow-x:hidden;
+}
+
+/* Nav */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,10,15,0.92);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);padding:12px 24px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.nav-logo{font-family:'Press Start 2P',cursive;font-size:0.6rem;color:var(--gold);letter-spacing:2px;}
+.nav-logo span{color:var(--red);}
+.nav-links{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.nav-links a{
+  font-family:'Press Start 2P',cursive;font-size:0.32rem;letter-spacing:1px;
+  padding:6px 10px;border:1px solid var(--border);color:var(--gray);
+  text-decoration:none;transition:all 0.2s;
+}
+.nav-links a:hover{border-color:var(--teal);color:var(--teal);}
+.nav-cta{
+  font-family:'Press Start 2P',cursive;font-size:0.35rem;letter-spacing:1px;
+  padding:8px 16px;border:none;background:var(--teal);color:#000;
+  cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-cta:hover{background:#00ddaa;}
+
+/* Hero */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:80px 24px 60px;position:relative;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(204,68,255,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(0,255,204,0.06) 0%, transparent 50%),
+    var(--black);
+}
+.hero-badge{
+  font-family:'Press Start 2P',cursive;font-size:0.35rem;letter-spacing:3px;
+  color:var(--teal);border:1px solid var(--teal);padding:6px 14px;margin-bottom:24px;
+  display:inline-block;
+}
+.hero h1{
+  font-family:'Press Start 2P',cursive;font-size:2.2rem;color:var(--gold);
+  letter-spacing:4px;line-height:1.4;margin-bottom:8px;
+}
+.hero h1 span{color:var(--red);}
+.hero-sub{
+  font-size:0.7rem;color:var(--gray);max-width:600px;line-height:1.8;margin:16px auto 32px;
+}
+.hero-stats{
+  display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;
+}
+.hero-stat{text-align:center;}
+.hero-stat-val{font-family:'Press Start 2P',cursive;font-size:1rem;color:var(--white);display:block;}
+.hero-stat-lbl{font-size:0.4rem;color:var(--gray);margin-top:4px;}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+.btn-primary{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;letter-spacing:1px;
+  padding:14px 28px;background:var(--teal);color:#000;border:none;
+  cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.btn-primary:hover{background:#00ddaa;transform:translateY(-2px);}
+.btn-secondary{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;letter-spacing:1px;
+  padding:14px 28px;background:transparent;color:var(--teal);
+  border:1px solid var(--teal);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.btn-secondary:hover{background:rgba(0,255,204,0.1);transform:translateY(-2px);}
+
+/* Gumball SVG animation */
+.hero-gumballs{
+  display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:40px 0 20px;
+}
+.hero-ball{
+  width:80px;height:80px;border-radius:50%;animation:float 3s ease-in-out infinite;
+  box-shadow:0 8px 30px rgba(0,0,0,0.4);
+}
+.hero-ball:nth-child(2){animation-delay:0.5s;}
+.hero-ball:nth-child(3){animation-delay:1s;}
+.hero-ball:nth-child(4){animation-delay:1.5s;}
+.hero-ball:nth-child(5){animation-delay:2s;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+
+/* Sections */
+.section{padding:80px 24px;max-width:980px;margin:0 auto;}
+.section-tag{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;color:var(--teal);
+  letter-spacing:3px;margin-bottom:12px;
+}
+.section h2{
+  font-family:'Press Start 2P',cursive;font-size:1.1rem;color:var(--white);
+  letter-spacing:2px;line-height:1.6;margin-bottom:20px;
+}
+.section p{font-size:0.55rem;color:var(--gray);line-height:2;max-width:700px;}
+
+/* Features grid */
+.features-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:30px;
+}
+.feature-card{
+  background:var(--panel);border:1px solid var(--border);padding:24px;
+  transition:border-color 0.3s;
+}
+.feature-card:hover{border-color:var(--teal);}
+.feature-icon{font-size:1.5rem;margin-bottom:12px;}
+.feature-title{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;color:var(--white);
+  letter-spacing:1px;margin-bottom:10px;
+}
+.feature-desc{font-size:0.48rem;color:var(--gray);line-height:1.8;}
+
+/* Rarity table */
+.rarity-table{width:100%;border-collapse:collapse;margin-top:20px;}
+.rarity-table th{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;color:var(--teal);
+  text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);
+  letter-spacing:1px;
+}
+.rarity-table td{
+  font-size:0.48rem;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--gray);
+}
+.rarity-table tr:hover td{background:var(--panel2);}
+
+/* How it works */
+.steps{display:flex;flex-direction:column;gap:20px;margin-top:30px;}
+.step{
+  display:flex;gap:20px;align-items:flex-start;
+  background:var(--panel);border:1px solid var(--border);padding:20px;
+}
+.step-num{
+  font-family:'Press Start 2P',cursive;font-size:1.2rem;color:var(--gold);
+  flex-shrink:0;width:40px;
+}
+.step-content h3{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;color:var(--white);
+  letter-spacing:1px;margin-bottom:8px;
+}
+.step-content p{font-size:0.48rem;color:var(--gray);line-height:1.8;}
+
+/* Pricing */
+.pricing-curve{
+  background:var(--panel);border:1px solid var(--border);padding:30px;margin-top:20px;
+}
+.price-bar-wrap{margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.price-label{font-size:0.4rem;color:var(--gray);width:80px;text-align:right;}
+.price-bar{flex:1;height:20px;background:var(--black);border:1px solid var(--border);overflow:hidden;}
+.price-bar-fill{height:100%;background:var(--teal);transition:width 0.5s;}
+.price-val{font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--white);width:80px;}
+
+/* Burn section */
+.burn-flow{
+  display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;
+  margin:30px 0;padding:30px;background:var(--panel);border:1px solid var(--border);
+}
+.burn-group{text-align:center;}
+.burn-count{font-family:'Press Start 2P',cursive;font-size:1.5rem;color:var(--red);}
+.burn-label{font-size:0.4rem;color:var(--gray);margin-top:4px;}
+.burn-arrow{font-size:1.5rem;color:var(--gold);}
+.burn-result-count{font-family:'Press Start 2P',cursive;font-size:1.5rem;color:var(--green);}
+
+/* FAQ */
+.faq-item{
+  background:var(--panel);border:1px solid var(--border);margin-bottom:8px;
+  overflow:hidden;
+}
+.faq-q{
+  font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--white);
+  padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;
+  align-items:center;letter-spacing:1px;transition:color 0.2s;
+}
+.faq-q:hover{color:var(--teal);}
+.faq-a{
+  font-size:0.48rem;color:var(--gray);line-height:1.9;padding:0 20px 16px;
+  display:none;
+}
+.faq-item.open .faq-a{display:block;}
+.faq-item.open .faq-q{color:var(--teal);}
+.faq-toggle{color:var(--teal);font-size:0.6rem;}
+
+/* Footer */
+.footer{
+  border-top:1px solid var(--border);padding:40px 24px;text-align:center;
+  margin-top:40px;
+}
+.footer-logo{font-family:'Press Start 2P',cursive;font-size:0.6rem;color:var(--gold);letter-spacing:2px;margin-bottom:16px;}
+.footer-logo span{color:var(--red);}
+.footer-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;}
+.footer-links a{
+  font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--gray);
+  text-decoration:none;letter-spacing:1px;transition:color 0.2s;
+}
+.footer-links a:hover{color:var(--teal);}
+.footer-copy{font-size:0.4rem;color:var(--gray);}
+
+/* Scroll reveal */
+.reveal{opacity:0;transform:translateY(30px);transition:all 0.6s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+@media(max-width:600px){
+  .hero h1{font-size:1.2rem;}
+  .hero-stat-val{font-size:0.7rem;}
+  .features-grid{grid-template-columns:1fr;}
+  .burn-flow{flex-direction:column;}
+  .step{flex-direction:column;}
+  .step-num{width:auto;}
+  .nav-links{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-logo">GUMBALL<span>.</span>XNT</div>
+  <div class="nav-links">
+    <a href="#about">ABOUT</a>
+    <a href="#traits">TRAITS</a>
+    <a href="#how">HOW IT WORKS</a>
+    <a href="#burn">BURN</a>
+    <a href="#pricing">PRICING</a>
+    <a href="#faq">FAQ</a>
+    <a href="index.html" class="nav-cta">MINT NOW</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">BUILT ON X1 BLOCKCHAIN</div>
+  <h1>GUMBALL<br><span>MACHINE</span></h1>
+  <p class="hero-sub">10,000 unique on-chain SVG gumballs. Provably fair randomness. Burn to upgrade. No IPFS. No centralized storage. 100% on-chain.</p>
+
+  <div class="hero-gumballs">
+    <div class="hero-ball" style="background:radial-gradient(circle at 35% 30%, #ff6688, #8a0020);"></div>
+    <div class="hero-ball" style="background:radial-gradient(circle at 35% 30%, #c077ff, #4a1a6b);"></div>
+    <div class="hero-ball" style="background:radial-gradient(circle at 35% 30%, #66aaff, #0033aa);"></div>
+    <div class="hero-ball" style="background:radial-gradient(circle at 35% 30%, #fff099, #b8960a);"></div>
+    <div class="hero-ball" style="background:radial-gradient(circle at 35% 30%, #88ff88, #228822);"></div>
+  </div>
+
+  <div class="hero-stats">
+    <div class="hero-stat"><span class="hero-stat-val">10,000</span><span class="hero-stat-lbl">MAX SUPPLY</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">0.25</span><span class="hero-stat-lbl">STARTING PRICE (XNT)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">5</span><span class="hero-stat-lbl">RARITY TIERS</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">100%</span><span class="hero-stat-lbl">ON-CHAIN</span></div>
+  </div>
+
+  <div class="hero-btns">
+    <a href="index.html" class="btn-primary">MINT NOW</a>
+    <a href="#about" class="btn-secondary">LEARN MORE</a>
+  </div>
+</section>
+
+<!-- About -->
+<section class="section reveal" id="about">
+  <div class="section-tag">// ABOUT</div>
+  <h2>WHAT IS GUMBALL MACHINE?</h2>
+  <p>Every gumball is a unique SVG artwork stored permanently on X1 blockchain. No IPFS links. No centralized servers. Your NFT exists entirely on-chain and can never be taken down.</p>
+  <p style="margin-top:12px;">Traits are generated using a commit-reveal oracle scheme that makes it mathematically impossible for anyone — including the team — to predict or manipulate outcomes.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🎨</div>
+      <div class="feature-title">100% ON-CHAIN SVG</div>
+      <div class="feature-desc">Artwork stored directly on the blockchain. No IPFS, no external hosting. Your gumball lives forever on-chain.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎲</div>
+      <div class="feature-title">PROVABLY FAIR</div>
+      <div class="feature-desc">Commit-reveal randomness with on-chain verification. Neither the oracle nor the minter can predict or manipulate trait outcomes.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔥</div>
+      <div class="feature-title">BURN TO UPGRADE</div>
+      <div class="feature-desc">Sacrifice lower-rarity gumballs to forge higher tiers. Burn 5 Commons for 1 Uncommon, all the way up to Legendary.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <div class="feature-title">DYNAMIC PRICING</div>
+      <div class="feature-desc">Early minters pay less. Price increases exponentially as supply fills up — from 0.25 XNT to 1.00 XNT.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏪</div>
+      <div class="feature-title">MARKETPLACE</div>
+      <div class="feature-desc">List, buy, sell, and make offers on gumballs. 5% royalty enforced on-chain. Trade directly, no middleman.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <div class="feature-title">AUDITED & SECURE</div>
+      <div class="feature-desc">5 rounds of security audit. 17 findings identified and resolved. Oracle secrets encrypted with AES-256-GCM.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Traits -->
+<section class="section reveal" id="traits">
+  <div class="section-tag">// TRAITS</div>
+  <h2>RARITY & TRAITS</h2>
+  <p>Every gumball has 4 randomized traits: flavor, color, special effect, and rarity. Traits are determined at mint time and can never be changed.</p>
+
+  <table class="rarity-table">
+    <thead>
+      <tr><th>RARITY</th><th>DROP RATE</th><th>SCORE</th><th>TRAITS</th></tr>
+    </thead>
+    <tbody>
+      <tr><td style="color:#aaaacc;">Common</td><td>60%</td><td>1 pt</td><td>Base traits</td></tr>
+      <tr><td style="color:#44ff88;">Uncommon</td><td>25%</td><td>4 pt</td><td>Base traits</td></tr>
+      <tr><td style="color:#44aaff;">Rare</td><td>10%</td><td>10 pt</td><td>Special border</td></tr>
+      <tr><td style="color:#cc88ff;">Epic</td><td>4%</td><td>40 pt</td><td>Special effects</td></tr>
+      <tr><td style="color:#ffcc00;">Legendary</td><td>1%</td><td>100 pt</td><td>Golden aura + dashed ring</td></tr>
+    </tbody>
+  </table>
+
+  <div class="features-grid" style="margin-top:30px;">
+    <div class="feature-card">
+      <div class="feature-title" style="color:var(--purple);">20 FLAVORS</div>
+      <div class="feature-desc">Cherry, Grape, Watermelon, Blueberry, Strawberry, Lemon, Lime, Orange, Bubblegum, Cotton Candy, Peach, Pineapple, Raspberry, Mint, Cinnamon, Root Beer, Banana, Green Apple, Mango, Mystery</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title" style="color:var(--blue);">12 COLORS</div>
+      <div class="feature-desc">Cherry Red, Grape Purple, Melon Pink, Berry Blue, Rose Gold, Citrus Yellow, Lime Green, Tangerine, Cotton White, Midnight Black, Shimmer Silver, Rainbow</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title" style="color:var(--gold);">5 SPECIALS</div>
+      <div class="feature-desc">None (common), Glitter particles, Double Bubble overlay, Holographic gradient ring, Crystal polygon facets</div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="section reveal" id="how">
+  <div class="section-tag">// HOW IT WORKS</div>
+  <h2>PROVABLY FAIR MINTING</h2>
+  <p>Our commit-reveal scheme ensures nobody can predict or manipulate your gumball's traits — not even us.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>ORACLE COMMITS</h3>
+        <p>The oracle generates a random secret and publishes sha256(secret + oracle_pubkey) on-chain. This happens BEFORE you pay — the oracle is locked in.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>YOU MINT</h3>
+        <p>You pay and provide your own random seed (user_seed). The oracle doesn't know your seed, and you don't know the oracle's secret.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>ORACLE REVEALS</h3>
+        <p>The oracle reveals its secret. The contract verifies it matches the commitment, then derives your traits from sha256(secret + slot_hash + user_seed + mint_index).</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>VERIFY ANYTIME</h3>
+        <p>The commitment hash and user seed are stored on your gumball forever. Anyone can independently verify the randomness was fair using our verification tool.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Burn to Upgrade -->
+<section class="section reveal" id="burn">
+  <div class="section-tag">// BURN TO UPGRADE</div>
+  <h2>SACRIFICE TO ASCEND</h2>
+  <p>Burn lower-rarity gumballs to forge a guaranteed higher-rarity one. Each upgrade costs the current mint price as a fee.</p>
+
+  <div class="burn-flow">
+    <div class="burn-group"><span class="burn-count">5</span><br><span class="burn-label" style="color:#aaaacc;">Common</span></div>
+    <span class="burn-arrow">&rarr;</span>
+    <div class="burn-group"><span class="burn-result-count">1</span><br><span class="burn-label" style="color:#44ff88;">Uncommon</span></div>
+  </div>
+  <div class="burn-flow">
+    <div class="burn-group"><span class="burn-count">3</span><br><span class="burn-label" style="color:#44ff88;">Uncommon</span></div>
+    <span class="burn-arrow">&rarr;</span>
+    <div class="burn-group"><span class="burn-result-count">1</span><br><span class="burn-label" style="color:#44aaff;">Rare</span></div>
+  </div>
+  <div class="burn-flow">
+    <div class="burn-group"><span class="burn-count">2</span><br><span class="burn-label" style="color:#44aaff;">Rare</span></div>
+    <span class="burn-arrow">&rarr;</span>
+    <div class="burn-group"><span class="burn-result-count">1</span><br><span class="burn-label" style="color:#cc88ff;">Epic</span></div>
+  </div>
+  <div class="burn-flow">
+    <div class="burn-group"><span class="burn-count">2</span><br><span class="burn-label" style="color:#cc88ff;">Epic</span></div>
+    <span class="burn-arrow">&rarr;</span>
+    <div class="burn-group"><span class="burn-result-count">1</span><br><span class="burn-label" style="color:#ffcc00;">Legendary</span></div>
+  </div>
+
+  <p style="margin-top:20px;text-align:center;color:var(--gray);font-size:0.45rem;">To craft 1 Legendary from scratch: 90 Commons &rarr; 18 Uncommons &rarr; 6 Rares &rarr; 2 Epics &rarr; 1 Legendary</p>
+</section>
+
+<!-- Pricing -->
+<section class="section reveal" id="pricing">
+  <div class="section-tag">// PRICING</div>
+  <h2>DYNAMIC MINT PRICING</h2>
+  <p>Early minters are rewarded. Price follows an exponential curve from 0.25 to 1.00 XNT as supply fills up.</p>
+
+  <div class="pricing-curve">
+    <div class="price-bar-wrap">
+      <span class="price-label">Mint #1</span>
+      <div class="price-bar"><div class="price-bar-fill" style="width:25%;"></div></div>
+      <span class="price-val">0.25 XNT</span>
+    </div>
+    <div class="price-bar-wrap">
+      <span class="price-label">#2,500</span>
+      <div class="price-bar"><div class="price-bar-fill" style="width:35%;"></div></div>
+      <span class="price-val">0.35 XNT</span>
+    </div>
+    <div class="price-bar-wrap">
+      <span class="price-label">#5,000</span>
+      <div class="price-bar"><div class="price-bar-fill" style="width:50%;"></div></div>
+      <span class="price-val">0.50 XNT</span>
+    </div>
+    <div class="price-bar-wrap">
+      <span class="price-label">#7,500</span>
+      <div class="price-bar"><div class="price-bar-fill" style="width:71%;"></div></div>
+      <span class="price-val">0.71 XNT</span>
+    </div>
+    <div class="price-bar-wrap">
+      <span class="price-label">#10,000</span>
+      <div class="price-bar"><div class="price-bar-fill" style="width:100%;background:var(--gold);"></div></div>
+      <span class="price-val">1.00 XNT</span>
+    </div>
+  </div>
+  <p style="margin-top:16px;text-align:center;font-size:0.45rem;color:var(--gold);">Batch mint up to 10 gumballs in a single transaction</p>
+</section>
+
+<!-- FAQ -->
+<section class="section reveal" id="faq">
+  <div class="section-tag">// FAQ</div>
+  <h2>FREQUENTLY ASKED</h2>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      What blockchain is this on?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Gumball Machine NFT is built on X1, a Solana-compatible blockchain. You need XNT tokens and an X1-compatible wallet (X1 Wallet or Phantom) to mint.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      What does "100% on-chain" mean?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">The SVG artwork for every gumball is stored directly on the X1 blockchain — not on IPFS, AWS, or any external server. Your NFT can never be taken down or lost because the server went offline.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      How do I verify my gumball is fair?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Visit the Verify page and enter your gumball's serial number. The commitment hash and user seed are stored on-chain. You can independently recompute the traits to prove no manipulation occurred.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      What happens if the oracle goes down?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">If the oracle doesn't reveal within 5 minutes, you can claim a full refund of your mint payment. The oracle auto-restarts via PM2 and the team is alerted via Telegram monitoring.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      Can I sell my gumball?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Yes! The built-in marketplace lets you list gumballs for sale at any price, make offers on others' gumballs, and trade directly. A 5% royalty goes to the treasury on every sale.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      How does burn-to-upgrade work?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Burn multiple gumballs of the same rarity to receive one gumball of the next rarity tier — guaranteed. For example, burn 5 Commons to get 1 Uncommon. Each upgrade also costs the current mint price as a fee.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+      Is the smart contract audited?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">The contract has undergone 5 rounds of security audit with 17 findings identified and resolved. The code is open source on GitHub for anyone to review.</div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="hero" style="min-height:auto;padding:80px 24px;">
+  <h2 style="font-family:'Press Start 2P',cursive;font-size:1.1rem;color:var(--white);margin-bottom:20px;">READY TO MINT?</h2>
+  <p style="font-size:0.55rem;color:var(--gray);margin-bottom:30px;">Join the gumball machine. Mint, burn, upgrade, trade.</p>
+  <div class="hero-btns">
+    <a href="index.html" class="btn-primary">MINT NOW</a>
+    <a href="marketplace.html" class="btn-secondary">MARKETPLACE</a>
+    <a href="activity.html" class="btn-secondary">ACTIVITY</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-logo">GUMBALL<span>.</span>XNT</div>
+  <div class="footer-links">
+    <a href="index.html">MINT</a>
+    <a href="marketplace.html">MARKET</a>
+    <a href="activity.html">ACTIVITY</a>
+    <a href="leaderboard.html">LEADERBOARD</a>
+    <a href="verify.html">VERIFY</a>
+    <a href="https://github.com/Lokoweb3/gumball_nft" target="_blank">GITHUB</a>
+  </div>
+  <div class="footer-copy">Gumball Machine NFT. 100% on-chain. Built on X1.</div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
