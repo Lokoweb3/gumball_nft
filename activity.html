@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — ACTIVITY & ANALYTICS</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --red:#ff2244; --gold:#ffcc00; --teal:#00ffcc;
+  --purple:#cc44ff; --white:#e8e8f8; --gray:#6666aa; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+header{
+  width:100%;max-width:980px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap;gap:12px;
+}
+.logo{font-family:'Press Start 2P',cursive;font-size:0.8rem;color:var(--gold);letter-spacing:2px;line-height:1.6;}
+.logo span{color:var(--red);}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover{border-color:var(--teal);color:var(--teal);}
+.nav-link.active{border-color:var(--teal);color:var(--teal);}
+.wallet-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:8px 14px;border:1px solid var(--gold);background:transparent;
+  color:var(--gold);cursor:pointer;transition:all 0.2s;
+}
+.wallet-btn:hover{background:rgba(255,204,0,0.1);}
+.wallet-btn.connected{border-color:var(--teal);color:var(--teal);}
+
+.wrap{width:100%;max-width:980px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+
+/* Section titles */
+.section{background:var(--panel);border:1px solid var(--border);padding:20px;margin-bottom:20px;}
+.section-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+
+/* Analytics cards */
+.analytics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.stat-card{background:var(--black);border:1px solid var(--border);padding:12px;text-align:center;}
+.stat-card-val{font-family:'Press Start 2P',cursive;font-size:0.65rem;color:var(--teal);display:block;}
+.stat-card-lbl{font-size:0.38rem;color:var(--gray);margin-top:6px;}
+
+/* Rarity bars */
+.rarity-bar-wrap{margin-bottom:10px;}
+.rarity-bar-label{display:flex;justify-content:space-between;font-size:0.42rem;margin-bottom:4px;}
+.rarity-bar-name{color:var(--white);}
+.rarity-bar-count{color:var(--gray);}
+.rarity-bar{height:16px;background:var(--black);border:1px solid var(--border);overflow:hidden;}
+.rarity-bar-fill{height:100%;transition:width 0.5s;}
+
+/* Completion grid */
+.completion-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px;}
+.completion-item{text-align:center;padding:8px;background:var(--black);border:1px solid var(--border);}
+.completion-pct{font-family:'Press Start 2P',cursive;font-size:0.5rem;display:block;margin-bottom:4px;}
+.completion-lbl{font-size:0.35rem;color:var(--gray);}
+
+/* Activity feed */
+.feed{max-height:600px;overflow-y:auto;}
+.feed-item{
+  display:flex;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);
+  align-items:center;font-size:0.45rem;transition:background 0.2s;
+}
+.feed-item:hover{background:var(--panel2);}
+.feed-icon{font-size:1rem;flex-shrink:0;width:28px;text-align:center;}
+.feed-body{flex:1;min-width:0;}
+.feed-action{color:var(--white);font-weight:bold;}
+.feed-detail{color:var(--gray);font-size:0.4rem;margin-top:3px;}
+.feed-time{font-size:0.35rem;color:var(--gray);flex-shrink:0;text-align:right;min-width:60px;}
+.feed-link{color:var(--teal);text-decoration:none;font-size:0.35rem;}
+.feed-link:hover{text-decoration:underline;}
+
+/* Filters */
+.filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.filter-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.32rem;padding:6px 10px;
+  border:1px solid var(--border);background:transparent;color:var(--gray);
+  cursor:pointer;letter-spacing:1px;transition:all 0.2s;
+}
+.filter-btn:hover{border-color:var(--teal);color:var(--teal);}
+.filter-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(0,255,204,0.05);}
+
+.r-common{color:#aaaacc;} .r-uncommon{color:#44ff88;} .r-rare{color:#44aaff;} .r-epic{color:#cc88ff;} .r-legendary{color:#ffcc00;}
+
+.empty-msg{text-align:center;padding:30px;font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);letter-spacing:2px;}
+.loading-msg{text-align:center;padding:20px;font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--teal);letter-spacing:2px;}
+
+/* Toast */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast{padding:12px 16px;font-size:0.45rem;border:1px solid;animation:fadeIn 0.3s;}
+.toast.info{background:rgba(102,102,170,0.1);border-color:var(--gray);color:var(--gray);}
+@keyframes fadeIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+@media(max-width:700px){
+  .two-col{grid-template-columns:1fr;}
+  .completion-grid{grid-template-columns:repeat(3,1fr);}
+  .analytics-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <a href="index.html" class="nav-link">[ MINT ]</a>
+    <a href="marketplace.html" class="nav-link">[ MARKET ]</a>
+    <a href="activity.html" class="nav-link active">[ ACTIVITY ]</a>
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Analytics Section -->
+  <div class="section" id="analyticsSection">
+    <div class="section-title">// COLLECTION ANALYTICS</div>
+    <div id="analyticsContent">
+      <div class="empty-msg">CONNECT WALLET TO VIEW YOUR ANALYTICS</div>
+    </div>
+  </div>
+
+  <!-- Activity Feed Section -->
+  <div class="section">
+    <div class="section-title">// LIVE ACTIVITY FEED</div>
+    <div class="filters">
+      <button class="filter-btn active" onclick="setFilter('all')">ALL</button>
+      <button class="filter-btn" onclick="setFilter('mint')">MINTS</button>
+      <button class="filter-btn" onclick="setFilter('burn')">BURNS</button>
+      <button class="filter-btn" onclick="setFilter('sale')">SALES</button>
+      <button class="filter-btn" onclick="setFilter('list')">LISTINGS</button>
+    </div>
+    <div class="feed" id="feedContent">
+      <div class="loading-msg">LOADING ACTIVITY...</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const { Connection, PublicKey } = solanaWeb3;
+const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const RPC         = "https://rpc.testnet.x1.xyz";
+const EXPLORER    = "https://explorer.testnet.x1.xyz";
+const connection  = new Connection(RPC, { commitment: "confirmed" });
+
+const TOKEN_PID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const FLAVORS  = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const COLORS   = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const RARITY   = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+const RARITY_SCORES = [1, 4, 10, 40, 100];
+
+const GD_V3 = 8+32+32+8+1+1+1+1+8+1;
+const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;
+const LISTING_SIZE = 8+32+32+8+8+1;
+
+// Pricing (mirrors on-chain)
+const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
+function getMintPrice(totalMinted) {
+  if (totalMinted >= 10000) return 1.0;
+  const scaled = totalMinted * 10;
+  const bucket = Math.floor(scaled / 10000);
+  const remainder = scaled % 10000;
+  if (bucket >= 10) return 1.0;
+  const lo = PRICE_TABLE[bucket], hi = PRICE_TABLE[bucket + 1];
+  return 0.25 * (lo + (hi - lo) * remainder / 10000) / 10000;
+}
+
+let walletPubkey = null;
+let currentFilter = 'all';
+let allEvents = [];
+let currentMinted = 0;
+
+function strToU8(s) { return new TextEncoder().encode(s); }
+function toast(msg, type='info', dur=3000) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), dur);
+}
+function getProvider() {
+  return window.xnft?.solana || window.x1wallet || window.phantom?.solana || window.solana || null;
+}
+function timeAgo(ts) {
+  const s = Math.floor(Date.now()/1000 - ts);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+// ── WALLET ───────────────────────────────────────────────────────────────────
+
+async function connectWallet() {
+  const btn = document.getElementById("walletBtn");
+  if (walletPubkey) {
+    walletPubkey = null;
+    btn.classList.remove("connected");
+    btn.textContent = "[ CONNECT WALLET ]";
+    localStorage.removeItem('walletConnected');
+    document.getElementById('analyticsContent').innerHTML = '<div class="empty-msg">CONNECT WALLET TO VIEW YOUR ANALYTICS</div>';
+    return;
+  }
+  const provider = getProvider();
+  if (!provider) { toast("NO WALLET FOUND", "error"); return; }
+  try {
+    const resp = await provider.connect();
+    walletPubkey = resp.publicKey;
+    btn.classList.add("connected");
+    btn.textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+    localStorage.setItem('walletConnected', 'true');
+    loadAnalytics();
+  } catch(e) { toast("WALLET CONNECTION FAILED"); }
+}
+
+// ── AUTO-CONNECT ─────────────────────────────────────────────────────────────
+
+(function autoConnect() {
+  if (localStorage.getItem('walletConnected') !== 'true') return;
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const provider = getProvider();
+    if (provider && provider.isConnected && provider.publicKey) {
+      clearInterval(poll);
+      walletPubkey = provider.publicKey;
+      const btn = document.getElementById("walletBtn");
+      btn.classList.add("connected");
+      btn.textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+      loadAnalytics();
+    } else if (attempts > 20) { clearInterval(poll); }
+  }, 200);
+})();
+
+// ── COLLECTION ANALYTICS ─────────────────────────────────────────────────────
+
+async function loadAnalytics() {
+  if (!walletPubkey) return;
+  const el = document.getElementById('analyticsContent');
+  el.innerHTML = '<div class="loading-msg">LOADING ANALYTICS...</div>';
+
+  try {
+    // Fetch user's gumballs
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+    const gumballs = [];
+    for (const ta of tokenAccounts.value) {
+      const parsed = ta.account.data.parsed.info;
+      if (parsed.tokenAmount.uiAmount !== 1) continue;
+      const mintKey = new PublicKey(parsed.mint);
+      const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+      try {
+        const info = await connection.getAccountInfo(gumballPda);
+        if (!info || info.owner.toBase58() !== PROGRAM_ID.toBase58()) continue;
+        const data = info.data;
+        const dv = new DataView(data.buffer, data.byteOffset);
+        const serial = Number(dv.getBigUint64(8+32+32, true));
+        if (serial === 0) continue;
+        gumballs.push({
+          serial,
+          flavor: data[8+32+32+8],
+          color: data[8+32+32+8+1],
+          rarity: data[8+32+32+8+2],
+          special: data[8+32+32+8+3],
+        });
+      } catch(e) {}
+    }
+
+    // Get machine state
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const mdv = new DataView(machineInfo.data.buffer, machineInfo.data.byteOffset);
+    currentMinted = Number(mdv.getBigUint64(8+32+32+32+8, true));
+    const currentPrice = getMintPrice(currentMinted);
+
+    // Calculate stats
+    const totalGumballs = gumballs.length;
+    const rarityCounts = [0, 0, 0, 0, 0];
+    gumballs.forEach(g => rarityCounts[g.rarity]++);
+
+    const rarityScore = gumballs.reduce((sum, g) => sum + RARITY_SCORES[g.rarity], 0);
+    const portfolioValue = gumballs.reduce((sum, g) => sum + currentPrice * RARITY_SCORES[g.rarity], 0);
+
+    // Flavor collection
+    const uniqueFlavors = new Set(gumballs.map(g => g.flavor)).size;
+    const uniqueColors = new Set(gumballs.map(g => g.color)).size;
+
+    // Render
+    el.innerHTML = `
+      <div class="analytics-grid">
+        <div class="stat-card">
+          <span class="stat-card-val">${totalGumballs}</span>
+          <span class="stat-card-lbl">TOTAL GUMBALLS</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-val">${rarityScore}</span>
+          <span class="stat-card-lbl">RARITY SCORE</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-val">${portfolioValue.toFixed(2)}</span>
+          <span class="stat-card-lbl">EST. VALUE (XNT)</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-val">${uniqueFlavors}/20</span>
+          <span class="stat-card-lbl">FLAVORS</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-val">${uniqueColors}/12</span>
+          <span class="stat-card-lbl">COLORS</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-val">${currentPrice.toFixed(4)}</span>
+          <span class="stat-card-lbl">CURRENT PRICE</span>
+        </div>
+      </div>
+
+      <div style="font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);margin-bottom:10px;">// RARITY BREAKDOWN</div>
+      ${RARITY.map((name, i) => {
+        const pct = totalGumballs > 0 ? (rarityCounts[i] / totalGumballs * 100) : 0;
+        return `
+          <div class="rarity-bar-wrap">
+            <div class="rarity-bar-label">
+              <span class="rarity-bar-name" style="color:${RARITY_COLORS[i]}">${name}</span>
+              <span class="rarity-bar-count">${rarityCounts[i]} (${pct.toFixed(1)}%)</span>
+            </div>
+            <div class="rarity-bar">
+              <div class="rarity-bar-fill" style="width:${pct}%;background:${RARITY_COLORS[i]};"></div>
+            </div>
+          </div>`;
+      }).join('')}
+
+      <div style="font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);margin:16px 0 10px;">// COMPLETION</div>
+      <div class="completion-grid">
+        ${RARITY.map((name, i) => {
+          const has = rarityCounts[i] > 0;
+          return `
+            <div class="completion-item" style="border-color:${has ? RARITY_COLORS[i] : 'var(--border)'}">
+              <span class="completion-pct" style="color:${has ? RARITY_COLORS[i] : 'var(--gray)'}">${rarityCounts[i]}</span>
+              <span class="completion-lbl">${name}</span>
+            </div>`;
+        }).join('')}
+      </div>
+    `;
+  } catch(e) {
+    console.error("loadAnalytics:", e);
+    el.innerHTML = '<div class="empty-msg">FAILED TO LOAD ANALYTICS</div>';
+  }
+}
+
+// ── ACTIVITY FEED ────────────────────────────────────────────────────────────
+
+async function loadActivityFeed() {
+  const el = document.getElementById('feedContent');
+
+  try {
+    // Fetch recent signatures for the program
+    const sigs = await connection.getSignaturesForAddress(PROGRAM_ID, { limit: 50 });
+
+    allEvents = [];
+    for (const sig of sigs) {
+      try {
+        const tx = await connection.getTransaction(sig.signature, { maxSupportedTransactionVersion: 0 });
+        if (!tx || !tx.meta || !tx.meta.logMessages) continue;
+
+        const logs = tx.meta.logMessages;
+        const timestamp = tx.blockTime || 0;
+        const sigStr = sig.signature;
+
+        // Parse instruction type from logs
+        let eventType = null;
+        let details = '';
+
+        for (const log of logs) {
+          if (log.includes('Instruction: RevealAndMint') || log.includes('Instruction: RequestMint')) {
+            eventType = 'mint';
+            details = 'Gumball minted';
+            break;
+          } else if (log.includes('Instruction: BurnToUpgrade')) {
+            eventType = 'burn';
+            details = 'Burn to upgrade (2 burned)';
+            break;
+          } else if (log.includes('Instruction: BurnMulti')) {
+            eventType = 'burn';
+            details = 'Burn to upgrade (multi)';
+            break;
+          } else if (log.includes('Instruction: BuyGumball')) {
+            eventType = 'sale';
+            details = 'Gumball sold';
+            break;
+          } else if (log.includes('Instruction: ListGumball')) {
+            eventType = 'list';
+            details = 'Gumball listed';
+            break;
+          } else if (log.includes('Instruction: DelistGumball')) {
+            eventType = 'list';
+            details = 'Gumball delisted';
+            break;
+          } else if (log.includes('Instruction: AcceptOffer')) {
+            eventType = 'sale';
+            details = 'Offer accepted';
+            break;
+          } else if (log.includes('Instruction: MakeOffer')) {
+            eventType = 'list';
+            details = 'Offer placed';
+            break;
+          }
+        }
+
+        if (!eventType) continue;
+
+        // Get the caller (first signer)
+        const keys = tx.transaction.message.accountKeys ||
+                     tx.transaction.message.staticAccountKeys || [];
+        const caller = keys.length > 0 ? keys[0].toBase58() : 'unknown';
+
+        allEvents.push({ eventType, details, timestamp, sigStr, caller });
+      } catch(e) {}
+    }
+
+    allEvents.sort((a, b) => b.timestamp - a.timestamp);
+    renderFeed();
+  } catch(e) {
+    console.error("loadActivityFeed:", e);
+    el.innerHTML = '<div class="empty-msg">FAILED TO LOAD ACTIVITY</div>';
+  }
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderFeed();
+}
+
+function renderFeed() {
+  const el = document.getElementById('feedContent');
+  const filtered = currentFilter === 'all' ? allEvents : allEvents.filter(e => e.eventType === currentFilter);
+
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO ACTIVITY FOUND</div>';
+    return;
+  }
+
+  const icons = { mint: '🎰', burn: '🔥', sale: '💰', list: '📋' };
+  const colors = { mint: 'var(--teal)', burn: 'var(--red)', sale: 'var(--gold)', list: 'var(--purple)' };
+
+  el.innerHTML = filtered.map(e => {
+    const callerShort = `${e.caller.slice(0,4)}...${e.caller.slice(-4)}`;
+    return `
+      <div class="feed-item">
+        <div class="feed-icon">${icons[e.eventType] || '?'}</div>
+        <div class="feed-body">
+          <div class="feed-action" style="color:${colors[e.eventType]}">${e.details}</div>
+          <div class="feed-detail">${callerShort}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="feed-time">${timeAgo(e.timestamp)}</div>
+          <a class="feed-link" href="${EXPLORER}/tx/${e.sigStr}" target="_blank">TX</a>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+loadActivityFeed();
+
+// Auto-refresh every 30s
+setInterval(() => {
+  loadActivityFeed();
+  if (walletPubkey) loadAnalytics();
+}, 30000);
+
+</script>
+</body>
+</html>

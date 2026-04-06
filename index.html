@@ -339,12 +339,17 @@ svg#gm{width:100%;}
   <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
   <div class="header-right">
     <a href="marketplace.html" class="nav-link">[ MARKET ]</a>
+    <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
   </div>
 </header>
 
+<div id="liveTicker" style="width:100%;max-width:980px;overflow:hidden;margin-bottom:10px;border:1px solid var(--border);background:var(--panel);padding:6px 12px;display:none;">
+  <div id="tickerContent" style="white-space:nowrap;animation:tickerScroll 20s linear infinite;font-size:0.4rem;color:var(--gray);"></div>
+</div>
+<style>@keyframes tickerScroll{0%{transform:translateX(100%);}100%{transform:translateX(-100%);}}</style>
 <div class="stats-bar">
   <div class="stat"><span class="stat-val" id="sMinted">—</span><span class="stat-lbl">Total Minted</span></div>
   <div class="stat"><span class="stat-val" id="sRemain">—</span><span class="stat-lbl">Remaining</span></div>
@@ -1829,6 +1834,38 @@ async function refundExpiredMint() {
   }
   isMinting = false;
 }
+
+// ── LIVE TICKER ──────────────────────────────────────────────────────────────
+async function loadTicker() {
+  try {
+    const sigs = await connection.getSignaturesForAddress(PROGRAM_ID, { limit: 10 });
+    const events = [];
+    for (const sig of sigs) {
+      try {
+        const tx = await connection.getTransaction(sig.signature, { maxSupportedTransactionVersion: 0 });
+        if (!tx || !tx.meta || !tx.meta.logMessages) continue;
+        const logs = tx.meta.logMessages;
+        const ts = tx.blockTime || 0;
+        const ago = Math.floor(Date.now()/1000 - ts);
+        const agoStr = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago/60)}m` : `${Math.floor(ago/3600)}h`;
+        const keys = tx.transaction.message.accountKeys || tx.transaction.message.staticAccountKeys || [];
+        const caller = keys.length > 0 ? keys[0].toBase58().slice(0,4)+'..'+keys[0].toBase58().slice(-4) : '?';
+        for (const log of logs) {
+          if (log.includes('Instruction: RevealAndMint')) { events.push(`🎰 ${caller} minted (${agoStr} ago)`); break; }
+          if (log.includes('Instruction: BurnToUpgrade') || log.includes('Instruction: BurnMulti')) { events.push(`🔥 ${caller} burned (${agoStr} ago)`); break; }
+          if (log.includes('Instruction: BuyGumball') || log.includes('Instruction: AcceptOffer')) { events.push(`💰 ${caller} sold (${agoStr} ago)`); break; }
+          if (log.includes('Instruction: ListGumball')) { events.push(`📋 ${caller} listed (${agoStr} ago)`); break; }
+        }
+      } catch(e) {}
+    }
+    if (events.length > 0) {
+      document.getElementById('liveTicker').style.display = 'block';
+      document.getElementById('tickerContent').textContent = events.join('     ');
+    }
+  } catch(e) {}
+}
+loadTicker();
+setInterval(loadTicker, 30000);
 
 // ── RECLAIM BURNED ────────────────────────────────────────────────────────────
 // burn_multi zeros owner on extra PDAs but can't move lamports (UnbalancedInstruction).
