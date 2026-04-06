@@ -362,7 +362,7 @@ async function verify() {
       const svgOff = PROOF_OFFSET;
       try {
         const svgLen = dv.getUint32(svgOff, true);
-        if (svgLen > 0 && svgLen <= 1024) svgStr = new TextDecoder().decode(accountData.slice(svgOff+4, svgOff+4+svgLen));
+        if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(accountData.slice(svgOff+4, svgOff+4+svgLen));
       } catch(e) {}
     } else {
       // v3/v4 — fetch SVG from separate PDA
@@ -374,7 +374,7 @@ async function verify() {
           if (svgInfo) {
             const svgDv = new DataView(svgInfo.data.buffer, svgInfo.data.byteOffset);
             const svgLen = svgDv.getUint32(8, true);
-            if (svgLen > 0 && svgLen <= 768) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
+            if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
           }
         }
       } catch(e) { console.error('SVG fetch error:', e); }

@@ -12,7 +12,7 @@ declare_id!("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
 
 const MAX_SUPPLY:     u64   = 10_000;
 const MAX_PER_TX:     u8    = 10;
-const MAX_SVG_LEN:    usize = 768;
+const MAX_SVG_LEN:    usize = 1400;
 const MINT_TIMEOUT:   i64   = 300; // 5 min before request expires — M-2 fix
 
 // Exponential pricing: 0.25 XNT at mint #0, 1.00 XNT at mint #10,000
@@ -78,38 +78,35 @@ fn generate_svg(serial: u64, flavor: u8, color: u8, rarity: u8, special: u8) -> 
     let sp = SPECIALS[si];
 
     let special_el: &str = match sp {
-        "Glitter"       => r##"<circle cx="125" cy="115" r="2" fill="white" opacity=".9"/><circle cx="170" cy="130" r="1.5" fill="white" opacity=".8"/><circle cx="140" cy="160" r="2.5" fill="white" opacity=".7"/><circle cx="165" cy="110" r="1.5" fill="white" opacity=".9"/><circle cx="130" cy="145" r="2" fill="white" opacity=".8"/>"##,
-        "Double Bubble"  => r##"<circle cx="205" cy="90" r="50" fill="#111" opacity=".6"/><circle cx="205" cy="90" r="48" fill="url(#b)" opacity=".7"/><ellipse cx="190" cy="76" rx="14" ry="10" fill="white" opacity=".35"/>"##,
-        "Holographic"    => r##"<circle cx="150" cy="145" r="85" fill="none" stroke="url(#hl)" stroke-width="5" opacity=".5"/><circle cx="150" cy="145" r="60" fill="none" stroke="url(#hl)" stroke-width="3" opacity=".35"/>"##,
-        "Crystal"        => r#"<polygon points="150,55 200,115 190,175 150,195 110,175 100,115" fill="none" stroke="white" stroke-width="1.2" opacity=".3"/><polygon points="150,55 200,115 150,145" fill="white" opacity=".06"/>"#,
+        "Glitter"       => r##"<circle cx="125" cy="115" r="2" fill="#fff" opacity=".9"/><circle cx="170" cy="130" r="1.5" fill="#fff" opacity=".8"/><circle cx="140" cy="160" r="2" fill="#fff" opacity=".7"/><circle cx="165" cy="110" r="1.5" fill="#fff" opacity=".85"/>"##,
+        "Double Bubble"  => r##"<circle cx="205" cy="90" r="45" fill="url(#b)" opacity=".5"/><ellipse cx="192" cy="78" rx="12" ry="8" fill="#fff" opacity=".3"/>"##,
+        "Holographic"    => r##"<circle cx="150" cy="145" r="85" fill="none" stroke="url(#hl)" stroke-width="4" opacity=".4"/>"##,
+        "Crystal"        => r#"<polygon points="150,60 195,115 185,170 150,190 115,170 105,115" fill="none" stroke="#fff" stroke-width="1" opacity=".25"/>"#,
         _                => "",
     };
 
     let holo_grad = if sp == "Holographic" {
-        r##"<linearGradient id="hl" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff44aa"/><stop offset="50%" stop-color="#44aaff"/><stop offset="100%" stop-color="#44ffaa"/></linearGradient>"##
+        r##"<linearGradient id="hl"><stop offset="0%" stop-color="#f4a"/><stop offset="50%" stop-color="#4af"/><stop offset="100%" stop-color="#4fa"/></linearGradient>"##
     } else { "" };
 
     let legend_el = if rn == "Legendary" {
-        r##"<circle cx="150" cy="145" r="118" fill="none" stroke="#ffcc00" stroke-width="1" stroke-dasharray="6 4" opacity=".4"/>"##
+        r##"<circle cx="150" cy="145" r="115" fill="none" stroke="#fc0" stroke-width="1" stroke-dasharray="5 3" opacity=".5"/>"##
     } else { "" };
 
-    let mut svg = String::with_capacity(700);
+    let mut svg = String::with_capacity(1400);
     svg.push_str(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">"#);
-    svg.push_str("<defs>");
-    svg.push_str(&format!(r#"<radialGradient id="b" cx="35%" cy="30%" r="65%"><stop offset="0%" stop-color="{hi}"/><stop offset="100%" stop-color="{sh}"/></radialGradient>"#));
-    svg.push_str(holo_grad);
-    svg.push_str("</defs>");
+    svg.push_str(&format!(r#"<defs><radialGradient id="b" cx="35%" cy="30%" r="65%"><stop offset="0%" stop-color="{hi}"/><stop offset="70%" stop-color="{gl}"/><stop offset="100%" stop-color="{sh}"/></radialGradient>{holo_grad}</defs>"#));
     svg.push_str(&format!(r#"<rect width="300" height="300" fill="{bg}"/>"#));
     svg.push_str(legend_el);
-    svg.push_str(&format!(r#"<circle cx="150" cy="145" r="108" fill="{gl}" opacity=".1"/>"#));
+    svg.push_str(&format!(r#"<circle cx="150" cy="145" r="106" fill="{gl}" opacity=".08"/>"#));
+    svg.push_str(r#"<ellipse cx="150" cy="250" rx="55" ry="7" fill="#000" opacity=".3"/>"#);
     svg.push_str(r#"<circle cx="150" cy="145" r="100" fill="url(#b)"/>"#);
     svg.push_str(special_el);
-    svg.push_str(r#"<ellipse cx="118" cy="108" rx="30" ry="20" fill="white" opacity=".45" transform="rotate(-30,118,108)"/>"#);
-    svg.push_str(&format!(r#"<circle cx="150" cy="145" r="100" fill="none" stroke="{rc}" stroke-width="2" opacity=".45"/>"#));
-    svg.push_str(r#"<rect x="0" y="248" width="300" height="52" fill="black" fill-opacity=".55"/>"#);
-    svg.push_str(&format!(r#"<text x="150" y="268" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="white">{fl}</text>"#));
+    svg.push_str(r#"<ellipse cx="120" cy="110" rx="28" ry="18" fill="#fff" opacity=".4" transform="rotate(-30,120,110)"/>"#);
+    svg.push_str(&format!(r#"<circle cx="150" cy="145" r="100" fill="none" stroke="{rc}" stroke-width="2" opacity=".4"/>"#));
+    svg.push_str(r#"<rect x="0" y="250" width="300" height="50" fill="#000" opacity=".6"/>"#);
+    svg.push_str(&format!(r#"<text x="150" y="270" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#fff">{fl}</text>"#));
     svg.push_str(&format!(r#"<text x="150" y="288" text-anchor="middle" font-family="monospace" font-size="9" fill="{rc}">{rn} #{serial:04}</text>"#));
-    svg.push_str(&format!(r#"<text x="8" y="18" font-family="monospace" font-size="9" fill="{rc}" opacity=".7">GUMBALL.XNT</text>"#));
     svg.push_str("</svg>");
 
     let bytes = svg.into_bytes();
@@ -907,8 +904,6 @@ pub mod gumball_nft {
         let seller_amount = amount.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
 
         let offer_info = ctx.accounts.offer.to_account_info();
-        let offer_lamports = offer_info.lamports();
-        let rent = Rent::get()?.minimum_balance(8 + Offer::LEN);
 
         // Pay seller from Offer PDA
         **offer_info.try_borrow_mut_lamports()? -= seller_amount;

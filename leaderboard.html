@@ -567,7 +567,7 @@ async function openSvgModal(g) {
       const dv = new DataView(info.data.buffer, info.data.byteOffset);
       const svgOff = 8+32+32+8+1+1+1+1+8+1;
       const svgLen = dv.getUint32(svgOff, true);
-      if (svgLen > 0 && svgLen <= 1024) {
+      if (svgLen > 0 && svgLen <= 1400) {
         const svgStr = new TextDecoder().decode(info.data.slice(svgOff+4, svgOff+4+svgLen));
         currentSvg = svgStr;
         svgDiv.innerHTML = svgStr;
