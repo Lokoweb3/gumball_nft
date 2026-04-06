@@ -473,15 +473,9 @@ pub mod gumball_nft {
             authority: ctx.accounts.burner.to_account_info(),
         }), 1)?;
 
-        // Reclaim rent from burned gumball PDAs → burner
-        let lamports_a = ctx.accounts.gumball_a.lamports();
-        **ctx.accounts.gumball_a.try_borrow_mut_lamports()? = 0;
-        **ctx.accounts.burner.try_borrow_mut_lamports()? += lamports_a;
-        ctx.accounts.gumball_a.try_borrow_mut_data()?.fill(0);
-        let lamports_b = ctx.accounts.gumball_b.lamports();
-        **ctx.accounts.gumball_b.try_borrow_mut_lamports()? = 0;
-        **ctx.accounts.burner.try_borrow_mut_lamports()? += lamports_b;
-        ctx.accounts.gumball_b.try_borrow_mut_data()?.fill(0);
+        // Zero owner field to mark as burned — use reclaim_burned to recover rent
+        ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
+        ctx.accounts.gumball_b.try_borrow_mut_data()?[8..40].fill(0);
 
         let new_rarity = burn_rarity + 1;
 
@@ -600,12 +594,8 @@ pub mod gumball_nft {
             authority: ctx.accounts.burner.to_account_info(),
         }), 1)?;
 
-        // Reclaim rent from base gumball PDA
-        let lamports_a = ctx.accounts.gumball_a.lamports();
-        **ctx.accounts.gumball_a.try_borrow_mut_lamports()? = 0;
-        **ctx.accounts.burner.try_borrow_mut_lamports()? += lamports_a;
-        // Zero data so runtime cleans up
-        ctx.accounts.gumball_a.try_borrow_mut_data()?.fill(0);
+        // Zero owner field to mark as burned — use reclaim_burned to recover rent
+        ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
 
         // Burn remaining gumballs from remaining_accounts
         for i in 0..extra {
@@ -643,12 +633,11 @@ pub mod gumball_nft {
                 },
             ), 1)?;
 
-            // Reclaim rent from burned gumball PDA → burner
-            let lamports = gumball_ai.lamports();
-            **gumball_ai.try_borrow_mut_lamports()? = 0;
-            **ctx.accounts.burner.try_borrow_mut_lamports()? += lamports;
-            // Zero data so runtime cleans up
-            gumball_ai.try_borrow_mut_data()?.fill(0);
+            // Zero owner field to mark as burned (can't move lamports from
+            // remaining_accounts — causes UnbalancedInstruction). Use reclaim_burned
+            // to recover rent later.
+            let mut gb_data = gumball_ai.try_borrow_mut_data()?;
+            gb_data[8..40].fill(0); // zero owner field
         }
 
         let new_rarity = burn_rarity + 1;
@@ -957,6 +946,26 @@ pub mod gumball_nft {
             seller: ctx.accounts.seller.key(), buyer: ctx.accounts.offer.buyer,
             nft_mint: ctx.accounts.offer.nft_mint, price: amount, royalty,
         });
+        Ok(())
+    }
+
+    /// Reclaim rent from zombie GumballData PDAs left by burn_multi.
+    /// burn_multi zeros the owner field instead of closing extra PDAs
+    /// (direct lamport transfer from remaining_accounts causes UnbalancedInstruction).
+    /// Only works on PDAs with zeroed owner field. Rent goes to the caller.
+    pub fn reclaim_burned(ctx: Context<ReclaimBurned>) -> Result<()> {
+        let gumball_info = &ctx.accounts.gumball_pda;
+        let data = gumball_info.try_borrow_data()?;
+        require!(data.len() >= 40, GumballError::InvalidAccount);
+        require!(data[8..40].iter().all(|&b| b == 0), GumballError::Unauthorized);
+        drop(data);
+
+        let lamports = gumball_info.lamports();
+        require!(lamports > 0, GumballError::InsufficientFunds);
+
+        **gumball_info.try_borrow_mut_lamports()? = 0;
+        **ctx.accounts.claimer.try_borrow_mut_lamports()? += lamports;
+        gumball_info.try_borrow_mut_data()?.fill(0);
         Ok(())
     }
 
@@ -1483,6 +1492,16 @@ pub struct AcceptOffer<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program:           Program<'info, System>,
     pub rent:                     Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ReclaimBurned<'info> {
+    #[account(mut)]
+    pub claimer: Signer<'info>,
+    /// CHECK: manually verified — must be a zombie gumball PDA with zeroed owner field.
+    #[account(mut, owner = crate::ID)]
+    pub gumball_pda: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
