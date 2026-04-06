@@ -1873,25 +1873,38 @@ async function reclaimBurned() {
     if (zombies.length === 0) { toast('NO ZOMBIE PDAs FOUND', 'info'); btn.textContent = '♻ RECLAIM BURN RENT'; isMinting = false; return; }
     const reclaimDisc = await disc("reclaim_burned");
     const totalLamports = zombies.reduce((sum, { account }) => sum + account.lamports, 0);
-    const tx = new Transaction();
-    for (const { pubkey } of zombies) {
-      tx.add(new TransactionInstruction({
-        programId: PROGRAM_ID,
-        keys: [
-          { pubkey: walletPubkey, isSigner: true, isWritable: true },
-          { pubkey, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ],
-        data: reclaimDisc,
-      }));
-    }
-    tx.feePayer = walletPubkey;
+    const BATCH_SIZE = 12;
     const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
-    btn.textContent = `⏳ APPROVE...`;
-    const signed = await provider.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
-    await connection.confirmTransaction(sig, "confirmed");
+
+    // Build all batch transactions
+    const txs = [];
+    for (let b = 0; b < zombies.length; b += BATCH_SIZE) {
+      const batch = zombies.slice(b, b + BATCH_SIZE);
+      const tx = new Transaction();
+      for (const { pubkey } of batch) {
+        tx.add(new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: walletPubkey, isSigner: true, isWritable: true },
+            { pubkey, isSigner: false, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data: reclaimDisc,
+        }));
+      }
+      tx.feePayer = walletPubkey;
+      tx.recentBlockhash = blockhash;
+      txs.push(tx);
+    }
+
+    // Sign and send each batch
+    for (let i = 0; i < txs.length; i++) {
+      btn.textContent = `⏳ APPROVE ${i+1}/${txs.length}...`;
+      const signed = await provider.signTransaction(txs[i]);
+      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+      await connection.confirmTransaction(sig, "confirmed");
+    }
+
     toast(`♻ RECLAIMED ${zombies.length} PDAs — +${(totalLamports/1e9).toFixed(4)} XNT`, 'success', 6000);
     document.getElementById('reclaimWrap').style.display = 'none';
   } catch(e) {
