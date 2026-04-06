@@ -23,6 +23,7 @@ const BASE_PRICE: u64 = 250_000_000; // 0.25 XNT in lamports
 const MAX_PRICE:  u64 = 1_000_000_000; // 1.00 XNT in lamports
 
 const RARITY_LEGENDARY: u8 = 4;
+const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
 // CRIT-2 FIX: burns required per rarity level [Common, Uncommon, Rare, Epic]
 const BURNS_REQUIRED: [u8; 4] = [5, 3, 2, 2];
 
@@ -754,6 +755,216 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    // ── Marketplace ──────────────────────────────────────────────────────────
+
+    /// List a gumball NFT for sale at a fixed price.
+    /// Token is escrowed in a PDA-owned ATA until sold or delisted.
+    pub fn list_gumball(ctx: Context<ListGumball>, price: u64) -> Result<()> {
+        require!(price > 0, GumballError::InvalidPrice);
+
+        // Transfer NFT from seller to escrow ATA
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.seller_ata.to_account_info(),
+                    to:        ctx.accounts.escrow_ata.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            1,
+        )?;
+
+        let listing         = &mut ctx.accounts.listing;
+        listing.seller      = ctx.accounts.seller.key();
+        listing.nft_mint    = ctx.accounts.nft_mint.key();
+        listing.price       = price;
+        listing.created_at  = Clock::get()?.unix_timestamp;
+        listing.bump        = ctx.bumps.listing;
+
+        emit!(GumballListedEvent {
+            seller: listing.seller, nft_mint: listing.nft_mint, price,
+        });
+        Ok(())
+    }
+
+    /// Cancel a listing and return the NFT to the seller.
+    pub fn delist_gumball(ctx: Context<DelistGumball>) -> Result<()> {
+        let nft_mint_key = ctx.accounts.listing.nft_mint;
+        let seeds = &[b"escrow".as_ref(), nft_mint_key.as_ref(), &[ctx.bumps.escrow_authority]];
+
+        // Transfer NFT from escrow back to seller
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.escrow_ata.to_account_info(),
+                    to:        ctx.accounts.seller_ata.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            1,
+        )?;
+
+        emit!(GumballDelistedEvent {
+            seller: ctx.accounts.listing.seller, nft_mint: nft_mint_key,
+        });
+        // Listing PDA closed via close = seller in account struct
+        Ok(())
+    }
+
+    /// Buy a listed gumball at the listed price. 1% royalty to treasury.
+    pub fn buy_gumball(ctx: Context<BuyGumball>) -> Result<()> {
+        let price = ctx.accounts.listing.price;
+        let royalty = price.checked_mul(ROYALTY_BPS).ok_or(GumballError::MathOverflow)? / 10_000;
+        let seller_amount = price.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
+
+        // Pay seller
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to:   ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            seller_amount,
+        )?;
+
+        // Pay royalty to treasury
+        if royalty > 0 {
+            anchor_lang::system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.buyer.to_account_info(),
+                        to:   ctx.accounts.treasury.to_account_info(),
+                    },
+                ),
+                royalty,
+            )?;
+        }
+
+        // Transfer NFT from escrow to buyer
+        let nft_mint_key = ctx.accounts.listing.nft_mint;
+        let seeds = &[b"escrow".as_ref(), nft_mint_key.as_ref(), &[ctx.bumps.escrow_authority]];
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.escrow_ata.to_account_info(),
+                    to:        ctx.accounts.buyer_ata.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            1,
+        )?;
+
+        // Update gumball owner
+        ctx.accounts.gumball_data.owner = ctx.accounts.buyer.key();
+
+        emit!(GumballSoldEvent {
+            seller: ctx.accounts.listing.seller, buyer: ctx.accounts.buyer.key(),
+            nft_mint: nft_mint_key, price, royalty,
+        });
+        // Listing PDA closed via close = seller
+        Ok(())
+    }
+
+    /// Place an offer on a gumball (listed or not). XNT escrowed in Offer PDA.
+    pub fn make_offer(ctx: Context<MakeOffer>, amount: u64) -> Result<()> {
+        require!(amount > 0, GumballError::InvalidPrice);
+
+        // Escrow XNT in the Offer PDA
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to:   ctx.accounts.offer.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        let offer        = &mut ctx.accounts.offer;
+        offer.buyer      = ctx.accounts.buyer.key();
+        offer.nft_mint   = ctx.accounts.nft_mint.key();
+        offer.amount     = amount;
+        offer.created_at = Clock::get()?.unix_timestamp;
+        offer.bump       = ctx.bumps.offer;
+
+        emit!(OfferMadeEvent {
+            buyer: offer.buyer, nft_mint: offer.nft_mint, amount,
+        });
+        Ok(())
+    }
+
+    /// Cancel an offer and return escrowed XNT to buyer.
+    pub fn cancel_offer(ctx: Context<CancelOffer>) -> Result<()> {
+        let offer_info = ctx.accounts.offer.to_account_info();
+        let lamports = offer_info.lamports();
+
+        // Return all lamports (escrowed amount + rent) to buyer
+        **offer_info.try_borrow_mut_lamports()? = 0;
+        **ctx.accounts.buyer.try_borrow_mut_lamports()? += lamports;
+
+        emit!(OfferCancelledEvent {
+            buyer: ctx.accounts.offer.buyer, nft_mint: ctx.accounts.offer.nft_mint,
+        });
+        Ok(())
+    }
+
+    /// Accept an offer — seller receives XNT (minus 1% royalty), buyer gets NFT.
+    pub fn accept_offer(ctx: Context<AcceptOffer>) -> Result<()> {
+        let amount = ctx.accounts.offer.amount;
+        let royalty = amount.checked_mul(ROYALTY_BPS).ok_or(GumballError::MathOverflow)? / 10_000;
+        let seller_amount = amount.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
+
+        let offer_info = ctx.accounts.offer.to_account_info();
+        let offer_lamports = offer_info.lamports();
+        let rent = Rent::get()?.minimum_balance(8 + Offer::LEN);
+
+        // Pay seller from Offer PDA
+        **offer_info.try_borrow_mut_lamports()? -= seller_amount;
+        **ctx.accounts.seller.try_borrow_mut_lamports()? += seller_amount;
+
+        // Pay royalty to treasury from Offer PDA
+        if royalty > 0 {
+            **offer_info.try_borrow_mut_lamports()? -= royalty;
+            **ctx.accounts.treasury.try_borrow_mut_lamports()? += royalty;
+        }
+
+        // Return remaining rent to buyer
+        let remaining = offer_info.lamports();
+        **offer_info.try_borrow_mut_lamports()? = 0;
+        **ctx.accounts.buyer.try_borrow_mut_lamports()? += remaining;
+
+        // Transfer NFT from seller to buyer
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.seller_ata.to_account_info(),
+                    to:        ctx.accounts.buyer_ata.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            1,
+        )?;
+
+        // Update gumball owner
+        ctx.accounts.gumball_data.owner = ctx.accounts.buyer.key();
+
+        emit!(GumballSoldEvent {
+            seller: ctx.accounts.seller.key(), buyer: ctx.accounts.offer.buyer,
+            nft_mint: ctx.accounts.offer.nft_mint, price: amount, royalty,
+        });
+        Ok(())
+    }
+
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1071,7 +1282,212 @@ pub struct UpdateOwner<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-// ReclaimBurned removed — burns now auto-reclaim rent. No zombie PDAs on mainnet.
+// ─── Marketplace Account Contexts ────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct ListGumball<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    pub nft_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = nft_mint,
+        associated_token::authority = seller,
+        constraint = seller_ata.amount == 1 @ GumballError::Unauthorized,
+    )]
+    pub seller_ata: Account<'info, TokenAccount>,
+    /// CHECK: escrow PDA authority
+    #[account(seeds = [b"escrow", nft_mint.key().as_ref()], bump)]
+    pub escrow_authority: AccountInfo<'info>,
+    #[account(
+        init_if_needed,
+        payer = seller,
+        associated_token::mint = nft_mint,
+        associated_token::authority = escrow_authority,
+    )]
+    pub escrow_ata: Account<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = seller,
+        space = 8 + Listing::LEN,
+        seeds = [b"listing", nft_mint.key().as_ref()],
+        bump,
+    )]
+    pub listing: Account<'info, Listing>,
+    #[account(
+        mut,
+        seeds = [b"gumball", nft_mint.key().as_ref()],
+        bump = gumball_data.bump,
+        constraint = gumball_data.owner == seller.key() @ GumballError::Unauthorized,
+    )]
+    pub gumball_data: Account<'info, GumballData>,
+    pub token_program:            Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program:           Program<'info, System>,
+    pub rent:                     Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct DelistGumball<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    pub nft_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        close = seller,
+        seeds = [b"listing", nft_mint.key().as_ref()],
+        bump = listing.bump,
+        constraint = listing.seller == seller.key() @ GumballError::Unauthorized,
+    )]
+    pub listing: Account<'info, Listing>,
+    /// CHECK: escrow PDA authority
+    #[account(seeds = [b"escrow", nft_mint.key().as_ref()], bump)]
+    pub escrow_authority: AccountInfo<'info>,
+    #[account(
+        mut,
+        associated_token::mint = nft_mint,
+        associated_token::authority = escrow_authority,
+    )]
+    pub escrow_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed,
+        payer = seller,
+        associated_token::mint = nft_mint,
+        associated_token::authority = seller,
+    )]
+    pub seller_ata: Account<'info, TokenAccount>,
+    pub token_program:            Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program:           Program<'info, System>,
+    pub rent:                     Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct BuyGumball<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    /// CHECK: seller receives payment, validated via listing
+    #[account(mut, constraint = seller.key() == listing.seller @ GumballError::Unauthorized)]
+    pub seller: AccountInfo<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    /// CHECK: treasury validated against machine
+    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
+    pub treasury: AccountInfo<'info>,
+    pub nft_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        close = seller,
+        seeds = [b"listing", nft_mint.key().as_ref()],
+        bump = listing.bump,
+    )]
+    pub listing: Account<'info, Listing>,
+    /// CHECK: escrow PDA authority
+    #[account(seeds = [b"escrow", nft_mint.key().as_ref()], bump)]
+    pub escrow_authority: AccountInfo<'info>,
+    #[account(
+        mut,
+        associated_token::mint = nft_mint,
+        associated_token::authority = escrow_authority,
+    )]
+    pub escrow_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = nft_mint,
+        associated_token::authority = buyer,
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [b"gumball", nft_mint.key().as_ref()],
+        bump = gumball_data.bump,
+    )]
+    pub gumball_data: Account<'info, GumballData>,
+    pub token_program:            Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program:           Program<'info, System>,
+    pub rent:                     Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct MakeOffer<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    pub nft_mint: Account<'info, Mint>,
+    #[account(
+        init,
+        payer = buyer,
+        space = 8 + Offer::LEN,
+        seeds = [b"offer", nft_mint.key().as_ref(), buyer.key().as_ref()],
+        bump,
+    )]
+    pub offer: Account<'info, Offer>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelOffer<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"offer", offer.nft_mint.as_ref(), buyer.key().as_ref()],
+        bump = offer.bump,
+        constraint = offer.buyer == buyer.key() @ GumballError::Unauthorized,
+    )]
+    pub offer: Account<'info, Offer>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptOffer<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    /// CHECK: buyer receives NFT and rent refund, validated via offer
+    #[account(mut, constraint = buyer.key() == offer.buyer @ GumballError::Unauthorized)]
+    pub buyer: AccountInfo<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    /// CHECK: treasury validated against machine
+    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
+    pub treasury: AccountInfo<'info>,
+    pub nft_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        seeds = [b"offer", nft_mint.key().as_ref(), buyer.key().as_ref()],
+        bump = offer.bump,
+        constraint = offer.nft_mint == nft_mint.key() @ GumballError::Unauthorized,
+    )]
+    pub offer: Account<'info, Offer>,
+    #[account(
+        mut,
+        associated_token::mint = nft_mint,
+        associated_token::authority = seller,
+        constraint = seller_ata.amount == 1 @ GumballError::Unauthorized,
+    )]
+    pub seller_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed,
+        payer = seller,
+        associated_token::mint = nft_mint,
+        associated_token::authority = buyer,
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [b"gumball", nft_mint.key().as_ref()],
+        bump = gumball_data.bump,
+        constraint = gumball_data.owner == seller.key() @ GumballError::Unauthorized,
+    )]
+    pub gumball_data: Account<'info, GumballData>,
+    pub token_program:            Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program:           Program<'info, System>,
+    pub rent:                     Sysvar<'info, Rent>,
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -1150,6 +1566,28 @@ impl GumballSvg {
     pub const LEN: usize = 4 + MAX_SVG_LEN;
 }
 
+/// Marketplace listing — seller lists NFT at a fixed price
+#[account]
+pub struct Listing {
+    pub seller:     Pubkey,  // 32
+    pub nft_mint:   Pubkey,  // 32
+    pub price:      u64,     //  8
+    pub created_at: i64,     //  8
+    pub bump:       u8,      //  1
+}
+impl Listing { pub const LEN: usize = 32+32+8+8+1; }
+
+/// Marketplace offer — buyer bids on an NFT with escrowed XNT
+#[account]
+pub struct Offer {
+    pub buyer:      Pubkey,  // 32
+    pub nft_mint:   Pubkey,  // 32
+    pub amount:     u64,     //  8
+    pub created_at: i64,     //  8
+    pub bump:       u8,      //  1
+}
+impl Offer { pub const LEN: usize = 32+32+8+8+1; }
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 #[event] pub struct MachineInitializedEvent { pub authority: Pubkey, pub treasury: Pubkey, pub mint_price: u64, pub max_supply: u64 }
@@ -1159,6 +1597,11 @@ impl GumballSvg {
 #[event] pub struct MintRefundedEvent       { pub minter: Pubkey, pub amount: u64 }
 #[event] pub struct GumballMintedEvent      { pub minter: Pubkey, pub serial: u64, pub mint: Pubkey, pub flavor: u8, pub color: u8, pub rarity: u8, pub special: u8, pub total_minted: u64 }
 #[event] pub struct GumballUpgradedEvent    { pub burner: Pubkey, pub burned_rarity: u8, pub burned_count: u8, pub new_serial: u64, pub new_rarity: u8, pub new_mint: Pubkey, pub flavor: u8, pub color: u8, pub special: u8 }
+#[event] pub struct GumballListedEvent     { pub seller: Pubkey, pub nft_mint: Pubkey, pub price: u64 }
+#[event] pub struct GumballDelistedEvent   { pub seller: Pubkey, pub nft_mint: Pubkey }
+#[event] pub struct GumballSoldEvent       { pub seller: Pubkey, pub buyer: Pubkey, pub nft_mint: Pubkey, pub price: u64, pub royalty: u64 }
+#[event] pub struct OfferMadeEvent         { pub buyer: Pubkey, pub nft_mint: Pubkey, pub amount: u64 }
+#[event] pub struct OfferCancelledEvent    { pub buyer: Pubkey, pub nft_mint: Pubkey }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 

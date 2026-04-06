@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — MARKETPLACE</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --red:#ff2244; --gold:#ffcc00; --gold2:#ffee88; --teal:#00ffcc;
+  --purple:#cc44ff; --white:#e8e8f8; --gray:#6666aa; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+
+header{
+  width:100%;max-width:980px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap;gap:12px;
+}
+.logo{font-family:'Press Start 2P',cursive;font-size:0.8rem;color:var(--gold);letter-spacing:2px;line-height:1.6;}
+.logo span{color:var(--red);}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover{border-color:var(--teal);color:var(--teal);}
+.nav-link.active{border-color:var(--teal);color:var(--teal);}
+.wallet-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:8px 14px;border:1px solid var(--gold);background:transparent;
+  color:var(--gold);cursor:pointer;transition:all 0.2s;
+}
+.wallet-btn:hover{background:rgba(255,204,0,0.1);}
+.wallet-btn.connected{border-color:var(--teal);color:var(--teal);}
+
+.wrap{width:100%;max-width:980px;}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+.tab{
+  font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:10px 16px;
+  border:1px solid var(--border);background:transparent;color:var(--gray);
+  cursor:pointer;letter-spacing:1px;transition:all 0.2s;
+}
+.tab:hover{border-color:var(--teal);color:var(--teal);}
+.tab.active{border-color:var(--teal);color:var(--teal);background:rgba(0,255,204,0.05);}
+
+/* Stats bar */
+.stats{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.stat{background:var(--panel);border:1px solid var(--border);padding:10px 14px;flex:1;min-width:120px;}
+.stat-val{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--teal);display:block;}
+.stat-lbl{font-size:0.4rem;color:var(--gray);margin-top:4px;}
+
+/* Grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+
+/* Listing card */
+.card{
+  background:var(--panel);border:1px solid var(--border);padding:14px;
+  transition:border-color 0.2s;cursor:pointer;position:relative;
+}
+.card:hover{border-color:var(--teal);}
+.card-svg{width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#111;margin-bottom:10px;}
+.card-svg svg{width:100%;height:100%;display:block;}
+.card-serial{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--purple);}
+.card-name{font-size:0.5rem;color:var(--white);margin:4px 0 8px;}
+.card-rarity{font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:3px 8px;display:inline-block;border-radius:2px;}
+.card-price{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--gold);margin-top:10px;}
+.card-seller{font-size:0.38rem;color:var(--gray);margin-top:4px;}
+.card-btn{
+  width:100%;margin-top:10px;font-family:'Press Start 2P',cursive;font-size:0.38rem;
+  padding:10px;border:1px solid var(--teal);background:transparent;color:var(--teal);
+  cursor:pointer;letter-spacing:1px;transition:all 0.2s;
+}
+.card-btn:hover{background:rgba(0,255,204,0.1);}
+.card-btn.buy{border-color:var(--gold);color:var(--gold);}
+.card-btn.buy:hover{background:rgba(255,204,0,0.1);}
+.card-btn.delist{border-color:var(--red);color:var(--red);}
+.card-btn.delist:hover{background:rgba(255,34,68,0.1);}
+.card-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.card-badge{
+  position:absolute;top:10px;right:10px;font-family:'Press Start 2P',cursive;
+  font-size:0.3rem;padding:4px 8px;background:var(--gold);color:#000;
+}
+
+/* Offer row */
+.offer-row{
+  background:var(--panel);border:1px solid var(--border);padding:12px 16px;
+  margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.offer-info{flex:1;min-width:200px;}
+.offer-buyer{font-size:0.42rem;color:var(--gray);}
+.offer-amount{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--gold);}
+.offer-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 12px;
+  border:1px solid var(--teal);background:transparent;color:var(--teal);
+  cursor:pointer;letter-spacing:1px;
+}
+.offer-btn:hover{background:rgba(0,255,204,0.1);}
+.offer-btn.cancel{border-color:var(--red);color:var(--red);}
+
+/* List modal */
+.modal-overlay{
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;
+}
+.modal-overlay.show{display:flex;}
+.modal{
+  background:var(--panel);border:1px solid var(--border);padding:24px;
+  max-width:400px;width:90%;
+}
+.modal-title{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--teal);margin-bottom:16px;}
+.modal input{
+  width:100%;padding:10px;background:var(--black);border:1px solid var(--border);
+  color:var(--white);font-family:'Space Mono',monospace;font-size:0.55rem;
+  outline:none;margin-bottom:12px;
+}
+.modal input:focus{border-color:var(--teal);}
+.modal-btns{display:flex;gap:8px;}
+.modal-btns button{flex:1;font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:10px;cursor:pointer;letter-spacing:1px;}
+
+/* Toast */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast{padding:12px 16px;font-size:0.45rem;border:1px solid;animation:fadeIn 0.3s;}
+.toast.success{background:rgba(0,255,204,0.1);border-color:var(--teal);color:var(--teal);}
+.toast.error{background:rgba(255,34,68,0.1);border-color:var(--red);color:var(--red);}
+.toast.info{background:rgba(102,102,170,0.1);border-color:var(--gray);color:var(--gray);}
+@keyframes fadeIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+.empty-msg{text-align:center;padding:40px;font-family:'Press Start 2P',cursive;font-size:0.45rem;color:var(--gray);letter-spacing:2px;}
+.section-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;margin-bottom:16px;}
+.r-common{color:#aaaacc;} .r-uncommon{color:#44ff88;} .r-rare{color:#44aaff;} .r-epic{color:#cc88ff;} .r-legendary{color:#ffcc00;}
+
+@media(max-width:500px){
+  .grid{grid-template-columns:1fr;}
+  .stats{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <a href="index.html" class="nav-link">[ MINT ]</a>
+    <a href="marketplace.html" class="nav-link active">[ MARKET ]</a>
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><span class="stat-val" id="sListings">0</span><span class="stat-lbl">ACTIVE LISTINGS</span></div>
+    <div class="stat"><span class="stat-val" id="sFloor">--</span><span class="stat-lbl">FLOOR PRICE</span></div>
+    <div class="stat"><span class="stat-val" id="sVolume">--</span><span class="stat-lbl">ROYALTY (5%)</span></div>
+    <div class="stat"><span class="stat-val" id="sOffers">0</span><span class="stat-lbl">YOUR OFFERS</span></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('listings')">ALL LISTINGS</button>
+    <button class="tab" onclick="switchTab('my-listed')">MY LISTINGS</button>
+    <button class="tab" onclick="switchTab('my-collection')">MY COLLECTION</button>
+    <button class="tab" onclick="switchTab('my-offers')">MY OFFERS</button>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <div class="empty-msg">CONNECT WALLET TO VIEW MARKETPLACE</div>
+  </div>
+
+</div>
+
+<!-- List Modal -->
+<div class="modal-overlay" id="listModal">
+  <div class="modal">
+    <div class="modal-title">// LIST FOR SALE</div>
+    <div style="font-size:0.45rem;color:var(--gray);margin-bottom:12px;" id="listModalInfo"></div>
+    <input type="number" id="listPriceInput" placeholder="Price in XNT (e.g. 0.5)" step="0.01" min="0.01" />
+    <div style="font-size:0.38rem;color:var(--gray);margin-bottom:12px;">5% royalty to treasury on sale</div>
+    <div class="modal-btns">
+      <button onclick="closeListModal()" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
+      <button onclick="confirmList()" style="background:var(--teal);border:1px solid var(--teal);color:#000;">LIST</button>
+    </div>
+  </div>
+</div>
+
+<!-- Offer Modal -->
+<div class="modal-overlay" id="offerModal">
+  <div class="modal">
+    <div class="modal-title">// MAKE OFFER</div>
+    <div style="font-size:0.45rem;color:var(--gray);margin-bottom:12px;" id="offerModalInfo"></div>
+    <input type="number" id="offerAmountInput" placeholder="Offer amount in XNT" step="0.01" min="0.01" />
+    <div style="font-size:0.38rem;color:var(--gray);margin-bottom:12px;">XNT will be escrowed until accepted or cancelled</div>
+    <div class="modal-btns">
+      <button onclick="closeOfferModal()" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
+      <button onclick="confirmOffer()" style="background:var(--gold);border:1px solid var(--gold);color:#000;">OFFER</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } = solanaWeb3;
+const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const RPC         = "https://rpc.testnet.x1.xyz";
+const connection  = new Connection(RPC, "confirmed");
+
+const TOKEN_PID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOC_PID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const RENT_PID  = new PublicKey("SysvarRent111111111111111111111111111111111");
+
+const FLAVORS  = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const COLORS   = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const RARITY   = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+
+const LISTING_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
+const OFFER_SIZE   = 8 + 32 + 32 + 8 + 8 + 1; // 89
+const GD_V4       = 8 + 32 + 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1 + 32 + 32; // 157
+
+let walletPubkey = null;
+let currentTab = 'listings';
+let allListings = [];
+let allOffers = [];
+let myCollection = [];
+let _listingMint = null;
+let _offerMint = null;
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+
+function getAta(mint, owner) {
+  const [ata] = PublicKey.findProgramAddressSync([owner.toBytes(), TOKEN_PID.toBytes(), mint.toBytes()], ASSOC_PID);
+  return ata;
+}
+
+async function disc(name) {
+  const enc = new TextEncoder().encode("global:" + name);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return new Uint8Array(buf).slice(0, 8);
+}
+
+function strToU8(s) { return new TextEncoder().encode(s); }
+function concatU8(...arrays) {
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total); let off = 0;
+  for (const a of arrays) { out.set(a, off); off += a.length; }
+  return out;
+}
+function u8FromNum(n, bytes=8) {
+  const a = new Uint8Array(bytes);
+  for (let i = 0; i < bytes; i++) { a[i] = Number(BigInt(n) >> BigInt(i * 8) & 0xFFn); }
+  return a;
+}
+
+function getProvider() {
+  return window.xnft?.solana || window.x1wallet || window.phantom?.solana || window.solana || null;
+}
+
+function toast(msg, type='info', duration=3500) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), duration);
+}
+
+function parseGumball(data) {
+  const dv = new DataView(data.buffer, data.byteOffset);
+  return {
+    owner:   new PublicKey(data.slice(8, 40)).toBase58(),
+    serial:  Number(dv.getBigUint64(8+32+32, true)),
+    flavor:  data[8+32+32+8],
+    color:   data[8+32+32+8+1],
+    rarity:  data[8+32+32+8+2],
+    special: data[8+32+32+8+3],
+  };
+}
+
+function parseListing(data) {
+  const dv = new DataView(data.buffer, data.byteOffset);
+  return {
+    seller:    new PublicKey(data.slice(8, 40)).toBase58(),
+    nftMint:   new PublicKey(data.slice(40, 72)).toBase58(),
+    price:     Number(dv.getBigUint64(72, true)),
+    createdAt: Number(dv.getBigInt64(80, true)),
+    bump:      data[88],
+  };
+}
+
+function parseOffer(data) {
+  const dv = new DataView(data.buffer, data.byteOffset);
+  return {
+    buyer:     new PublicKey(data.slice(8, 40)).toBase58(),
+    nftMint:   new PublicKey(data.slice(40, 72)).toBase58(),
+    amount:    Number(dv.getBigUint64(72, true)),
+    createdAt: Number(dv.getBigInt64(80, true)),
+    bump:      data[88],
+  };
+}
+
+// ── WALLET ───────────────────────────────────────────────────────────────────
+
+async function connectWallet() {
+  const btn = document.getElementById("walletBtn");
+  if (walletPubkey) {
+    walletPubkey = null;
+    btn.classList.remove("connected");
+    btn.textContent = "[ CONNECT WALLET ]";
+    render();
+    return;
+  }
+  const provider = getProvider();
+  if (!provider) { toast("NO WALLET FOUND — INSTALL X1 WALLET OR PHANTOM", "error"); return; }
+  try {
+    const resp = await provider.connect();
+    walletPubkey = resp.publicKey;
+    btn.classList.add("connected");
+    btn.textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+    loadAll();
+  } catch(e) { toast("WALLET CONNECTION FAILED", "error"); }
+}
+
+// ── DATA LOADING ─────────────────────────────────────────────────────────────
+
+async function loadAll() {
+  await Promise.all([loadListings(), loadMyCollection(), loadOffers()]);
+  updateStats();
+  render();
+}
+
+async function loadListings() {
+  try {
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: LISTING_SIZE }],
+    });
+    allListings = [];
+    for (const { pubkey, account } of accounts) {
+      const listing = parseListing(account.data);
+      // Fetch gumball data for traits
+      const mintPubkey = new PublicKey(listing.nftMint);
+      const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID);
+      try {
+        const gbInfo = await connection.getAccountInfo(gumballPda);
+        if (gbInfo) {
+          const gb = parseGumball(gbInfo.data);
+          allListings.push({ ...listing, ...gb, listingPda: pubkey.toBase58(), mintPubkey });
+        }
+      } catch(e) {}
+    }
+    allListings.sort((a, b) => a.price - b.price);
+  } catch(e) { console.error("loadListings:", e); }
+}
+
+async function loadMyCollection() {
+  if (!walletPubkey) return;
+  try {
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { dataSize: GD_V4 },
+        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+      ],
+    });
+    myCollection = [];
+    for (const { pubkey, account } of accounts) {
+      const gb = parseGumball(account.data);
+      // Find the mint key by deriving PDAs
+      // We need to find a mint whose PDA matches this pubkey
+      gb.gbPda = pubkey;
+      myCollection.push(gb);
+    }
+    // Try to find mint keys via token accounts
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+    for (const ta of tokenAccounts.value) {
+      const parsed = ta.account.data.parsed.info;
+      if (parsed.tokenAmount.uiAmount === 1) {
+        const mintKey = new PublicKey(parsed.mint);
+        const [expectedPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+        const match = myCollection.find(g => g.gbPda.equals(expectedPda));
+        if (match) {
+          match.mintPubkey = mintKey;
+          match.ataPubkey = ta.pubkey;
+        }
+      }
+    }
+    // Check which are listed
+    for (const g of myCollection) {
+      g.isListed = allListings.some(l => l.mintPubkey && g.mintPubkey && l.mintPubkey.equals(g.mintPubkey));
+    }
+  } catch(e) { console.error("loadMyCollection:", e); }
+}
+
+async function loadOffers() {
+  if (!walletPubkey) return;
+  try {
+    // Load offers made BY this wallet
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { dataSize: OFFER_SIZE },
+        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+      ],
+    });
+    allOffers = accounts.map(({ pubkey, account }) => ({
+      ...parseOffer(account.data),
+      offerPda: pubkey,
+    }));
+  } catch(e) { console.error("loadOffers:", e); }
+}
+
+function updateStats() {
+  document.getElementById("sListings").textContent = allListings.length;
+  if (allListings.length > 0) {
+    const floor = Math.min(...allListings.map(l => l.price));
+    document.getElementById("sFloor").textContent = (floor / 1e9).toFixed(4);
+  } else {
+    document.getElementById("sFloor").textContent = "--";
+  }
+  document.getElementById("sOffers").textContent = allOffers.length;
+}
+
+// ── TABS & RENDERING ─────────────────────────────────────────────────────────
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  render();
+}
+
+function render() {
+  const content = document.getElementById('content');
+  if (!walletPubkey) {
+    content.innerHTML = '<div class="empty-msg">CONNECT WALLET TO VIEW MARKETPLACE</div>';
+    return;
+  }
+
+  if (currentTab === 'listings') renderListings(content);
+  else if (currentTab === 'my-listed') renderMyListings(content);
+  else if (currentTab === 'my-collection') renderMyCollection(content);
+  else if (currentTab === 'my-offers') renderMyOffers(content);
+}
+
+function renderListings(el) {
+  if (allListings.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO ACTIVE LISTINGS</div>';
+    return;
+  }
+  el.innerHTML = `<div class="grid">${allListings.map(l => listingCard(l, false)).join('')}</div>`;
+}
+
+function renderMyListings(el) {
+  const mine = allListings.filter(l => l.seller === walletPubkey.toBase58());
+  if (mine.length === 0) {
+    el.innerHTML = '<div class="empty-msg">YOU HAVE NO ACTIVE LISTINGS</div>';
+    return;
+  }
+  el.innerHTML = `<div class="grid">${mine.map(l => listingCard(l, true)).join('')}</div>`;
+}
+
+function renderMyCollection(el) {
+  const unlisted = myCollection.filter(g => !g.isListed && g.mintPubkey);
+  if (unlisted.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO UNLISTED GUMBALLS IN YOUR WALLET</div>';
+    return;
+  }
+  el.innerHTML = `<div class="grid">${unlisted.map(g => collectionCard(g)).join('')}</div>`;
+}
+
+function renderMyOffers(el) {
+  if (allOffers.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO ACTIVE OFFERS</div>';
+    return;
+  }
+  el.innerHTML = allOffers.map(o => offerRow(o)).join('');
+}
+
+function listingCard(l, isMine) {
+  const rarName = RARITY[l.rarity] || "Common";
+  const rarColor = RARITY_COLORS[l.rarity] || "#aaaacc";
+  const flavorName = FLAVORS[l.flavor] || "Mystery";
+  const colorName = COLORS[l.color] || "Berry Blue";
+  const priceXNT = (l.price / 1e9).toFixed(4);
+  const sellerShort = `${l.seller.slice(0,4)}...${l.seller.slice(-4)}`;
+  const mintKey = l.mintPubkey ? l.mintPubkey.toBase58() : '';
+
+  return `
+    <div class="card">
+      <div class="card-svg" id="svg-${l.serial}" data-mint="${mintKey}"></div>
+      <div class="card-serial">#${String(l.serial).padStart(4,'0')}</div>
+      <div class="card-name">${flavorName} - ${colorName}</div>
+      <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
+      <div class="card-price">${priceXNT} XNT</div>
+      <div class="card-seller">Seller: ${sellerShort}</div>
+      ${isMine
+        ? `<button class="card-btn delist" onclick="delistGumball('${mintKey}')">DELIST</button>`
+        : `<button class="card-btn buy" onclick="buyGumball('${mintKey}')" ${!walletPubkey?'disabled':''}>BUY NOW</button>
+           <button class="card-btn" onclick="openOfferModal('${mintKey}', ${l.serial})" style="margin-top:6px;">MAKE OFFER</button>`
+      }
+    </div>`;
+}
+
+function collectionCard(g) {
+  const rarName = RARITY[g.rarity] || "Common";
+  const rarColor = RARITY_COLORS[g.rarity] || "#aaaacc";
+  const flavorName = FLAVORS[g.flavor] || "Mystery";
+  const mintKey = g.mintPubkey ? g.mintPubkey.toBase58() : '';
+
+  return `
+    <div class="card">
+      <div class="card-svg" id="svg-c-${g.serial}" data-mint="${mintKey}"></div>
+      <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
+      <div class="card-name">${flavorName}</div>
+      <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
+      <button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>
+    </div>`;
+}
+
+function offerRow(o) {
+  const amountXNT = (o.amount / 1e9).toFixed(4);
+  const mintShort = `${o.nftMint.slice(0,6)}...${o.nftMint.slice(-4)}`;
+  return `
+    <div class="offer-row">
+      <div class="offer-info">
+        <div class="offer-buyer">OFFER ON: ${mintShort}</div>
+        <div class="offer-amount">${amountXNT} XNT</div>
+      </div>
+      <button class="offer-btn cancel" onclick="cancelOffer('${o.nftMint}')">CANCEL</button>
+    </div>`;
+}
+
+// ── SVG LOADING ──────────────────────────────────────────────────────────────
+
+async function loadSvgs() {
+  const svgEls = document.querySelectorAll('.card-svg[data-mint]');
+  for (const el of svgEls) {
+    const mintStr = el.dataset.mint;
+    if (!mintStr) continue;
+    try {
+      const mintKey = new PublicKey(mintStr);
+      const [svgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
+      const info = await connection.getAccountInfo(svgPda);
+      if (info) {
+        const dv = new DataView(info.data.buffer, info.data.byteOffset);
+        const svgLen = dv.getUint32(8, true);
+        if (svgLen > 0 && svgLen <= 768) {
+          const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+          el.innerHTML = svgStr;
+        }
+      }
+    } catch(e) {}
+  }
+}
+
+// ── MARKETPLACE ACTIONS ──────────────────────────────────────────────────────
+
+function openListModal(mintKey, serial) {
+  _listingMint = mintKey;
+  document.getElementById('listModalInfo').textContent = `Gumball #${String(serial).padStart(4,'0')}`;
+  document.getElementById('listPriceInput').value = '';
+  document.getElementById('listModal').classList.add('show');
+}
+function closeListModal() {
+  document.getElementById('listModal').classList.remove('show');
+  _listingMint = null;
+}
+
+function openOfferModal(mintKey, serial) {
+  _offerMint = mintKey;
+  document.getElementById('offerModalInfo').textContent = `Offer on Gumball #${String(serial).padStart(4,'0')}`;
+  document.getElementById('offerAmountInput').value = '';
+  document.getElementById('offerModal').classList.add('show');
+}
+function closeOfferModal() {
+  document.getElementById('offerModal').classList.remove('show');
+  _offerMint = null;
+}
+
+async function confirmList() {
+  if (!_listingMint || !walletPubkey) return;
+  const priceXNT = parseFloat(document.getElementById('listPriceInput').value);
+  if (!priceXNT || priceXNT <= 0) { toast("ENTER A VALID PRICE", "error"); return; }
+  const priceLamports = Math.floor(priceXNT * 1e9);
+
+  closeListModal();
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(_listingMint);
+    const [listingPda] = PublicKey.findProgramAddressSync([strToU8("listing"), mintKey.toBytes()], PROGRAM_ID);
+    const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
+    const escrowAta = getAta(mintKey, escrowAuth);
+    const sellerAta = getAta(mintKey, walletPubkey);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+
+    const discBytes = await disc("list_gumball");
+    const data = concatU8(discBytes, u8FromNum(priceLamports, 8));
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
+        { pubkey: MACHINE_PDA,         isSigner: false, isWritable: false },
+        { pubkey: mintKey,             isSigner: false, isWritable: false },
+        { pubkey: sellerAta,           isSigner: false, isWritable: true  },
+        { pubkey: escrowAuth,          isSigner: false, isWritable: false },
+        { pubkey: escrowAta,           isSigner: false, isWritable: true  },
+        { pubkey: listingPda,          isSigner: false, isWritable: true  },
+        { pubkey: gumballPda,          isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast(`LISTED FOR ${priceXNT} XNT`, "success");
+    await loadAll();
+  } catch(e) {
+    console.error("list error:", e);
+    toast("LIST FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function delistGumball(mintKeyStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(mintKeyStr);
+    const [listingPda] = PublicKey.findProgramAddressSync([strToU8("listing"), mintKey.toBytes()], PROGRAM_ID);
+    const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
+    const escrowAta = getAta(mintKey, escrowAuth);
+    const sellerAta = getAta(mintKey, walletPubkey);
+
+    const discBytes = await disc("delist_gumball");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
+        { pubkey: mintKey,             isSigner: false, isWritable: false },
+        { pubkey: listingPda,          isSigner: false, isWritable: true  },
+        { pubkey: escrowAuth,          isSigner: false, isWritable: false },
+        { pubkey: escrowAta,           isSigner: false, isWritable: true  },
+        { pubkey: sellerAta,           isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast("DELISTED SUCCESSFULLY", "success");
+    await loadAll();
+  } catch(e) {
+    console.error("delist error:", e);
+    toast("DELIST FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function buyGumball(mintKeyStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(mintKeyStr);
+    const listing = allListings.find(l => l.mintPubkey && l.mintPubkey.toBase58() === mintKeyStr);
+    if (!listing) { toast("LISTING NOT FOUND", "error"); return; }
+
+    const sellerPubkey = new PublicKey(listing.seller);
+    const [listingPda] = PublicKey.findProgramAddressSync([strToU8("listing"), mintKey.toBytes()], PROGRAM_ID);
+    const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
+    const escrowAta = getAta(mintKey, escrowAuth);
+    const buyerAta = getAta(mintKey, walletPubkey);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+
+    // Read treasury from machine
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
+
+    const discBytes = await disc("buy_gumball");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
+        { pubkey: sellerPubkey,        isSigner: false, isWritable: true  },
+        { pubkey: MACHINE_PDA,         isSigner: false, isWritable: false },
+        { pubkey: treasuryPubkey,      isSigner: false, isWritable: true  },
+        { pubkey: mintKey,             isSigner: false, isWritable: false },
+        { pubkey: listingPda,          isSigner: false, isWritable: true  },
+        { pubkey: escrowAuth,          isSigner: false, isWritable: false },
+        { pubkey: escrowAta,           isSigner: false, isWritable: true  },
+        { pubkey: buyerAta,            isSigner: false, isWritable: true  },
+        { pubkey: gumballPda,          isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast(`BOUGHT FOR ${(listing.price / 1e9).toFixed(4)} XNT`, "success");
+    await loadAll();
+  } catch(e) {
+    console.error("buy error:", e);
+    toast("BUY FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function confirmOffer() {
+  if (!_offerMint || !walletPubkey) return;
+  const amountXNT = parseFloat(document.getElementById('offerAmountInput').value);
+  if (!amountXNT || amountXNT <= 0) { toast("ENTER A VALID AMOUNT", "error"); return; }
+  const amountLamports = Math.floor(amountXNT * 1e9);
+
+  closeOfferModal();
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(_offerMint);
+    const [offerPda] = PublicKey.findProgramAddressSync([strToU8("offer"), mintKey.toBytes(), walletPubkey.toBytes()], PROGRAM_ID);
+
+    const discBytes = await disc("make_offer");
+    const data = concatU8(discBytes, u8FromNum(amountLamports, 8));
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
+        { pubkey: mintKey,             isSigner: false, isWritable: false },
+        { pubkey: offerPda,            isSigner: false, isWritable: true  },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast(`OFFER PLACED: ${amountXNT} XNT`, "success");
+    await loadAll();
+  } catch(e) {
+    console.error("offer error:", e);
+    toast("OFFER FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function cancelOffer(nftMintStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(nftMintStr);
+    const [offerPda] = PublicKey.findProgramAddressSync([strToU8("offer"), mintKey.toBytes(), walletPubkey.toBytes()], PROGRAM_ID);
+
+    const discBytes = await disc("cancel_offer");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
+        { pubkey: offerPda,            isSigner: false, isWritable: true  },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast("OFFER CANCELLED — XNT RETURNED", "success");
+    await loadAll();
+  } catch(e) {
+    console.error("cancel offer error:", e);
+    toast("CANCEL FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+// Auto-refresh every 30s
+setInterval(async () => {
+  if (walletPubkey) {
+    await loadAll();
+    loadSvgs();
+  }
+}, 30000);
+
+// Load SVGs after render
+const observer = new MutationObserver(() => loadSvgs());
+observer.observe(document.getElementById('content'), { childList: true, subtree: true });
+
+</script>
+</body>
+</html>
