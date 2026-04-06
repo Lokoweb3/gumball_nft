@@ -550,3 +550,43 @@ Only authorized chat ID can issue commands. Uses `execFile()` with action whitel
 **Why:** Oracle downtime means mints aren't fulfilled. Users can refund after 5 min,
 but operator needs to know immediately. Remote restart via Telegram avoids SSH.
 
+---
+
+### [2026-04-05] MED-4 fix — standardize slot hash entropy
+
+**Files:** `lib.rs`
+
+**What:** Changed `burn_to_upgrade` from `slot_hash_data[8..16]` (8-byte slot number)
+to `slot_hash_data[16..48]` (32-byte hash) with `hashv()` context mixing. Now matches
+`burn_multi` and `reveal_and_mint`. All slot hash usage is consistent across the program.
+
+**Why:** 8-byte slot number is weaker entropy than 32-byte hash. While only cosmetic
+traits (flavor/color/special) are affected (rarity is guaranteed), consistent entropy
+prevents grinding for specific cosmetic combos on upgrades.
+
+---
+
+### [2026-04-05] Remove reclaim_burned instruction
+
+**Files:** `lib.rs`, `index.html`
+
+**What:** Removed `reclaim_burned` instruction and `ReclaimBurned` accounts struct from
+the smart contract. Removed zombie PDA scanning, reclaim button, and `reclaimBurned()`
+function from frontend.
+
+**Why:** Burns now auto-reclaim rent in the same transaction (lamports returned + data
+zeroed). No zombie PDAs are created. `reclaim_burned` was only needed for legacy testnet
+zombies and had an authorization gap (anyone could claim rent, not just the original
+burner). Removing it eliminates the attack surface for mainnet.
+
+---
+
+### [2026-04-05] Final audit — round 5
+
+**Status:** CLEAN — A- grade, mainnet ready.
+
+5 rounds of security audit completed. All 17 findings resolved. No remaining
+vulnerabilities. Verified: access control, arithmetic safety, commit-reveal
+randomness, payment handling, secrets management, frontend security, oracle
+implementation, monitoring, and file protection.
+

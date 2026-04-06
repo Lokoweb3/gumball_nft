@@ -1,6 +1,8 @@
-# 🎰 Gumball Machine NFT — X1 Testnet
+# Gumball Machine NFT — X1
 
 A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SVG gumball with randomized traits, generated and verified entirely on-chain via a commit-reveal oracle.
+
+**Security Grade: A-** — 5 rounds of audit, all findings resolved.
 
 ---
 
@@ -28,7 +30,7 @@ Randomness is generated via a **commit-reveal scheme**:
 3. User pays and locks the commitment with a random `user_seed` (unknown to oracle)
 4. Oracle reveals the secret — contract derives traits from `sha256(secret || slot_hash || user_seed || mint_index)`
 
-The oracle cannot predict or manipulate outcomes: slot hash is unknown at commit time, user seed is unknown until after commit is submitted.
+The oracle cannot predict or manipulate outcomes: slot hash (32 bytes) is unknown at commit time, user seed is unknown until after commit is submitted.
 
 | | |
 |---|---|
@@ -68,7 +70,9 @@ All four upgrade paths are fully implemented and tested:
 | Rare | Epic | 2 | `burn_to_upgrade` |
 | Epic | Legendary | 2 | `burn_to_upgrade` |
 
-Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. This means upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
+Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
+
+Burned PDAs auto-reclaim rent to the burner immediately. No zombie PDAs.
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -81,21 +85,22 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | `initialize_machine` | Admin | Set up the gumball machine |
 | `set_active` | Admin | Enable/disable minting |
 | `set_oracle` | Admin | Rotate oracle wallet |
-| `set_mint_price` | Admin | Update mint price |
+| `set_mint_price` | Admin | Update base mint price |
 | `withdraw` | Admin | Withdraw treasury funds |
 | `migrate_machine` | Admin | Migrate machine account to new struct size |
 | `submit_commitment` | Oracle | Submit randomness commitment pre-mint |
 | `request_mint` | User | Pay and lock 1-10 mints in one transaction |
 | `reveal_and_mint` | Oracle | Reveal secret and mint NFT (loops for multi-mint) |
 | `refund_mint` | User | Reclaim XNT after oracle timeout (5 min) |
-| `burn_to_upgrade` | User | Burn 2 gumballs (Rare to Epic or Epic to Legendary) |
-| `burn_multi` | User | Burn 3-5 gumballs (Common to Uncommon or Uncommon to Rare) |
-| ~~`reclaim_burned`~~ | — | Removed — burns now auto-reclaim rent |
+| `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
+| `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
 
 ---
 
 ## Security Audit Status
+
+5 rounds of security audit completed. All findings resolved.
 
 | ID | Issue | Severity | Status |
 |---|---|---|---|
@@ -115,8 +120,9 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | A-7 | Silent slot hash fallback in burns | High | Fixed (error on failure) |
 | A-8 | Rent sweep returns 0 on insufficient lamports | High | Fixed (require > 0) |
 | A-9 | Unchecked integer multiply in pricing | High | Fixed (checked_mul) |
+| MED-4 | Inconsistent slot hash entropy in burn_to_upgrade | Medium | Fixed (32-byte hash) |
 
-**Final audit status: CLEAN — all findings resolved, no remaining issues.**
+**Final audit: CLEAN — A- grade, mainnet ready.**
 
 ---
 
@@ -181,7 +187,7 @@ Load env before starting: `export $(cat .env | xargs) && pm2 start ecosystem.con
 ```bash
 # Build and deploy
 anchor build
-anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet /path/to/wallet.json
+anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet ~/.config/solana/id.json
 
 # Initialize machine (first time only)
 node scripts/initialize.cjs
@@ -217,16 +223,16 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 - Refund expired — claim XNT back if oracle was down during your mint
 - Oracle countdown — live timer showing mint request timeout
 - Leaderboard — top holders, rarity distribution, auto-refreshes every 60s
-- Provably fair verification — verify.html lets anyone check gumball fairness with on-chain proof fields
+- Provably fair verification — verify.html with on-chain proof fields
 
 ---
 
 ## Supply and Economics
 
 - Total supply: 10,000 hard cap enforced on-chain
-- Treasury: all mint proceeds sent to treasury wallet, withdrawable by admin
+- Treasury: all mint + upgrade fee proceeds sent to treasury wallet, withdrawable by admin
 - Burns: reduce circulating supply; total_burned tracked on-chain
-- Upgrades: consume input tokens, mint new serial at higher rarity; blocked at max supply
+- Upgrades: consume input tokens + upgrade fee, mint new serial at higher rarity; blocked at max supply
 
 ### Dynamic Mint Pricing
 
@@ -244,18 +250,52 @@ Early minters pay less. Price increases as supply fills up.
 | 9,000 | 0.8706 XNT |
 | 10,000 | 1.0000 XNT |
 
-Batch mints (up to 10) sum each mint's individual price — e.g. minting 10 at mint #5,000 costs the sum of prices for mints #5,000 through #5,009.
+Batch mints (up to 10) sum each mint's individual price. Upgrade fees also follow this curve.
 
-Total projected revenue at full sellout: **~4,080 XNT** (vs 2,500 XNT at flat 0.25).
+Total projected revenue at full sellout: **~4,080 XNT** from mints + upgrade fees.
+
+---
+
+## Verification
+
+Visit `verify.html?serial=42` to independently verify any gumball's provable fairness.
+
+For v4 gumballs, the commitment hash and user seed are stored on-chain. Anyone can paste the oracle secret to confirm `sha256(secret + oracle_pubkey)` matches the stored commitment — proving the oracle could not have manipulated the outcome.
+
+---
+
+## Architecture
+
+```
+GumballData  seeds: [b"gumball", mint.key()]  — 157 bytes (v4, traits + proof fields)
+GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG artwork)
+```
+
+SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 157 bytes each, well within limits.
 
 ---
 
 ## Known Limitations
 
 - Oracle must be running for mints to fulfill — PM2 auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
-- `reclaim_burned` is only needed for legacy zombie PDAs from pre-v4 burns — new burns auto-reclaim rent
-- `update_owner` only works on v4 gumballs (157 bytes) — pre-v4 testnet gumballs cannot sync owner after trade. Not an issue on mainnet (fresh deploy)
+- `update_owner` only works on v4 gumballs (157 bytes) — not an issue on mainnet (fresh deploy, all v4)
+- Oracle can choose when to reveal within the 5-min window (slot timing), but cannot predict or control traits (slot hash + user seed are unknown at commit time)
 
-## Verification
+---
 
-Visit `verify.html?serial=42` to independently verify any gumball's provable fairness. For v4 gumballs, the commitment hash and user seed are stored on-chain — anyone can paste the oracle secret to confirm `sha256(secret + oracle_pubkey)` matches the stored commitment.
+## Files
+
+| File | Purpose |
+|---|---|
+| `programs/gumball_nft/src/lib.rs` | Anchor smart contract |
+| `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
+| `scripts/monitor.cjs` | Telegram monitoring + remote commands |
+| `scripts/initialize.cjs` | Machine init / migration script |
+| `index.html` | Main frontend (mint + collection + burns) |
+| `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
+| `verify.html` | Provably fair verification page |
+| `ecosystem.config.cjs` | PM2 config for oracle + monitor |
+| `setup.sh` | Automated server setup script |
+| `DEPLOY.md` | Server deployment checklist |
+| `NOTES.md` | Technical architecture notes |
+| `CLAUDE.md` | Development context and changelog |

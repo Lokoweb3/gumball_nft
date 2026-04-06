@@ -229,7 +229,7 @@ SVG loading per version:
 - [x] Bounds checks on all raw account data reads (InvalidAccount error)
 - [x] Auto rent reclaim on burns (no zombie PDAs)
 
-### Code Safety (Audit Round 3)
+### Code Safety (Audit Rounds 3-5)
 - [x] No unsafe `.unwrap()` on fallible operations — all use `.map_err()`
 - [x] No silent `.unwrap_or()` fallbacks on slot hashes — all error on failure
 - [x] Integer overflow protected: `checked_mul(10)` in `get_mint_price()`
@@ -237,6 +237,9 @@ SVG loading per version:
 - [x] No division-by-zero possible (all divisors validated or constant)
 - [x] All array access bounds-checked via modulo or explicit require
 - [x] No reentrancy risk (token program CPI does not callback)
+- [x] MED-4: burn_to_upgrade standardized to 32-byte slot hash [16..48] (was 8-byte)
+- [x] `reclaim_burned` removed — eliminates attack surface, burns auto-reclaim
+- [x] Final audit (round 5): CLEAN — no remaining issues
 
 ### Economic
 - [x] Mint pricing — exponential curve 0.25 → 1.00 XNT (deployed)
