@@ -41,7 +41,7 @@ header{
   padding:7px 10px;border:1px solid var(--border);background:transparent;
   color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
 }
-.nav-link:hover{border-color:var(--teal);color:var(--teal);}
+.nav-link:hover,.nav-link.active{border-color:var(--teal);color:var(--teal);}
 .wallet-btn{
   font-family:'Press Start 2P',cursive;font-size:0.45rem;letter-spacing:1px;
   padding:9px 12px;border:1px solid var(--teal);background:rgba(0,255,204,0.07);
@@ -338,6 +338,7 @@ svg#gm{width:100%;}
 <header>
   <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
   <div class="header-right">
+    <a href="index.html" class="nav-link active">[ MINT ]</a>
     <a href="marketplace.html" class="nav-link">[ MARKET ]</a>
     <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
