@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — NFT Machine</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --red:#ff2244; --gold:#ffcc00; --gold2:#ffee88; --teal:#00ffcc;
+  --purple:#cc44ff; --white:#e8e8f8; --gray:#6666aa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    radial-gradient(ellipse at 20% 50%,rgba(204,68,255,0.07) 0%,transparent 55%),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+
+/* ── HEADER ── */
+header{
+  width:100%;max-width:980px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap;gap:12px;
+}
+.logo{
+  font-family:'Press Start 2P',cursive;font-size:clamp(0.5rem,2vw,0.9rem);
+  color:var(--gold);text-shadow:0 0 12px rgba(255,204,0,0.5);letter-spacing:2px;line-height:1.6;
+}
+.logo span{color:var(--red);text-shadow:0 0 12px rgba(255,34,68,0.6);}
+.header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover{border-color:var(--teal);color:var(--teal);}
+.wallet-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;letter-spacing:1px;
+  padding:9px 12px;border:1px solid var(--teal);background:rgba(0,255,204,0.07);
+  color:var(--teal);cursor:pointer;transition:all 0.2s;
+  text-shadow:0 0 8px rgba(0,255,204,0.4);white-space:nowrap;
+}
+.wallet-btn:hover{background:rgba(0,255,204,0.15);box-shadow:0 0 16px rgba(0,255,204,0.3);}
+.wallet-btn.connected{border-color:var(--gold);color:var(--gold);background:rgba(255,204,0,0.07);}
+
+/* ── STATS BAR ── */
+.stats-bar{
+  width:100%;max-width:980px;display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:32px;
+}
+@media(max-width:600px){.stats-bar{grid-template-columns:repeat(3,1fr);}}
+.stat{background:var(--panel);padding:12px 8px;text-align:center;}
+.stat-val{
+  font-family:'Press Start 2P',cursive;font-size:clamp(0.55rem,2vw,0.8rem);color:var(--gold);
+  display:block;margin-bottom:5px;text-shadow:0 0 10px rgba(255,204,0,0.4);
+}
+.stat-lbl{font-size:0.48rem;color:var(--gray);letter-spacing:1px;text-transform:uppercase;}
+
+/* ── MAIN GRID ── */
+.main{width:100%;max-width:980px;display:grid;grid-template-columns:1fr 360px;gap:24px;}
+@media(max-width:720px){.main{grid-template-columns:1fr;}}
+
+/* ── MACHINE ── */
+.machine-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;}
+.machine-frame{
+  border:2px solid var(--border);background:var(--panel);
+  padding:20px;position:relative;width:100%;max-width:300px;
+}
+.machine-frame::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,204,0,0.03) 0%,transparent 60%);pointer-events:none;
+}
+svg#gm{width:100%;}
+@keyframes crank-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+@keyframes ball-drop{0%{transform:translateY(-40px);opacity:0}60%{transform:translateY(6px)}100%{transform:translateY(0);opacity:1}}
+@keyframes shimmer{0%,100%{opacity:0.7}50%{opacity:1}}
+@keyframes pulse-glow{0%,100%{opacity:0.6}50%{opacity:1}}
+
+/* ── STATUS / STEPS ── */
+.status-wrap{
+  width:100%;max-width:300px;background:var(--panel);
+  border:1px solid var(--border);padding:14px;
+}
+.status-msg{
+  text-align:center;font-family:'Press Start 2P',cursive;font-size:0.48rem;
+  color:var(--teal);letter-spacing:1px;line-height:1.8;word-break:break-all;
+  text-shadow:0 0 10px rgba(0,255,204,0.4);min-height:2em;
+}
+
+/* Mint steps */
+.mint-steps{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.step{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border:1px solid transparent;font-size:0.42rem;letter-spacing:1px;
+  transition:all 0.3s;opacity:0.3;
+}
+.step.active{opacity:1;border-color:var(--teal);background:rgba(0,255,204,0.05);}
+.step.done{opacity:1;border-color:rgba(0,255,204,0.3);color:var(--teal);}
+.step.error{opacity:1;border-color:var(--red);color:var(--red);}
+.step-icon{width:14px;text-align:center;font-size:0.6rem;flex-shrink:0;}
+.step-label{flex:1;}
+.step-spinner{
+  width:10px;height:10px;border:1.5px solid var(--teal);border-top-color:transparent;
+  border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Countdown */
+.oracle-countdown{
+  text-align:center;font-size:0.42rem;color:var(--gray);margin-top:6px;
+  font-family:'Press Start 2P',cursive;display:none;
+}
+.oracle-countdown span{color:var(--gold);}
+
+/* ── MINT PANEL ── */
+.right-col{display:flex;flex-direction:column;gap:16px;}
+.mint-panel{background:var(--panel);border:1px solid var(--border);padding:22px;}
+.panel-title{
+  font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--teal);
+  letter-spacing:2px;margin-bottom:18px;
+  padding-bottom:12px;border-bottom:1px solid var(--border);
+  text-shadow:0 0 10px rgba(0,255,204,0.4);
+}
+.price-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;}
+.price-big{font-family:'Press Start 2P',cursive;font-size:1.1rem;color:var(--gold);text-shadow:0 0 14px rgba(255,204,0,0.5);}
+.price-sub{font-size:0.55rem;color:var(--gray);}
+.qty-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.qty-lbl{font-size:0.58rem;color:var(--gray);letter-spacing:1px;flex:1;}
+.qty-ctrl{display:flex;align-items:center;}
+.qty-btn{
+  width:30px;height:30px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--white);font-family:'Press Start 2P',cursive;font-size:0.7rem;
+  cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;
+}
+.qty-btn:hover{background:var(--border);color:var(--gold);}
+.qty-val{
+  width:40px;height:30px;background:var(--black);
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Press Start 2P',cursive;font-size:0.75rem;color:var(--gold);
+}
+.total-cost{text-align:center;font-size:0.55rem;color:var(--gray);margin-bottom:18px;}
+.total-cost span{color:var(--gold);}
+
+/* Progress bar */
+.progress-wrap{margin-bottom:18px;}
+.progress-lbl{display:flex;justify-content:space-between;font-size:0.52rem;color:var(--gray);margin-bottom:5px;}
+.progress-bar{height:5px;background:var(--black);border:1px solid var(--border);}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--purple));transition:width 0.8s;box-shadow:0 0 8px rgba(255,34,68,0.4);}
+
+/* Mint button */
+.mint-btn{
+  width:100%;padding:16px;font-family:'Press Start 2P',cursive;font-size:0.62rem;
+  letter-spacing:2px;background:var(--red);color:#fff;border:none;cursor:pointer;
+  position:relative;overflow:hidden;transition:all 0.2s;
+  box-shadow:0 4px 0 #8a0020,0 0 24px rgba(255,34,68,0.3);margin-bottom:14px;
+}
+.mint-btn::before{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);transition:left 0.4s;
+}
+.mint-btn:hover::before{left:100%;}
+.mint-btn:hover{box-shadow:0 4px 0 #8a0020,0 0 40px rgba(255,34,68,0.5);}
+.mint-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #8a0020;}
+.mint-btn:disabled{background:#333;box-shadow:none;cursor:not-allowed;color:#555;}
+
+.network-badge{font-size:0.5rem;color:var(--teal);padding:3px 8px;border:1px solid var(--teal);display:inline-block;margin-bottom:12px;}
+
+/* Trait preview */
+.trait-preview{background:var(--black);border:1px solid var(--border);padding:14px;margin-bottom:16px;display:none;}
+.trait-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(42,42,74,0.5);font-size:0.55rem;}
+.trait-row:last-child{border-bottom:none;}
+.trait-key{color:var(--gray);letter-spacing:1px;}
+.rarity-badge{padding:2px 7px;font-size:0.48rem;font-family:'Press Start 2P',cursive;}
+.r-common{background:rgba(100,100,150,0.25);color:#aaaacc;border:1px solid #4444aa;}
+.r-uncommon{background:rgba(0,200,100,0.15);color:#44ff88;border:1px solid #00aa44;}
+.r-rare{background:rgba(0,100,255,0.15);color:#44aaff;border:1px solid #0066cc;}
+.r-epic{background:rgba(150,0,255,0.2);color:#cc88ff;border:1px solid #8800cc;}
+.r-legendary{background:rgba(255,180,0,0.2);color:var(--gold);border:1px solid var(--gold);animation:shimmer 1.4s ease-in-out infinite;}
+.tx-link{font-size:0.5rem;color:var(--teal);text-decoration:none;word-break:break-all;}
+.tx-link:hover{text-decoration:underline;}
+
+/* ── LAST MINTED ── */
+.last-minted{background:var(--panel);border:1px solid var(--border);padding:20px;display:none;}
+.lm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.lm-serial{font-family:'Press Start 2P',cursive;font-size:0.65rem;color:var(--purple);text-shadow:0 0 10px rgba(200,68,255,0.5);}
+.lm-ball{width:72px;height:72px;border-radius:50%;margin:0 auto 14px;position:relative;animation:ball-drop 0.6s cubic-bezier(0.34,1.56,0.64,1);}
+.lm-ball::after{content:'';position:absolute;top:16%;left:18%;width:38%;height:38%;border-radius:50%;background:rgba(255,255,255,0.5);}
+.lm-name{font-family:'Press Start 2P',cursive;font-size:0.55rem;text-align:center;color:var(--white);margin-bottom:12px;line-height:1.8;}
+
+/* ── RARITY BAR ── */
+.rarity-bar-panel{width:100%;max-width:980px;background:var(--panel);border:1px solid var(--border);padding:14px 18px;margin-bottom:20px;display:none;}
+.rarity-bar-title{font-family:'Press Start 2P',cursive;font-size:0.46rem;color:var(--gray);letter-spacing:2px;margin-bottom:10px;}
+.rarity-bar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+@media(max-width:500px){.rarity-bar-grid{grid-template-columns:repeat(3,1fr);}}
+
+/* ── MOBILE POLISH ── */
+@media(max-width:480px){
+  body{padding:0 10px 48px;}
+  .logo{font-size:0.55rem;}
+  .wallet-btn{font-size:0.38rem;padding:7px 8px;}
+  .nav-link{font-size:0.32rem;padding:5px 7px;}
+  .stats-bar{grid-template-columns:repeat(3,1fr);}
+  .stat-val{font-size:0.55rem;}
+  .stat-lbl{font-size:0.38rem;}
+  .machine-frame{padding:12px;}
+  .mint-panel{padding:14px;}
+  .price-big{font-size:0.85rem;}
+  .mint-btn{font-size:0.5rem;padding:13px;}
+  .coll-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;}
+  .coll-card{min-height:160px;padding:8px 6px;}
+  .coll-serial{font-size:0.45rem;}
+  .coll-flavor{font-size:0.55rem;}
+  .coll-rarity{font-size:0.42rem;}
+  .upgrade-grid{grid-template-columns:1fr;}
+  .upgrade-card{padding:14px;}
+  .filter-btn{font-size:0.32rem;padding:4px 6px;}
+  .panel-title{font-size:0.45rem;}
+  .coll-title{font-size:0.48rem;}
+  .upgrade-title{font-size:0.48rem;}
+}
+.rarity-stat{text-align:center;}
+.rarity-stat-val{font-family:'Press Start 2P',cursive;font-size:0.65rem;display:block;margin-bottom:3px;}
+.rarity-stat-lbl{font-size:0.44rem;letter-spacing:1px;}
+.rarity-track{height:3px;border-radius:2px;margin-top:5px;transition:width 0.8s;}
+
+/* ── COLLECTION ── */
+.collection{width:100%;max-width:980px;margin-top:32px;display:none;}
+.coll-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;flex-wrap:wrap;gap:10px;}
+.coll-title{font-family:'Press Start 2P',cursive;font-size:0.58rem;color:var(--teal);letter-spacing:2px;}
+.coll-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.coll-count{font-size:0.55rem;color:var(--gray);}
+.filter-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:5px 8px;
+  background:transparent;border:1px solid var(--border);color:var(--gray);
+  cursor:pointer;transition:all 0.15s;letter-spacing:1px;
+}
+.filter-btn:hover,.filter-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(0,255,204,0.05);}
+.coll-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;}
+@keyframes card-pop{to{transform:scale(1);opacity:1;}}
+.coll-card{
+  background:var(--panel);border:2px solid var(--border);padding:10px 8px;
+  text-align:center;cursor:pointer;transition:border-color 0.2s, box-shadow 0.2s;position:relative;
+  transform:scale(0);opacity:0;
+  animation:card-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+  animation-fill-mode:forwards;
+  min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+}
+.coll-card:hover{box-shadow:0 0 18px rgba(200,68,255,0.3);transform:translateY(-3px);}
+.coll-card:hover{animation:none;transform:translateY(-3px);opacity:1;}
+.coll-card.r-common   { border-color:#4444aa44; }
+.coll-card.r-uncommon { border-color:#00aa4466; box-shadow:0 0 8px #00aa4422; }
+.coll-card.r-rare     { border-color:#0066cc88; box-shadow:0 0 10px #0066cc33; }
+.coll-card.r-epic     { border-color:#8800ccaa; box-shadow:0 0 12px #8800cc44; }
+.coll-card.r-legendary{ border-color:var(--gold);animation:card-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards, gold-pulse 1.4s ease-in-out infinite;}
+@keyframes gold-pulse{0%,100%{box-shadow:0 0 10px rgba(255,204,0,0.3);}50%{box-shadow:0 0 22px rgba(255,204,0,0.7);}}
+.coll-ball{width:56px;height:56px;border-radius:50%;margin:0 auto 8px;position:relative;flex-shrink:0;}
+.coll-ball::after{content:'';position:absolute;top:18%;left:20%;width:36%;height:36%;border-radius:50%;background:rgba(255,255,255,0.45);}
+.coll-ball-svg{width:56px;height:56px;border-radius:50%;margin:0 auto 8px;overflow:hidden;display:block;flex-shrink:0;background:#0a0a0f;}
+.coll-ball-svg svg{width:56px;height:56px;display:block;}
+.coll-serial{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--teal);margin-bottom:5px;margin-top:4px;}
+.coll-flavor{font-size:0.65rem;color:var(--white);margin-bottom:3px;font-weight:bold;}
+.coll-rarity{font-size:0.55rem;margin-top:4px;font-family:'Press Start 2P',cursive;letter-spacing:1px;}
+
+/* ── UPGRADE SECTION ── */
+.upgrade-section{width:100%;max-width:980px;margin-top:32px;display:none;}
+.upgrade-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;}
+.upgrade-title{font-family:'Press Start 2P',cursive;font-size:0.58rem;color:var(--purple);letter-spacing:2px;text-shadow:0 0 10px rgba(200,68,255,0.4);}
+.upgrade-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
+.upgrade-card{background:var(--panel);border:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:10px;transition:border-color 0.2s;}
+.upgrade-card.available{border-color:rgba(200,68,255,0.4);box-shadow:0 0 16px rgba(200,68,255,0.1);}
+.upgrade-card-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--white);letter-spacing:1px;}
+.upgrade-arrow{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.upgrade-from,.upgrade-to{text-align:center;}
+.upgrade-from-count,.upgrade-to-count{font-family:'Press Start 2P',cursive;font-size:1rem;}
+.upgrade-from-count{color:var(--gold);}
+.upgrade-to-count{color:var(--teal);}
+.upgrade-from-label,.upgrade-to-label{font-size:0.5rem;color:var(--gray);margin-top:3px;}
+.upgrade-arrow-icon{font-size:1.2rem;color:var(--purple);}
+.upgrade-progress{font-size:0.54rem;color:var(--gray);}
+.upgrade-progress span{color:var(--white);}
+.upgrade-btn{
+  width:100%;padding:10px;font-family:'Press Start 2P',cursive;font-size:0.5rem;
+  letter-spacing:1px;background:var(--purple);color:#fff;border:none;cursor:pointer;
+  transition:all 0.2s;box-shadow:0 3px 0 #6600aa;
+}
+.upgrade-btn:hover{box-shadow:0 3px 0 #6600aa,0 0 20px rgba(200,68,255,0.4);}
+.upgrade-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #6600aa;}
+.upgrade-btn:disabled{background:#333;box-shadow:none;cursor:not-allowed;color:#555;}
+
+/* ── SVG MODAL ── */
+#svgModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+
+/* ── TOASTS ── */
+#toastContainer{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{
+  font-family:'Press Start 2P',cursive;font-size:0.44rem;letter-spacing:1px;
+  padding:10px 14px;border:1px solid;max-width:280px;line-height:1.8;
+  animation:toastIn 0.3s ease forwards;pointer-events:auto;
+}
+.toast.success{background:rgba(0,255,204,0.1);border-color:var(--teal);color:var(--teal);}
+.toast.error{background:rgba(255,34,68,0.1);border-color:var(--red);color:var(--red);}
+.toast.info{background:rgba(204,68,255,0.1);border-color:var(--purple);color:var(--purple);}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
+
+/* ── CONFETTI ── */
+.confetti-piece{
+  position:fixed;top:-10px;width:8px;height:8px;pointer-events:none;z-index:9998;
+  animation:confettiFall linear forwards;border-radius:2px;
+}
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0deg);opacity:1;}
+  100%{transform:translateY(100vh) rotate(720deg);opacity:0;}
+}
+
+/* ── CORNER DECOR ── */
+.corner-decor{position:relative;}
+.corner-decor::before,.corner-decor::after{content:'';position:absolute;width:8px;height:8px;}
+.corner-decor::before{top:-1px;left:-1px;border-top:2px solid var(--gold);border-left:2px solid var(--gold);}
+.corner-decor::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold);}
+</style>
+</head>
+<body>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer"></div>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div class="header-right">
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><span class="stat-val" id="sMinted">—</span><span class="stat-lbl">Total Minted</span></div>
+  <div class="stat"><span class="stat-val" id="sRemain">—</span><span class="stat-lbl">Remaining</span></div>
+  <div class="stat"><span class="stat-val" id="sPrice">0.25</span><span class="stat-lbl">XNT / Ball</span></div>
+  <div class="stat"><span class="stat-val" id="sBurned">0</span><span class="stat-lbl">Burned 🔥</span></div>
+  <div class="stat"><span class="stat-val" id="sOwned">0</span><span class="stat-lbl">You Own</span></div>
+</div>
+
+<div class="rarity-bar-panel" id="rarityBar">
+  <div class="rarity-bar-title">// RARITY BREAKDOWN</div>
+  <div class="rarity-bar-grid">
+    <div class="rarity-stat"><span class="rarity-stat-val" id="rCommon" style="color:#aaaacc">—</span><span class="rarity-stat-lbl" style="color:#aaaacc">COMMON</span><span id="rCommonLeft" style="color:#555566;font-size:0.42rem;display:block;margin-top:2px;">~6,000 left</span><div class="rarity-track" style="background:#4444aa;"></div></div>
+    <div class="rarity-stat"><span class="rarity-stat-val" id="rUncommon" style="color:#44ff88">—</span><span class="rarity-stat-lbl" style="color:#44ff88">UNCOMMON</span><span id="rUncommonLeft" style="color:#006633;font-size:0.42rem;display:block;margin-top:2px;">~2,500 left</span><div class="rarity-track" style="background:#00aa44;"></div></div>
+    <div class="rarity-stat"><span class="rarity-stat-val" id="rRare" style="color:#44aaff">—</span><span class="rarity-stat-lbl" style="color:#44aaff">RARE</span><span id="rRareLeft" style="color:#004488;font-size:0.42rem;display:block;margin-top:2px;">~1,000 left</span><div class="rarity-track" style="background:#0066cc;"></div></div>
+    <div class="rarity-stat"><span class="rarity-stat-val" id="rEpic" style="color:#cc88ff">—</span><span class="rarity-stat-lbl" style="color:#cc88ff">EPIC</span><span id="rEpicLeft" style="color:#550088;font-size:0.42rem;display:block;margin-top:2px;">~400 left</span><div class="rarity-track" style="background:#8800cc;"></div></div>
+    <div class="rarity-stat"><span class="rarity-stat-val" id="rLegendary" style="color:var(--gold)">—</span><span class="rarity-stat-lbl" style="color:var(--gold)">LEGENDARY</span><span id="rLegendaryLeft" style="color:#886600;font-size:0.42rem;display:block;margin-top:2px;">~100 left</span><div class="rarity-track" style="background:var(--gold);"></div></div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- LEFT: Machine -->
+  <div class="machine-wrap">
+    <div class="machine-frame corner-decor">
+      <svg id="gm" viewBox="0 0 300 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="glass" cx="34%" cy="28%" r="60%">
+            <stop offset="0%" stop-color="rgba(200,240,255,0.18)"/>
+            <stop offset="100%" stop-color="rgba(80,140,220,0.22)"/>
+          </radialGradient>
+          <radialGradient id="shine" cx="28%" cy="22%" r="44%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.8)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+          </radialGradient>
+          <linearGradient id="chrome" x1="0%" x2="100%">
+            <stop offset="0%" stop-color="#555"/><stop offset="25%" stop-color="#ccc"/>
+            <stop offset="50%" stop-color="#fff"/><stop offset="75%" stop-color="#bbb"/>
+            <stop offset="100%" stop-color="#555"/>
+          </linearGradient>
+          <linearGradient id="body-g" x1="0%" x2="100%">
+            <stop offset="0%" stop-color="#6a0015"/><stop offset="20%" stop-color="#cc1133"/>
+            <stop offset="45%" stop-color="#ff2244"/><stop offset="80%" stop-color="#cc1133"/>
+            <stop offset="100%" stop-color="#6a0015"/>
+          </linearGradient>
+          <clipPath id="globe-clip"><circle cx="150" cy="166" r="88"/></clipPath>
+        </defs>
+        <ellipse cx="150" cy="472" rx="78" ry="9" fill="rgba(0,255,204,0.08)"/>
+        <rect x="66" y="448" width="168" height="18" rx="6" fill="url(#chrome)" stroke="#444" stroke-width="0.6"/>
+        <ellipse cx="150" cy="448" rx="84" ry="10" fill="url(#chrome)" stroke="#555" stroke-width="0.6"/>
+        <text x="150" y="462" text-anchor="middle" font-family="'Press Start 2P'" font-size="5.5" fill="#888" letter-spacing="3">X N T</text>
+        <rect x="127" y="360" width="46" height="92" rx="6" fill="url(#chrome)" stroke="#555" stroke-width="0.6"/>
+        <rect x="139" y="360" width="10" height="92" fill="rgba(255,255,255,0.4)" rx="3"/>
+        <rect x="118" y="354" width="64" height="11" rx="4" fill="url(#chrome)" stroke="#555" stroke-width="0.6"/>
+        <rect x="118" y="438" width="64" height="11" rx="4" fill="url(#chrome)" stroke="#555" stroke-width="0.6"/>
+        <rect x="76" y="262" width="148" height="100" rx="10" fill="url(#body-g)" stroke="#440010" stroke-width="1"/>
+        <rect x="80" y="265" width="140" height="28" rx="7" fill="rgba(255,255,255,0.1)"/>
+        <rect x="92" y="300" width="76" height="44" rx="4" fill="rgba(0,0,0,0.25)" stroke="rgba(255,204,0,0.35)" stroke-width="0.8"/>
+        <text x="130" y="317" text-anchor="middle" font-family="'Press Start 2P'" font-size="7.5" fill="#ffcc00">NFT</text>
+        <text x="130" y="330" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.8)" id="svgPrice">0.25 XNT</text>
+        <text x="130" y="340" text-anchor="middle" font-family="'Press Start 2P'" font-size="4" fill="rgba(255,204,0,0.55)">PER BALL</text>
+        <rect x="178" y="278" width="32" height="8" rx="4" fill="#111" stroke="#333" stroke-width="0.6"/>
+        <rect x="180" y="280" width="28" height="4" rx="2" fill="#090909"/>
+        <text x="194" y="275" text-anchor="middle" font-family="'Press Start 2P'" font-size="4.5" fill="rgba(255,204,0,0.7)">INSERT</text>
+        <g id="crank-g" style="transform-origin:200px 326px">
+          <rect x="200" y="322" width="28" height="6" rx="3" fill="url(#chrome)" stroke="#888" stroke-width="0.6"/>
+          <circle cx="230" cy="325" r="8" fill="url(#body-g)" stroke="#440010" stroke-width="1"/>
+          <circle cx="227.5" cy="322.5" r="3.5" fill="rgba(255,255,255,0.3)"/>
+        </g>
+        <circle cx="200" cy="325" r="9" fill="url(#chrome)" stroke="#888" stroke-width="0.6"/>
+        <circle cx="200" cy="325" r="5.5" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+        <rect x="126" y="350" width="48" height="14" rx="4" fill="#111" stroke="#222" stroke-width="0.8"/>
+        <path d="M98 364 L92 368 L92 386 Q92 394 102 395 L198 395 Q208 394 208 386 L208 368 L202 364 Z" fill="url(#chrome)" stroke="#aaa" stroke-width="0.6"/>
+        <path d="M104 370 L104 384 Q104 389 111 390 L189 390 Q196 389 196 384 L196 370 Z" fill="#efefef"/>
+        <g id="globe-balls" clip-path="url(#globe-clip)"></g>
+        <circle cx="150" cy="166" r="88" fill="url(#glass)" stroke="#5599cc" stroke-width="1.8"/>
+        <circle cx="150" cy="166" r="88" fill="none" stroke="rgba(0,255,204,0.15)" stroke-width="2.5"/>
+        <ellipse cx="112" cy="118" rx="30" ry="19" fill="url(#shine)" opacity="0.7" transform="rotate(-26,112,118)"/>
+        <ellipse cx="150" cy="80" rx="66" ry="12" fill="url(#body-g)" stroke="#440010" stroke-width="0.8"/>
+        <path d="M84 80 Q90 34 150 22 Q210 34 216 80 Z" fill="url(#body-g)" stroke="#440010" stroke-width="0.8"/>
+        <path d="M110 80 Q115 50 150 40 Q130 42 120 62 Q112 72 110 80 Z" fill="rgba(255,255,255,0.1)"/>
+        <text x="150" y="58" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.7)" letter-spacing="2">GUMBALL</text>
+        <ellipse cx="150" cy="22" rx="16" ry="6" fill="url(#chrome)" stroke="#888" stroke-width="0.6"/>
+        <ellipse cx="150" cy="17" rx="10" ry="4.5" fill="#e8e8e8" stroke="#bbb" stroke-width="0.5"/>
+        <rect x="76" y="359" width="148" height="1" fill="rgba(0,255,204,0.2)"/>
+        <rect x="76" y="262" width="148" height="1" fill="rgba(0,255,204,0.2)"/>
+        <g id="disp-g" opacity="0">
+          <circle id="disp-ball" cx="150" cy="358" r="11"/>
+          <circle id="disp-shine" cx="145" cy="352" r="4" fill="rgba(255,255,255,0.5)"/>
+        </g>
+        <g id="coin-g" opacity="0">
+          <circle id="coin-c" cx="194" cy="265" r="9" fill="#ffcc00" stroke="#cc9900" stroke-width="1.2"/>
+          <text id="coin-t" x="194" y="269" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="#665500">XNT</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Status + Steps -->
+    <div class="status-wrap">
+      <div class="status-msg" id="statusMsg">INSERT COIN TO PLAY</div>
+      <div class="mint-steps" id="mintSteps" style="display:none;">
+        <div class="step" id="step1"><span class="step-icon">💸</span><span class="step-label">REQUESTING MINT</span></div>
+        <div class="step" id="step2"><span class="step-icon">🎲</span><span class="step-label">ORACLE REVEALING</span></div>
+        <div class="step" id="step3"><span class="step-icon">✨</span><span class="step-label">MINTED!</span></div>
+      </div>
+      <div class="oracle-countdown" id="oracleCountdown">ORACLE TIMEOUT IN <span id="countdownVal">270</span>s</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Controls -->
+  <div class="right-col">
+    <div class="mint-panel corner-decor">
+      <div class="panel-title">// MINT GUMBALL NFT</div>
+      <span class="network-badge">◉ X1 TESTNET</span>
+      <div class="progress-wrap">
+        <div class="progress-lbl"><span>SUPPLY</span><span id="progTxt">— / 10,000</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
+      </div>
+      <div class="price-row">
+        <div><div class="price-big" id="currentPrice">0.25 XNT</div><div class="price-sub">per gumball NFT</div></div>
+      </div>
+      <div class="qty-row">
+        <span class="qty-lbl">QUANTITY</span>
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="changeQty(-1)">−</button>
+          <div class="qty-val" id="qtyVal">1</div>
+          <button class="qty-btn" onclick="changeQty(1)">+</button>
+        </div>
+      </div>
+      <div class="total-cost">TOTAL: <span id="totalCost">0.2500 XNT</span></div>
+      <button class="mint-btn" id="mintBtn" onclick="mintGumball()" disabled>► CONNECT WALLET FIRST ◄</button>
+      <div class="trait-preview" id="traitPreview">
+        <div style="font-size:0.52rem;color:var(--gray);letter-spacing:2px;margin-bottom:8px;">LAST MINT TRAITS</div>
+        <div class="trait-row"><span class="trait-key">FLAVOR</span><span id="tFlavor">—</span></div>
+        <div class="trait-row"><span class="trait-key">COLOR</span><span id="tColor">—</span></div>
+        <div class="trait-row"><span class="trait-key">SPECIAL</span><span id="tSpecial">—</span></div>
+        <div class="trait-row"><span class="trait-key">RARITY</span><span class="rarity-badge" id="tRarity">—</span></div>
+        <div class="trait-row"><span class="trait-key">SERIAL</span><span id="tSerial">—</span></div>
+        <div class="trait-row"><span class="trait-key">TX</span><a class="tx-link" id="tTx" href="#" target="_blank">—</a></div>
+      </div>
+    </div>
+
+    <div class="last-minted corner-decor" id="lastMinted">
+      <div class="lm-header">
+        <div class="panel-title" style="margin:0;border:none;padding:0">// MINTED!</div>
+        <div class="lm-serial" id="lmSerial">#0000</div>
+      </div>
+      <div class="lm-ball" id="lmBall"></div>
+      <div class="lm-name" id="lmName">—</div>
+      <div id="lmTraits"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Collection -->
+<div class="collection" id="collArea">
+  <div class="coll-header">
+    <div class="coll-title">// YOUR COLLECTION</div>
+    <div class="coll-controls">
+      <button class="filter-btn active" onclick="filterCollection('all', this)">ALL</button>
+      <button class="filter-btn" onclick="filterCollection('common', this)">COMMON</button>
+      <button class="filter-btn" onclick="filterCollection('uncommon', this)">UNCOMMON</button>
+      <button class="filter-btn" onclick="filterCollection('rare', this)">RARE</button>
+      <button class="filter-btn" onclick="filterCollection('epic', this)">EPIC</button>
+      <button class="filter-btn" onclick="filterCollection('legendary', this)">★ LEG</button>
+    </div>
+    <div class="coll-count" id="collCount">0 gumballs</div>
+  </div>
+  <div class="coll-grid" id="collGrid"></div>
+</div>
+
+<!-- SVG Modal -->
+<div id="svgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:14px;overflow-y:auto;padding:20px 0;">
+  <div style="font-family:'Press Start 2P',cursive;font-size:0.6rem;color:var(--teal);letter-spacing:2px;" id="modalTitle">// GUMBALL #0000</div>
+  <div id="modalSvg" style="width:280px;height:280px;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(0,255,204,0.2);"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+    <button onclick="copyOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--teal);color:var(--teal);cursor:pointer;">📋 COPY SVG</button>
+    <button onclick="downloadOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--purple);color:var(--purple);cursor:pointer;">⬇ DOWNLOAD</button>
+    <button onclick="viewSvgSource()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--gray);color:var(--gray);cursor:pointer;">{ } SOURCE</button>
+  </div>
+  <div id="modalTraits" style="font-size:0.56rem;color:var(--gray);text-align:center;line-height:2;"></div>
+
+  <!-- Verification section -->
+  <div style="background:var(--panel);border:1px solid var(--border);padding:14px 18px;max-width:340px;width:100%;">
+    <div style="font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--teal);letter-spacing:2px;margin-bottom:12px;">// PROVABLY FAIR</div>
+    <div style="font-size:0.52rem;color:var(--gray);line-height:1.9;margin-bottom:12px;">
+      Your gumball's traits were locked in <span style="color:var(--white);">before you paid</span> — the oracle committed to a random hash on-chain first, so it couldn't change the outcome after seeing your wallet.
+    </div>
+    <div id="modalProofBox" style="margin-bottom:12px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;" id="modalProofLinks">
+      <a id="modalCommitLink" href="#" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:6px 10px;border:1px solid var(--teal);color:var(--teal);text-decoration:none;text-align:center;display:none;">🔗 VIEW COMMITMENT TX</a>
+      <a id="modalAccountLink" href="#" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:6px 10px;border:1px solid var(--gray);color:var(--gray);text-decoration:none;text-align:center;">⛓ VIEW ON-CHAIN ACCOUNT</a>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <div style="font-size:0.42rem;color:var(--teal);padding:3px 8px;border:1px solid var(--teal);">✅ STORED ON-CHAIN</div>
+      <div style="font-size:0.42rem;color:var(--gold);padding:3px 8px;border:1px solid var(--gold);">🎲 ORACLE VERIFIED</div>
+    </div>
+  </div>
+
+  <button onclick="document.getElementById('svgModal').style.display='none'" style="font-family:'Press Start 2P',cursive;font-size:0.48rem;padding:9px 18px;background:var(--panel);border:1px solid var(--border);color:var(--white);cursor:pointer;">[ CLOSE ]</button>
+</div>
+
+<!-- Upgrade Section -->
+<div class="upgrade-section" id="upgradeSection">
+  <div class="upgrade-header">
+    <div class="upgrade-title">// BURN TO UPGRADE</div>
+    <div style="font-size:0.54rem;color:var(--gray);">guaranteed rarity up</div>
+  </div>
+  <div class="upgrade-grid" id="upgradeGrid"></div>
+  <div class="status-msg" id="upgradeStatus" style="margin-top:14px;display:none;"></div>
+  <div style="margin-top:16px;text-align:center;display:none;" id="refundWrap">
+    <button onclick="refundExpiredMint()" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:rgba(255,34,68,0.1);border:1px solid var(--red);color:var(--red);cursor:pointer;letter-spacing:1px;" id="refundBtn">
+      💸 CLAIM MINT REFUND
+    </button>
+    <div style="font-size:0.44rem;color:var(--gray);margin-top:6px;" id="refundInfo"></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const PROGRAM_ID_STR = "Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK";
+const MACHINE_PDA_STR = "AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj";
+const RPC = "https://rpc.testnet.x1.xyz";
+const EXPLORER = "https://explorer.testnet.x1.xyz/tx";
+const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram, LAMPORTS_PER_SOL } = solanaWeb3;
+const connection = new Connection(RPC, "confirmed");
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR);
+const MACHINE_PDA = new PublicKey(MACHINE_PDA_STR);
+
+const FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const COLORS = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
+const RARITY = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_CLASSES = ["r-common","r-uncommon","r-rare","r-epic","r-legendary"];
+const BALL_COLORS = {
+  "Cherry Red":"#e82040","Grape Purple":"#8b35cc","Melon Pink":"#ff7aab",
+  "Berry Blue":"#2266ee","Rose Gold":"#e8927a","Citrus Yellow":"#f5c842",
+  "Lime Green":"#44cc44","Tangerine":"#ff8822","Cotton White":"#eeeeee",
+  "Midnight Black":"#222244","Shimmer Silver":"#ccccee","Rainbow":"#ff44aa"
+};
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+
+const TOKEN_PID  = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOC_PID  = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const SLOT_HASHES_PID = new PublicKey("SysvarS1otHashes111111111111111111111111111");
+const RENT_SYSVAR_PID = new PublicKey("SysvarRent111111111111111111111111111111111");
+
+function getAta(mint, owner) {
+  const [ata] = PublicKey.findProgramAddressSync(
+    [owner.toBytes(), TOKEN_PID.toBytes(), mint.toBytes()], ASSOC_PID
+  );
+  return ata;
+}
+
+let walletPubkey = null, qty = 1, isMinting = false, collection = [];
+let _currentSvg = "", _currentSerial = 0;
+let currentMinted = 0; // updated by fetchMachineState
+
+// Exponential pricing: 0.25 * 4^(totalMinted/10000) XNT
+// Matches on-chain get_mint_price() exactly
+const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
+const MAX_SUPPLY_PRICE = 10000;
+const BASE_PRICE_XNT = 0.25;
+function getMintPrice(totalMinted) {
+  if (totalMinted >= MAX_SUPPLY_PRICE) return 1.0;
+  const scaled = totalMinted * 10;
+  const bucket = Math.floor(scaled / MAX_SUPPLY_PRICE);
+  const remainder = scaled % MAX_SUPPLY_PRICE;
+  if (bucket >= 10) return 1.0;
+  const lo = PRICE_TABLE[bucket];
+  const hi = PRICE_TABLE[bucket + 1];
+  const interp = lo + (hi - lo) * remainder / MAX_SUPPLY_PRICE;
+  return BASE_PRICE_XNT * interp / 10000;
+}
+function getBatchTotal(totalMinted, quantity) {
+  let total = 0;
+  for (let i = 0; i < quantity; i++) total += getMintPrice(totalMinted + i);
+  return total;
+}
+function updatePriceDisplay() {
+  const price = getMintPrice(currentMinted);
+  const total = getBatchTotal(currentMinted, qty);
+  document.getElementById("totalCost").textContent = `${total.toFixed(4)} XNT`;
+  const priceEl = document.getElementById("currentPrice");
+  if (priceEl) priceEl.textContent = `${price.toFixed(4)} XNT`;
+  const statPrice = document.getElementById("sPrice");
+  if (statPrice) statPrice.textContent = price.toFixed(4);
+  const svgPrice = document.getElementById("svgPrice");
+  if (svgPrice) svgPrice.textContent = `${price.toFixed(2)} XNT`;
+}
+let _countdownInterval = null;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+// ── TOAST SYSTEM ──────────────────────────────────────────────────────────────
+function toast(msg, type='info', duration=3500) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'toastOut 0.3s ease forwards';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
+// ── CONFETTI ──────────────────────────────────────────────────────────────────
+function launchConfetti(color) {
+  const colors = [color, '#ffcc00', '#cc44ff', '#00ffcc', '#ff2244', color];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.cssText = `
+      left:${Math.random()*100}vw;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      animation-duration:${1.5+Math.random()*2}s;
+      animation-delay:${Math.random()*0.5}s;
+      width:${5+Math.random()*8}px;
+      height:${5+Math.random()*8}px;
+      border-radius:${Math.random()>0.5?'50%':'2px'};
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+}
+
+// ── MINT STEPS UI ─────────────────────────────────────────────────────────────
+function showSteps() {
+  document.getElementById('mintSteps').style.display = 'flex';
+  resetSteps();
+}
+function hideSteps() {
+  document.getElementById('mintSteps').style.display = 'none';
+  stopCountdown();
+}
+function resetSteps() {
+  ['step1','step2','step3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'step';
+    const spinner = el.querySelector('.step-spinner');
+    if (spinner) spinner.remove();
+  });
+}
+function setStep(n, state) { // state: 'active' | 'done' | 'error'
+  const el = document.getElementById('step'+n);
+  el.className = 'step ' + state;
+  const existing = el.querySelector('.step-spinner');
+  if (existing) existing.remove();
+  if (state === 'active') {
+    const sp = document.createElement('div');
+    sp.className = 'step-spinner';
+    el.appendChild(sp);
+  }
+}
+
+// ── ORACLE COUNTDOWN ──────────────────────────────────────────────────────────
+function startCountdown(seconds=270) {
+  const cd = document.getElementById('oracleCountdown');
+  const val = document.getElementById('countdownVal');
+  cd.style.display = 'block';
+  let remaining = seconds;
+  val.textContent = remaining;
+  _countdownInterval = setInterval(() => {
+    remaining--;
+    val.textContent = remaining;
+    if (remaining <= 0) { stopCountdown(); }
+  }, 1000);
+}
+function stopCountdown() {
+  if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+  document.getElementById('oracleCountdown').style.display = 'none';
+}
+
+// ── DISCRIMINATORS ────────────────────────────────────────────────────────────
+async function disc(name) {
+  const enc = new TextEncoder().encode("global:" + name);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return new Uint8Array(buf).slice(0, 8);
+}
+
+// ── GLOBE ─────────────────────────────────────────────────────────────────────
+let globeBalls = [];
+function initGlobe(n=24) {
+  globeBalls = [];
+  let tries = 0;
+  while(globeBalls.length < n && tries < 4000) {
+    tries++;
+    const a = Math.random()*Math.PI*2, d = Math.sqrt(Math.random()*0.85)*74;
+    const x = 150+d*Math.cos(a), y = 166+d*Math.sin(a)+4, r = 8+Math.random()*4;
+    let ok = true;
+    for(const b of globeBalls){const dx=b.x-x,dy=b.y-y;if(Math.sqrt(dx*dx+dy*dy)<b.r+r+1.5){ok=false;break;}}
+    if(ok) globeBalls.push({x,y,r,color:Object.values(BALL_COLORS)[globeBalls.length%12]});
+  }
+  renderGlobe();
+}
+function renderGlobe() {
+  const c = document.getElementById("globe-balls"); c.innerHTML = "";
+  [...globeBalls].sort((a,b)=>a.y-b.y).forEach(b=>{
+    const sh = document.createElementNS(SVG_NS,"circle");
+    sh.setAttribute("cx",b.x+1.5);sh.setAttribute("cy",b.y+2.5);sh.setAttribute("r",b.r);
+    sh.setAttribute("fill","rgba(0,0,0,0.22)");c.appendChild(sh);
+    const ci = document.createElementNS(SVG_NS,"circle");
+    ci.setAttribute("cx",b.x);ci.setAttribute("cy",b.y);ci.setAttribute("r",b.r);
+    ci.setAttribute("fill",b.color);c.appendChild(ci);
+    const hi = document.createElementNS(SVG_NS,"circle");
+    hi.setAttribute("cx",b.x-b.r*0.3);hi.setAttribute("cy",b.y-b.r*0.3);hi.setAttribute("r",b.r*0.37);
+    hi.setAttribute("fill","rgba(255,255,255,0.55)");c.appendChild(hi);
+  });
+}
+initGlobe();
+
+// ── PROVIDER ─────────────────────────────────────────────────────────────────
+function getProvider() {
+  return window.xnft?.solana || window.x1wallet || window.phantom?.solana || window.solana || null;
+}
+
+// ── WALLET ────────────────────────────────────────────────────────────────────
+async function connectWallet() {
+  const btn = document.getElementById("walletBtn");
+  if (walletPubkey) {
+    walletPubkey = null;
+    btn.classList.remove("connected");
+    btn.textContent = "[ CONNECT WALLET ]";
+    document.getElementById("mintBtn").disabled = true;
+    document.getElementById("mintBtn").textContent = "► CONNECT WALLET FIRST ◄";
+    setStatus("WALLET DISCONNECTED");
+    return;
+  }
+  try {
+    const provider = getProvider();
+    if (!provider) { toast("NO WALLET FOUND! INSTALL X1 WALLET OR PHANTOM", 'error', 5000); return; }
+    setStatus("CONNECTING WALLET...");
+    const resp = await provider.connect();
+    walletPubkey = resp.publicKey;
+    const short = walletPubkey.toBase58().slice(0,4)+"..."+walletPubkey.toBase58().slice(-4);
+    btn.classList.add("connected");
+    btn.textContent = `[ ${short} ]`;
+    document.getElementById("mintBtn").disabled = false;
+    document.getElementById("mintBtn").textContent = "► TURN THE CRANK ◄";
+    setStatus("WALLET CONNECTED!");
+    toast(`CONNECTED: ${short}`, 'success');
+    await fetchMachineState();
+    await fetchWalletGumballs();
+  } catch(e) {
+    setStatus("CONNECTION FAILED");
+    toast("CONNECTION FAILED: " + e.message, 'error');
+  }
+}
+
+// ── FETCH WALLET GUMBALLS ─────────────────────────────────────────────────────
+async function fetchWalletGumballs() {
+  if (!walletPubkey) return;
+  try {
+    setStatus("SCANNING YOUR GUMBALLS...");
+
+    // Build gumballPda → { mintPubkey, ataPubkey } from wallet's token accounts
+    const gumballMintMap = {};
+    try {
+      const tokenAccts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+      for (const { pubkey: ataPubkey, account } of tokenAccts.value) {
+        const data = account.data;
+        const mintPubkey = new PublicKey(data.slice(0, 32));
+        const amount = Number(new DataView(data.buffer, data.byteOffset).getBigUint64(64, true));
+        if (amount !== 1) continue;
+        const [gumballPda] = PublicKey.findProgramAddressSync(
+          [strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID
+        );
+        gumballMintMap[gumballPda.toBase58()] = { mintPubkey, ataPubkey };
+      }
+    } catch(e) { console.error("Token account lookup failed:", e); }
+
+    // Fetch all 4 GumballData formats:
+    // GD_V1: 1121 bytes (original, svg inline, MAX_SVG_LEN=1024)
+    // GD_V2: 865 bytes  (svg inline, MAX_SVG_LEN=768)
+    // GD_V3: 93 bytes   (svg in separate PDA, no proof fields)
+    // GD_V4: 157 bytes  (current, +commitment_hash +user_seed for verification)
+    const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1121
+    const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
+    const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
+    const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
+    const [v1Accounts, v2Accounts, v3Accounts, v4Accounts] = await Promise.all([
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V1 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        ],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V2 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        ],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V3 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        ],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V4 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        ],
+      }),
+    ]);
+    const accounts = [
+      ...v1Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 1 })),
+      ...v2Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 2 })),
+      ...v3Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 3 })),
+      ...v4Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 4 })),
+    ];
+    collection = [];
+    document.getElementById("collGrid").innerHTML = "";
+    if (accounts.length === 0) {
+      setStatus("NO GUMBALLS YET — MINT YOUR FIRST!");
+      document.getElementById("sOwned").textContent = "0";
+      document.getElementById("collArea").style.display = "none";
+      return;
+    }
+    const processAccount = async ({ pubkey, account, version }) => {
+      const data = account.data;
+      const dv = new DataView(data.buffer, data.byteOffset);
+      const serial = Number(dv.getBigUint64(8+32+32, true));
+      const flavor = data[8+32+32+8];
+      const color  = data[8+32+32+8+1];
+      const rarity = data[8+32+32+8+2];
+      const special= data[8+32+32+8+3];
+
+      // Parse SVG based on version
+      let svgStr = null;
+      if (version === 3) {
+        // V3: SVG in separate GumballSvg PDA — fetch lazily (will be loaded on card click)
+        svgStr = null; // loaded on demand
+      } else {
+        // V1/V2: SVG inline in GumballData
+        try {
+          const svgOff = 8+32+32+8+1+1+1+1+8+1;
+          if (data.length > svgOff + 4) {
+            const svgLen = dv.getUint32(svgOff, true);
+            if (svgLen > 0 && svgLen <= 1024) svgStr = new TextDecoder().decode(data.slice(svgOff+4, svgOff+4+svgLen));
+          }
+        } catch(e) {}
+      }
+
+      const colorName = COLORS[color]  || "Berry Blue";
+      const ballColor = BALL_COLORS[colorName] || "#2266ee";
+      const mintInfo  = gumballMintMap[pubkey.toBase58()] || {};
+
+      if (!mintInfo.mintPubkey) return;
+
+      addToCollection({
+        serial, flavorName: FLAVORS[flavor]||"Mystery", colorName,
+        rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: pubkey, svgStr,
+        mintPubkey: mintInfo.mintPubkey || null,
+        ataPubkey:  mintInfo.ataPubkey  || null,
+        version,
+      });
+    };
+
+    await Promise.all(accounts.map(a => processAccount(a)));
+    // Sort by serial
+    const grid = document.getElementById("collGrid");
+    [...grid.children].sort((a,b) => {
+      const aEl = a.querySelector(".coll-serial");
+      const bEl = b.querySelector(".coll-serial");
+      const aVal = aEl ? parseInt(aEl.textContent.replace("#","")) || 0 : 0;
+      const bVal = bEl ? parseInt(bEl.textContent.replace("#","")) || 0 : 0;
+      return aVal - bVal;
+    }).forEach(c => grid.appendChild(c));
+    setStatus(`LOADED ${collection.length} GUMBALL${collection.length!==1?"S":""}`);
+    renderUpgradeCards();
+    checkExpiredMints();
+  } catch(e) {
+    console.error(e);
+    setStatus("READY TO MINT!");
+  }
+}
+
+// ── FETCH RARITY BREAKDOWN ────────────────────────────────────────────────────
+async function fetchRarityBreakdown() {
+  try {
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+      dataSlice: { offset: 8+32+32+8+2, length: 1 },
+    });
+    const minted = [0,0,0,0,0];
+    accounts.forEach(({ account }) => { const r = account.data[0]; if (r>=0&&r<=4) minted[r]++; });
+    const expected = [6000,2500,1000,400,100];
+    const ids = ["rCommon","rUncommon","rRare","rEpic","rLegendary"];
+    const leftIds = ["rCommonLeft","rUncommonLeft","rRareLeft","rEpicLeft","rLegendaryLeft"];
+    minted.forEach((m,i) => {
+      document.getElementById(ids[i]).textContent = m;
+      document.getElementById(leftIds[i]).textContent = `~${Math.max(0,expected[i]-m).toLocaleString()} left`;
+    });
+    document.getElementById("rarityBar").style.display = "block";
+  } catch(e) {}
+}
+
+// ── FETCH MACHINE STATE ───────────────────────────────────────────────────────
+async function fetchMachineState() {
+  try {
+    const info = await connection.getAccountInfo(MACHINE_PDA);
+    if (!info) { setStatus("MACHINE NOT FOUND"); return; }
+    const dv = new DataView(info.data.buffer, info.data.byteOffset);
+    const totalMinted  = Number(dv.getBigUint64(8+32+32+32+8,   true));
+    const maxSupply    = Number(dv.getBigUint64(8+32+32+32+8+8, true));
+    const isActive     = info.data[8+32+32+32+8+8+8] === 1;
+    // total_burned is at offset 8+32+32+32+8+8+8+1+1 = 122 (after bump byte)
+    let totalBurned = 0;
+    try { totalBurned = Number(dv.getBigUint64(8+32+32+32+8+8+8+1+1, true)); } catch(e) {}
+    const circulating  = totalMinted - totalBurned;
+    const soldOut      = totalMinted >= maxSupply;
+
+    currentMinted = totalMinted; // update global for pricing
+    updatePriceDisplay();
+
+    document.getElementById("sMinted").textContent  = totalMinted.toLocaleString();
+    document.getElementById("sRemain").textContent  = soldOut ? "SOLD OUT" : (maxSupply - totalMinted).toLocaleString();
+    document.getElementById("progTxt").textContent  = `${totalMinted.toLocaleString()} / ${maxSupply.toLocaleString()}`;
+    document.getElementById("progFill").style.width = (totalMinted/maxSupply*100).toFixed(2)+"%";
+
+    // Show burned stat if any burns have happened
+    const burnEl = document.getElementById("sBurned");
+    if (burnEl) burnEl.textContent = totalBurned > 0 ? totalBurned.toLocaleString() : "0";
+    const circEl = document.getElementById("sCirc");
+    if (circEl) circEl.textContent = circulating.toLocaleString();
+
+    fetchRarityBreakdown();
+
+    if (!isActive) {
+      setStatus("MACHINE IS PAUSED");
+      document.getElementById("mintBtn").disabled = true;
+    } else if (soldOut) {
+      setStatus("🔴 SOLD OUT — BURNS ALSO CLOSED");
+      document.getElementById("mintBtn").disabled = true;
+      document.getElementById("mintBtn").textContent = "► SOLD OUT ◄";
+    }
+
+    try {
+      const treasuryPubkey = new PublicKey(info.data.slice(8+32, 8+32+32));
+      const bal = await connection.getBalance(treasuryPubkey);
+      console.log("Treasury balance:", (bal/1e9).toFixed(4), "XNT");
+    } catch(e) {}
+  } catch(e) { console.error(e); }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function strToU8(s) { return new TextEncoder().encode(s); }
+function concatU8(...arrays) {
+  const total = arrays.reduce((n,a)=>n+a.length,0);
+  const out = new Uint8Array(total); let offset = 0;
+  for (const a of arrays) { out.set(a,offset); offset+=a.length; }
+  return out;
+}
+function u8FromNum(n,bytes=1) { const a=new Uint8Array(bytes); for(let i=0;i<bytes;i++){a[i]=n&0xff;n>>=8;} return a; }
+
+// ── COMMITMENT FETCHING ───────────────────────────────────────────────────────
+async function fetchLatestCommitment() {
+  const COMMIT_SIZE = 8 + 32 + 32 + 8 + 8 + 1 + 1;
+  const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+  const oraclePubkey = new PublicKey(machineInfo.data.slice(8+32+32, 8+32+32+32));
+  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [{ memcmp: { offset: 8, bytes: oraclePubkey.toBase58() } }],
+  });
+  const unused = accounts.filter(({ account }) => {
+    if (account.data.length !== COMMIT_SIZE) return false;
+    return account.data[8+32+32+8+8] === 0;
+  });
+  if (unused.length === 0) throw new Error("No oracle commitment available — is oracle.cjs running?");
+  unused.sort((a,b) => {
+    const slotA = Number(new DataView(a.account.data.buffer, a.account.data.byteOffset).getBigUint64(8+32+32+8,true));
+    const slotB = Number(new DataView(b.account.data.buffer, b.account.data.byteOffset).getBigUint64(8+32+32+8,true));
+    return slotB - slotA;
+  });
+  return unused[0].pubkey;
+}
+
+const BATCH_SIZE = 2;
+
+async function buildRequestIx(commitPda, requestDisc, quantity=1) {
+  const [mintRequestPda] = PublicKey.findProgramAddressSync(
+    [strToU8("mint_request"), walletPubkey.toBytes(), commitPda.toBytes()], PROGRAM_ID
+  );
+  const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+  const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
+  const userSeedBytes = new Uint8Array(32);
+  crypto.getRandomValues(userSeedBytes);
+  // quantity byte (1) — how many NFTs to mint from this single request
+  const data = concatU8(requestDisc, u8FromNum(quantity, 1), userSeedBytes);
+  return {
+    ix: new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,           isSigner: true,  isWritable: true  },
+        { pubkey: MACHINE_PDA,            isSigner: false, isWritable: true  },
+        { pubkey: treasuryPubkey,         isSigner: false, isWritable: true  },
+        { pubkey: commitPda,              isSigner: false, isWritable: true  },
+        { pubkey: mintRequestPda,         isSigner: false, isWritable: true  },
+        { pubkey: SystemProgram.programId,isSigner: false, isWritable: false },
+      ],
+      data,
+    }),
+    mintRequestPda,
+    commitPda,
+  };
+}
+
+
+
+// ── MINT ──────────────────────────────────────────────────────────────────────
+async function mintGumball() {
+  if (!walletPubkey || isMinting) return;
+  isMinting = true;
+  document.getElementById("mintBtn").disabled = true;
+  showSteps();
+
+  const totalToMint = qty;
+  let mintedCount = 0;
+
+  try {
+    const provider = getProvider();
+    const requestDisc = await disc("request_mint");
+
+    // ── Step 1: Single request for ALL qty ───────────────────────
+    resetSteps(); setStep(1, 'active');
+    setStatus(`FETCHING ORACLE COMMITMENT...`);
+
+    const commitPda = await fetchLatestCommitment();
+    const req = await buildRequestIx(commitPda, requestDisc, totalToMint);
+
+    setStatus(`APPROVE 1 TRANSACTION FOR ${totalToMint} MINT${totalToMint>1?'S':''}...`);
+    toast(`1 APPROVAL = ${totalToMint} GUMBALL${totalToMint>1?'S':''}`, 'info', 5000);
+
+    const tx = new Transaction().add(req.ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    // ── Snapshot BEFORE sending request ──────────────────────────
+    // Poll both v3 (93 bytes) and v4 (157 bytes) — contract may be either version
+    const GD_POLL_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93 bytes
+    const GD_POLL_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157 bytes
+    const [beforeV3, beforeV4] = await Promise.all([
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+      }),
+    ]);
+    const beforeKeys = new Set([...beforeV3, ...beforeV4].map(a => a.pubkey.toBase58()));
+
+    await animCoin();
+    const signed = await provider.signTransaction(tx);
+    setStatus(`LOCKING ${getBatchTotal(currentMinted, totalToMint).toFixed(4)} XNT...`);
+    await animCrank();
+    const raw = signed.serialize();
+    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    setStep(1, 'done');
+    setStep(2, 'active');
+    setStatus(`ORACLE MINTING ${totalToMint} GUMBALL${totalToMint>1?'S':''}... (0/${totalToMint})`);
+    startCountdown(270);
+    toast(`REQUEST LOCKED — ORACLE IS REVEALING ${totalToMint} GUMBALL${totalToMint>1?'S':''}...`, 'info', 5000);
+
+    const timeoutMs = 120000; // 2 min for multi-mint
+    const start = Date.now();
+
+    while (mintedCount < totalToMint && Date.now() - start < timeoutMs) {
+      await new Promise(r => setTimeout(r, 2000));
+
+      const [afterV3, afterV4] = await Promise.all([
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+        }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+        }),
+      ]);
+      const after = [...afterV3, ...afterV4];
+
+      const newAccounts = after.filter(a => !beforeKeys.has(a.pubkey.toBase58()));
+
+      for (const { pubkey, account } of newAccounts) {
+        if (beforeKeys.has(pubkey.toBase58())) continue;
+        beforeKeys.add(pubkey.toBase58()); // mark as seen
+
+        const data = account.data;
+        const dv = new DataView(data.buffer, data.byteOffset);
+        const serial  = Number(dv.getBigUint64(8+32+32, true));
+        const flavor  = data[8+32+32+8];
+        const color   = data[8+32+32+8+1];
+        const rarity  = data[8+32+32+8+2];
+        const special = data[8+32+32+8+3];
+        // V3: SVG is in separate GumballSvg PDA, loaded on demand when modal opens
+        const svgStr = null;
+
+        const colorName   = COLORS[color]   || "Berry Blue";
+        const ballColor   = BALL_COLORS[colorName] || "#2266ee";
+        const flavorName  = FLAVORS[flavor]  || "Mystery";
+        const rarName     = RARITY[rarity]   || "Common";
+        const specialName = SPECIALS[special] || "None";
+
+        mintedCount++;
+        setStatus(`ORACLE MINTING... (${mintedCount}/${totalToMint})`);
+
+        await animDispense(ballColor);
+        launchConfetti(ballColor);
+        showTraits({ serial, flavor, color, rarity, special, colorName, ballColor, sig });
+        showLastMinted({ serial, flavorName, colorName, rarName, specialName, ballColor, svgStr, oracleVerified: true });
+        toast(`🎉 (${mintedCount}/${totalToMint}) ${flavorName} ${rarName} #${String(serial).padStart(4,"0")}`, 'success', 4000);
+
+        if (mintedCount >= totalToMint) break;
+      }
+    }
+
+    stopCountdown();
+
+    if (mintedCount === 0) {
+      setStep(2, 'error');
+      setStatus("ORACLE TIMEOUT — IS oracle.cjs RUNNING?");
+      toast("ORACLE TIMEOUT!", 'error', 6000);
+    } else {
+      setStep(2, 'done');
+      setStep(3, 'done');
+      setStatus(`🎉 ALL ${mintedCount} GUMBALLS MINTED!`);
+      toast(`✅ ${mintedCount}/${totalToMint} GUMBALLS MINTED!`, 'success', 6000);
+    }
+
+    await fetchMachineState();
+    await fetchWalletGumballs();
+    setTimeout(hideSteps, 3000);
+
+  } catch(e) {
+    console.error("Mint error:", e);
+    setStep(1, 'error');
+    stopCountdown();
+    const msg = e.message || "failed";
+    setStatus("ERROR: " + msg.slice(0, 100));
+    toast("MINT FAILED: " + msg.slice(0,60), 'error', 6000);
+    hideSteps();
+    if (mintedCount > 0) {
+      await fetchMachineState();
+      await fetchWalletGumballs();
+    }
+  }
+  isMinting = false;
+  document.getElementById("mintBtn").disabled = false;
+}
+
+// ── ANIMATIONS ────────────────────────────────────────────────────────────────
+function animCoin() {
+  return new Promise(res => {
+    const g=document.getElementById("coin-g"),c=document.getElementById("coin-c"),t=document.getElementById("coin-t");
+    g.style.opacity="1";
+    let y=265,vy=1.5,grav=0.55;
+    const iv=setInterval(()=>{
+      vy+=grav;y+=vy;c.setAttribute("cy",y);t.setAttribute("y",y+4);
+      if(y>=285){clearInterval(iv);setTimeout(()=>{g.style.opacity="0";c.setAttribute("cy","265");t.setAttribute("y","269");res();},180);}
+    },16);
+  });
+}
+function animCrank() {
+  return new Promise(res => {
+    const g=document.getElementById("crank-g");
+    let angle=0;
+    const iv=setInterval(()=>{angle+=9;g.style.transform=`rotate(${angle}deg)`;if(angle>=360){clearInterval(iv);g.style.transform="";res();}},16);
+  });
+}
+function animDispense(color) {
+  return new Promise(res => {
+    const g=document.getElementById("disp-g"),b=document.getElementById("disp-ball"),s=document.getElementById("disp-shine");
+    b.setAttribute("fill",color);b.setAttribute("cx","150");b.setAttribute("cy","358");
+    g.style.opacity="1";
+    let y=358,vy=1.5,grav=0.6,bounces=0,cx=150,vx=(Math.random()-0.5)*2;
+    const fl=382;
+    const iv=setInterval(()=>{
+      vy+=grav;y+=vy;cx+=vx;vx*=0.96;
+      b.setAttribute("cy",y);b.setAttribute("cx",cx);s.setAttribute("cy",y-6);s.setAttribute("cx",cx-5);
+      if(y>=fl&&bounces<2){bounces++;vy=-vy*(0.38-bounces*0.1);grav=0.8;}
+      if(y>=fl&&bounces>=2&&Math.abs(vy)<0.6){
+        clearInterval(iv);
+        setTimeout(()=>{g.style.opacity="0";b.setAttribute("cy","358");b.setAttribute("cx","150");res();},400);
+      }
+    },16);
+  });
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function setStatus(m){document.getElementById("statusMsg").textContent=m;}
+function changeQty(d){
+  qty=Math.min(10,Math.max(1,qty+d));
+  document.getElementById("qtyVal").textContent=qty;
+  updatePriceDisplay();
+}
+function lighten(h){if(!h.startsWith("#"))return"#fff";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgb(${Math.min(255,r+75)},${Math.min(255,g+75)},${Math.min(255,b+75)})`;}
+function darken(h){if(!h.startsWith("#"))return"#000";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgb(${Math.max(0,r-50)},${Math.max(0,g-50)},${Math.max(0,b-50)})`;}
+function ballGrad(c){return`radial-gradient(circle at 34% 28%,${lighten(c)},${c} 58%,${darken(c)})`;}
+
+function showTraits(g) {
+  document.getElementById("traitPreview").style.display="block";
+  document.getElementById("tFlavor").textContent = FLAVORS[g.flavor]||"—";
+  document.getElementById("tColor").textContent  = COLORS[g.color]||"—";
+  document.getElementById("tSpecial").textContent= SPECIALS[g.special]||"—";
+  const rb = document.getElementById("tRarity");
+  rb.textContent = RARITY[g.rarity]||"—";
+  rb.className = "rarity-badge " + (RARITY_CLASSES[g.rarity]||"r-common");
+  document.getElementById("tSerial").textContent = "#"+String(g.serial).padStart(4,"0");
+  const txEl = document.getElementById("tTx");
+  txEl.href = `${EXPLORER}/${g.sig}`;
+  txEl.textContent = g.sig.slice(0,14)+"...";
+}
+
+function showLastMinted(g) {
+  document.getElementById("lastMinted").style.display="block";
+  document.getElementById("lmSerial").textContent="#"+String(g.serial).padStart(4,"0");
+  const ball=document.getElementById("lmBall");
+  if (g.svgStr) {
+    ball.style.background="none";ball.style.boxShadow="none";
+    ball.innerHTML=`<div style="width:72px;height:72px;border-radius:50%;overflow:hidden;margin:0 auto;">${g.svgStr}</div>`;
+  } else {
+    ball.innerHTML="";
+    ball.style.background=ballGrad(g.ballColor);
+    ball.style.boxShadow=`0 0 24px ${g.ballColor}55,0 8px 20px rgba(0,0,0,0.5)`;
+  }
+  document.getElementById("lmName").textContent=`${g.flavorName} • ${g.colorName}`;
+  document.getElementById("lmTraits").innerHTML=`
+    <div class="trait-row"><span class="trait-key">FLAVOR</span><span>${g.flavorName}</span></div>
+    <div class="trait-row"><span class="trait-key">COLOR</span><span>${g.colorName}</span></div>
+    <div class="trait-row"><span class="trait-key">SPECIAL</span><span>${g.specialName}</span></div>
+    <div class="trait-row"><span class="trait-key">RARITY</span><span class="rarity-badge r-${g.rarName.toLowerCase()}">${g.rarName}</span></div>
+    ${g.svgStr?'<div class="trait-row"><span class="trait-key">IMAGE</span><span style="color:var(--teal)">✅ ON-CHAIN SVG</span></div>':''}
+    ${g.oracleVerified?'<div class="trait-row"><span class="trait-key">RANDOM</span><span style="color:var(--gold)">🎲 ORACLE VERIFIED</span></div>':''}
+  `;
+}
+
+// ── COLLECTION ────────────────────────────────────────────────────────────────
+let _currentFilter = 'all';
+function addToCollection(g) {
+  document.getElementById("collArea").style.display="block";
+  collection.push(g);
+  document.getElementById("sOwned").textContent = collection.length;
+  document.getElementById("collCount").textContent = `${collection.length} gumball${collection.length!==1?'s':''}`;
+  renderCollCard(g);
+}
+
+function renderCollCard(g) {
+  const grid = document.getElementById("collGrid");
+  const card = document.createElement("div");
+  card.className = "coll-card r-" + g.rarName.toLowerCase();
+  card.dataset.rarity = g.rarName.toLowerCase();
+  card.style.animationDelay = (collection.length * 0.04) + "s";
+  const rarColor = RARITY_COLORS[g.rarity] || "#aaaacc";
+
+  if (g.svgStr) {
+    const uid = `g${g.serial}`;
+    // Extract inner content from the SVG tag, then wrap in our own controlled SVG
+    const innerContent = g.svgStr
+      .replace(/id="b"/g,              `id="b_${uid}"`)
+      .replace(/fill="url\(#b\)"/g,    `fill="url(#b_${uid})"`)
+      .replace(/id="hl"/g,             `id="hl_${uid}"`)
+      .replace(/stroke="url\(#hl\)"/g, `stroke="url(#hl_${uid})"`)
+      .replace(/fill="url\(#hl\)"/g,   `fill="url(#hl_${uid})"`)
+      .replace(/<svg[^>]*>/,           '')   // strip opening svg tag
+      .replace(/<\/svg>/,              '');  // strip closing svg tag
+    // Render in a 60x60 circle, viewBox 0 0 300 248 clips off the text bar at bottom
+    card.innerHTML = `
+      <div style="width:60px;height:60px;border-radius:50%;overflow:hidden;flex-shrink:0;margin:0 auto 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" width="60" height="60">${innerContent}</svg>
+      </div>
+      <div class="coll-serial">#${String(g.serial).padStart(4,"0")}</div>
+      <div class="coll-flavor">${g.flavorName}</div>
+      <div class="coll-rarity" style="color:${rarColor}">${g.rarName}</div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="coll-ball" style="background:${ballGrad(g.ballColor)};box-shadow:0 0 12px ${g.ballColor}44;"></div>
+      <div class="coll-serial">#${String(g.serial).padStart(4,"0")}</div>
+      <div class="coll-flavor">${g.flavorName}</div>
+      <div class="coll-rarity" style="color:${rarColor}">${g.rarName}</div>
+    `;
+  }
+
+  card.onclick = () => openSvgModal(g);
+  if (_currentFilter !== 'all' && g.rarName.toLowerCase() !== _currentFilter) {
+    card.style.display = 'none';
+  }
+  grid.appendChild(card);
+  // Force visibility in case animation fill-mode doesn't kick in
+  setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'scale(1)'; }, 500);
+}
+
+function filterCollection(rarity, btn) {
+  _currentFilter = rarity;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cards = document.querySelectorAll('.coll-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const show = rarity === 'all' || card.dataset.rarity === rarity;
+    card.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById("collCount").textContent = `${visible} gumball${visible!==1?'s':''}`;
+}
+
+// ── SVG HELPERS ───────────────────────────────────────────────────────────────
+async function fetchGumballSvg(mintPubkey) {
+  try {
+    const [svgPda] = PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("svg"), mintPubkey.toBytes()], PROGRAM_ID
+    );
+    const info = await connection.getAccountInfo(svgPda);
+    if (!info || info.data.length < 12) return null;
+    // GumballSvg: disc(8) + vec_len(4) + svg_bytes
+    const dv = new DataView(info.data.buffer, info.data.byteOffset);
+    const svgLen = dv.getUint32(8, true);
+    if (svgLen > 0 && svgLen <= 1024) {
+      return new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ── SVG MODAL ─────────────────────────────────────────────────────────────────
+let _modalGumball = null;
+function openSvgModal(g) {
+  _modalGumball = g;
+  _currentSvg = g.svgStr || "";
+  _currentSerial = g.serial;
+  const modal = document.getElementById("svgModal");
+  modal.style.display = "flex";
+  document.getElementById("modalTitle").textContent = `// GUMBALL #${String(g.serial).padStart(4,"0")}`;
+  document.getElementById("modalTraits").textContent = `${g.flavorName} · ${g.colorName} · ${g.rarName}`;
+
+  const EXPLORER_BASE = "https://explorer.testnet.x1.xyz";
+  const accountLink = document.getElementById("modalAccountLink");
+  const commitLink  = document.getElementById("modalCommitLink");
+  const proofBox    = document.getElementById("modalProofBox");
+
+  // Set account link
+  if (g.gbPda) {
+    accountLink.href = `${EXPLORER_BASE}/account/${g.gbPda.toBase58()}`;
+  }
+
+  // Reset proof box
+  commitLink.style.display = "none";
+  if (proofBox) proofBox.innerHTML = '<div style="color:var(--gray);font-size:0.42rem;">LOADING PROOF...</div>';
+
+  // Load proof data from on-chain GumballData account
+  if (g.gbPda) {
+    connection.getAccountInfo(g.gbPda).then(info => {
+      if (!info || info.data.length < 8+32+32+8+1+1+1+1+8+1+32+32) return;
+      const d = info.data;
+      // GumballData layout: disc(8) + owner(32) + machine(32) + serial(8) +
+      //   flavor(1) + color(1) + rarity(1) + special(1) + minted_at(8) + bump(1) +
+      //   commitment(32) + user_seed(32) + svg_len(4) + svg(...)
+      const commitOffset   = 8+32+32+8+1+1+1+1+8+1;      // 93
+      const userSeedOffset = commitOffset + 32;             // 125
+      const commitment = Array.from(d.slice(commitOffset, commitOffset+32))
+        .map(b => b.toString(16).padStart(2,'0')).join('');
+      const userSeed = Array.from(d.slice(userSeedOffset, userSeedOffset+32))
+        .map(b => b.toString(16).padStart(2,'0')).join('');
+      const hasProof = commitment !== '0'.repeat(64);
+
+      if (proofBox && hasProof) {
+        proofBox.innerHTML = `
+          <div style="font-size:0.4rem;color:var(--gray);margin-bottom:6px;letter-spacing:1px;">COMMITMENT HASH</div>
+          <div style="font-size:0.38rem;color:var(--teal);word-break:break-all;font-family:monospace;margin-bottom:10px;">${commitment.slice(0,32)}...</div>
+          <div style="font-size:0.4rem;color:var(--gray);margin-bottom:6px;letter-spacing:1px;">USER SEED HASH</div>
+          <div style="font-size:0.38rem;color:var(--purple);word-break:break-all;font-family:monospace;margin-bottom:10px;">${userSeed.slice(0,32)}...</div>
+          <div style="font-size:0.42rem;color:var(--green);line-height:1.8;">✅ Traits were determined by combining the oracle's secret (committed before you paid) + the blockchain's slot hash + your unique seed. Nobody could predict or manipulate the outcome.</div>
+        `;
+      } else if (proofBox) {
+        proofBox.innerHTML = `<div style="font-size:0.42rem;color:var(--gray);">Proof data available for gumballs minted after the v2 upgrade.</div>`;
+      }
+    }).catch(() => {
+      if (proofBox) proofBox.innerHTML = '';
+    });
+
+    // Fetch mint TX
+    connection.getSignaturesForAddress(g.gbPda, { limit: 10 }).then(sigs => {
+      if (sigs && sigs.length > 0) {
+        const mintSig = sigs[sigs.length - 1].signature;
+        commitLink.href = `${EXPLORER_BASE}/tx/${mintSig}`;
+        commitLink.style.display = "block";
+        commitLink.textContent = `🔗 VIEW MINT TX (${mintSig.slice(0,8)}...)`;
+      }
+    }).catch(() => {});
+  }
+
+  const svgDiv = document.getElementById("modalSvg");
+  if (g.svgStr) {
+    svgDiv.innerHTML = g.svgStr;
+    const svg = svgDiv.querySelector("svg");
+    if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
+  } else if (g.version === 3 && g.mintPubkey) {
+    // V3: fetch SVG from separate PDA
+    svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">LOADING SVG...</span></div>`;
+    fetchGumballSvg(g.mintPubkey).then(svgStr => {
+      if (svgStr) {
+        g.svgStr = svgStr; // cache it
+        svgDiv.innerHTML = svgStr;
+        const svg = svgDiv.querySelector("svg");
+        if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
+        // Also update the collection card
+        const cards = document.querySelectorAll('.coll-card');
+        cards.forEach(card => {
+          const serialEl = card.querySelector('.coll-serial');
+          if (serialEl && serialEl.textContent === `#${String(g.serial).padStart(4,'0')}`) {
+            const ballDiv = card.querySelector('div[style*="border-radius:50%"]');
+            if (ballDiv) {
+              const uid = `g${g.serial}`;
+              const innerContent = svgStr.replace(/id="b"/g, `id="b_${uid}"`).replace(/fill="url\(#b\)"/g, `fill="url(#b_${uid})"`).replace(/<svg[^>]*>/, '').replace(/<\/svg>/, '');
+              ballDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" width="60" height="60">${innerContent}</svg>`;
+            }
+          }
+        });
+      }
+    });
+  } else {
+    svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">NO SVG</span></div>`;
+  }
+}
+function copyOnChainSvg() {
+  if (!_currentSvg) return;
+  navigator.clipboard.writeText(_currentSvg).then(() => toast("SVG COPIED TO CLIPBOARD!", 'success'));
+}
+function downloadOnChainSvg() {
+  if (!_currentSvg) return;
+  const blob = new Blob([_currentSvg],{type:"image/svg+xml"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url;a.download=`gumball_${String(_currentSerial).padStart(4,"0")}.svg`;a.click();
+  URL.revokeObjectURL(url);
+}
+function viewSvgSource() {
+  if (!_currentSvg) return;
+  const w = window.open("","_blank");
+  w.document.write(`<pre style="background:#0a0a0f;color:#00ffcc;font-family:monospace;padding:20px;margin:0;">${_currentSvg.replace(/</g,"&lt;")}</pre>`);
+}
+
+// ── UPGRADE CARDS ─────────────────────────────────────────────────────────────
+function renderUpgradeCards() {
+  const upgrades = [
+    { from: "Common",   to: "Uncommon",  burnsNeeded: 5, fromIdx: 0, toIdx: 1 },
+    { from: "Uncommon", to: "Rare",      burnsNeeded: 3, fromIdx: 1, toIdx: 2 },
+    { from: "Rare",     to: "Epic",      burnsNeeded: 2, fromIdx: 2, toIdx: 3 },
+    { from: "Epic",     to: "Legendary", burnsNeeded: 2, fromIdx: 3, toIdx: 4 },
+  ];
+  const counts = [0,0,0,0,0];
+  collection.forEach(g => { if (g.rarity < 5) counts[g.rarity]++; });
+  const grid = document.getElementById("upgradeGrid");
+  grid.innerHTML = "";
+  let hasUpgrades = false;
+  upgrades.forEach(u => {
+    const have = counts[u.fromIdx];
+    const canUpgrade = have >= u.burnsNeeded;
+    if (have > 0) hasUpgrades = true;
+    const card = document.createElement("div");
+    card.className = "upgrade-card" + (canUpgrade ? " available" : "");
+    const fromColor = RARITY_COLORS[u.fromIdx];
+    const toColor   = RARITY_COLORS[u.toIdx];
+    card.innerHTML = `
+      <div class="upgrade-card-title">${u.from.toUpperCase()} → ${u.to.toUpperCase()}</div>
+      <div class="upgrade-arrow">
+        <div class="upgrade-from">
+          <div class="upgrade-from-count" style="color:${fromColor}">${u.burnsNeeded}</div>
+          <div class="upgrade-from-label">${u.from}</div>
+        </div>
+        <span class="upgrade-arrow-icon">→</span>
+        <div class="upgrade-to">
+          <div class="upgrade-to-count" style="color:${toColor}">1</div>
+          <div class="upgrade-to-label">${u.to}</div>
+        </div>
+      </div>
+      <div class="upgrade-progress">YOU HAVE: <span>${have} ${u.from}</span></div>
+      <div class="upgrade-fee" style="font-size:0.4rem;color:var(--gold);margin:4px 0;">FEE: ${getMintPrice(currentMinted).toFixed(4)} XNT</div>
+      <button class="upgrade-btn" ${canUpgrade?'':'disabled'} onclick="burnToUpgrade(${u.fromIdx}, ${u.toIdx}, ${u.burnsNeeded})">
+        ${canUpgrade ? `🔥 BURN ${u.burnsNeeded} + FEE` : `NEED ${Math.max(0, u.burnsNeeded - have)} MORE`}
+      </button>
+    `;
+    grid.appendChild(card);
+  });
+  document.getElementById("upgradeSection").style.display = hasUpgrades ? "block" : "none";
+}
+
+async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
+  if (!walletPubkey || isMinting) return;
+
+  // Check sold out before attempting — saves a failed tx
+  try {
+    const info = await connection.getAccountInfo(MACHINE_PDA);
+    if (info) {
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      const totalMinted = Number(dv.getBigUint64(8+32+32+32+8,   true));
+      const maxSupply   = Number(dv.getBigUint64(8+32+32+32+8+8, true));
+      if (totalMinted >= maxSupply) {
+        toast("🔴 SOLD OUT — BURNS ARE CLOSED (max supply reached)", 'error', 5000);
+        return;
+      }
+    }
+  } catch(e) {}
+
+  isMinting = true;
+
+  const fromName = RARITY[fromRarity];
+  const toName   = RARITY[toRarity];
+  const upgradeFee = getMintPrice(currentMinted);
+  const statusEl = document.getElementById("upgradeStatus");
+  statusEl.style.display = "block";
+  statusEl.textContent   = `🔥 BURNING ${burnsNeeded} ${fromName.toUpperCase()} + ${upgradeFee.toFixed(4)} XNT FEE...`;
+
+  try {
+    const provider = getProvider();
+    const { Keypair } = solanaWeb3;
+
+    // Pick gumballs of the right rarity that have mint info
+    const eligible = collection.filter(g => g.rarity === fromRarity && g.mintPubkey);
+    if (eligible.length < burnsNeeded) {
+      toast(`NEED ${burnsNeeded} ${fromName} WITH KNOWN MINT — REFRESH AND TRY AGAIN`, 'error', 5000);
+      statusEl.style.display = "none";
+      isMinting = false;
+      return;
+    }
+    const selected = eligible.slice(0, burnsNeeded);
+
+    // Common accounts for both instructions
+    const [machineAuthority] = PublicKey.findProgramAddressSync([strToU8("machine_authority")], PROGRAM_ID);
+    const newMint = Keypair.generate();
+    const [newGumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), newMint.publicKey.toBytes()], PROGRAM_ID);
+    const [newGumballSvgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), newMint.publicKey.toBytes()], PROGRAM_ID);
+    const newAta = getAta(newMint.publicKey, walletPubkey);
+
+    // Read treasury from Machine PDA for upgrade fee
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
+
+    let discBytes, keys, remainingAccounts = [], extraSigners = [newMint];
+
+    if (burnsNeeded === 2) {
+      // ── burn_to_upgrade: Rare→Epic or Epic→Legendary ──────────────────────
+      discBytes = await disc("burn_to_upgrade");
+      const a = selected[0], b = selected[1];
+      keys = [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // burner
+        { pubkey: MACHINE_PDA,             isSigner: false, isWritable: true  }, // machine
+        { pubkey: machineAuthority,        isSigner: false, isWritable: false }, // machine_authority
+        { pubkey: treasuryPubkey,          isSigner: false, isWritable: true  }, // treasury
+        { pubkey: a.gbPda,                 isSigner: false, isWritable: true  }, // gumball_a
+        { pubkey: a.mintPubkey,            isSigner: false, isWritable: true  }, // mint_a
+        { pubkey: a.ataPubkey,             isSigner: false, isWritable: true  }, // ata_a
+        { pubkey: b.gbPda,                 isSigner: false, isWritable: true  }, // gumball_b
+        { pubkey: b.mintPubkey,            isSigner: false, isWritable: true  }, // mint_b
+        { pubkey: b.ataPubkey,             isSigner: false, isWritable: true  }, // ata_b
+        { pubkey: newMint.publicKey,       isSigner: true,  isWritable: true  }, // new_mint
+        { pubkey: newAta,                  isSigner: false, isWritable: true  }, // new_ata
+        { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
+        { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
+        { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false }, // rent
+      ];
+    } else {
+      // ── burn_multi: Uncommon→Rare (3) or Common→Uncommon (5) ──────────────
+      discBytes = await disc("burn_multi");
+      const base   = selected[0];
+      const extras = selected.slice(1); // N-1 extra burns via remaining_accounts
+      keys = [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // burner
+        { pubkey: MACHINE_PDA,             isSigner: false, isWritable: true  }, // machine
+        { pubkey: machineAuthority,        isSigner: false, isWritable: false }, // machine_authority
+        { pubkey: treasuryPubkey,          isSigner: false, isWritable: true  }, // treasury
+        { pubkey: base.gbPda,              isSigner: false, isWritable: true  }, // gumball_a
+        { pubkey: base.mintPubkey,         isSigner: false, isWritable: true  }, // mint_a
+        { pubkey: base.ataPubkey,          isSigner: false, isWritable: true  }, // ata_a
+        { pubkey: newMint.publicKey,       isSigner: true,  isWritable: true  }, // new_mint
+        { pubkey: newAta,                  isSigner: false, isWritable: true  }, // new_ata
+        { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
+        { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
+        { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false }, // rent
+      ];
+      // remaining_accounts: triples of (mint, ata, gumball_pda) for each extra burn
+      for (const g of extras) {
+        remainingAccounts.push({ pubkey: g.mintPubkey, isSigner: false, isWritable: true });
+        remainingAccounts.push({ pubkey: g.ataPubkey,  isSigner: false, isWritable: true });
+        remainingAccounts.push({ pubkey: g.gbPda,      isSigner: false, isWritable: true });
+      }
+    }
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [...keys, ...remainingAccounts],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    // Simulate first to get detailed logs
+    tx.partialSign(newMint);
+    const sim = await connection.simulateTransaction(tx);
+    if (sim.value.err) {
+      console.error("Simulation logs:", sim.value.logs);
+      throw new Error("Simulation failed: " + JSON.stringify(sim.value.err) + "\nLogs:\n" + sim.value.logs?.join("\n"));
+    }
+
+    statusEl.textContent = "APPROVE IN WALLET...";
+    toast(`APPROVE BURN: ${burnsNeeded} ${fromName} → 1 ${toName}`, 'info');
+
+    // Re-build tx since simulation consumed the partial sig state
+    const tx2 = new Transaction().add(ix);
+    tx2.feePayer = walletPubkey;
+    tx2.recentBlockhash = blockhash;
+    tx2.partialSign(newMint);
+
+    const signed = await provider.signTransaction(tx2);
+
+    statusEl.textContent = "SUBMITTING BURN TX...";
+    const raw = signed.serialize();
+    const sig = await connection.sendRawTransaction(raw, { skipPreflight: true });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    statusEl.textContent = `✅ UPGRADED TO ${toName.toUpperCase()}!`;
+    toast(`🔥 BURNED ${burnsNeeded} ${fromName} → 1 ${toName}!`, 'success', 6000);
+    launchConfetti(RARITY_COLORS[toRarity]);
+
+    setTimeout(() => { statusEl.style.display = "none"; }, 3000);
+    await fetchMachineState();
+    await fetchWalletGumballs();
+
+  } catch(e) {
+    console.error("Burn error:", e);
+    const msg = e.message || "unknown error";
+    statusEl.textContent = "ERROR: " + msg.slice(0, 80);
+    toast("BURN FAILED: " + msg.slice(0, 60), 'error', 6000);
+  }
+  isMinting = false;
+}
+
+// ── REFUND EXPIRED MINTS ──────────────────────────────────────────────────────
+async function checkExpiredMints() {
+  if (!walletPubkey) return;
+  try {
+    const MINT_REQUEST_SIZE = 8+32+32+32+1+1+8+8+1+1+32; // 156 bytes
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { dataSize: MINT_REQUEST_SIZE },
+        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }, // minter = wallet
+      ],
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const TIMEOUT = 300; // 5 minutes
+    const expired = accounts.filter(({ account }) => {
+      const dv = new DataView(account.data.buffer, account.data.byteOffset);
+      const requestedAt = Number(dv.getBigInt64(114, true));
+      const fulfilled   = account.data[122] === 1;
+      return !fulfilled && (now - requestedAt) > TIMEOUT;
+    });
+    const wrap = document.getElementById('refundWrap');
+    const info = document.getElementById('refundInfo');
+    if (expired.length > 0) {
+      const totalPaid = expired.reduce((sum, { account }) => {
+        const dv = new DataView(account.data.buffer, account.data.byteOffset);
+        return sum + Number(dv.getBigUint64(106, true));
+      }, 0);
+      wrap.style.display = 'block';
+      info.textContent = `${expired.length} EXPIRED REQUEST${expired.length>1?'S':''} — ~${(totalPaid/1e9).toFixed(4)} XNT REFUNDABLE`;
+      // Store for use in refund
+      wrap.dataset.accounts = JSON.stringify(expired.map(a => a.pubkey.toBase58()));
+    } else {
+      wrap.style.display = 'none';
+    }
+  } catch(e) { console.error('checkExpiredMints:', e); }
+}
+
+async function refundExpiredMint() {
+  if (!walletPubkey || isMinting) return;
+  isMinting = true;
+  const btn = document.getElementById('refundBtn');
+  btn.textContent = '⏳ PROCESSING...';
+
+  try {
+    const provider = getProvider();
+    const MINT_REQUEST_SIZE = 8+32+32+32+1+1+8+8+1+1+32;
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { dataSize: MINT_REQUEST_SIZE },
+        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+      ],
+    });
+    const now = Math.floor(Date.now() / 1000);
+    const expired = accounts.filter(({ account }) => {
+      const dv = new DataView(account.data.buffer, account.data.byteOffset);
+      const requestedAt = Number(dv.getBigInt64(114, true));
+      const fulfilled   = account.data[122] === 1;
+      return !fulfilled && (now - requestedAt) > 300;
+    });
+
+    if (expired.length === 0) {
+      toast('NO EXPIRED MINTS FOUND', 'info');
+      btn.textContent = '💸 CLAIM MINT REFUND';
+      isMinting = false;
+      return;
+    }
+
+    const refundDisc = await disc("refund_mint");
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
+
+    let refunded = 0;
+    let totalRefunded = 0;
+
+    for (const { pubkey: mintRequestPubkey, account } of expired) {
+      try {
+        const data = account.data;
+        const dv = new DataView(data.buffer, data.byteOffset);
+        const paidAmount = Number(dv.getBigUint64(106, true));
+        const commitPubkey = new PublicKey(data.slice(72, 104));
+
+        const ix = new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // minter
+            { pubkey: mintRequestPubkey,   isSigner: false, isWritable: true  }, // mint_request
+            { pubkey: commitPubkey,        isSigner: false, isWritable: false }, // oracle_commit
+            { pubkey: MACHINE_PDA,         isSigner: false, isWritable: false }, // machine
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data: refundDisc,
+        });
+
+        const tx = new Transaction().add(ix);
+        tx.feePayer = walletPubkey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+
+        btn.textContent = `⏳ REFUNDING ${refunded+1}/${expired.length}...`;
+        const signed = await provider.signTransaction(tx);
+        const raw = signed.serialize();
+        const sig = await connection.sendRawTransaction(raw, { skipPreflight: false });
+        await connection.confirmTransaction(sig, "confirmed");
+
+        totalRefunded += paidAmount;
+        refunded++;
+      } catch(e) {
+        console.error('Refund failed:', e.message);
+      }
+    }
+
+    toast(`💸 REFUNDED ${refunded} REQUEST${refunded>1?'S':''} — +${(totalRefunded/1e9).toFixed(4)} XNT`, 'success', 6000);
+    document.getElementById('refundWrap').style.display = 'none';
+    btn.textContent = '💸 CLAIM MINT REFUND';
+
+  } catch(e) {
+    console.error('refundExpiredMint:', e);
+    toast('REFUND FAILED: ' + e.message.slice(0,60), 'error');
+    btn.textContent = '💸 CLAIM MINT REFUND';
+  }
+  isMinting = false;
+}
+
+// reclaim_burned removed — burns now auto-reclaim rent
+</script>
+</body>
+</html>

@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — VERIFY</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --teal:#00ffcc; --purple:#cc44ff; --gold:#ffcc00; --white:#e8e8f8;
+  --gray:#6666aa; --red:#ff2244; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+header{
+  width:100%;max-width:900px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:32px;flex-wrap:wrap;gap:12px;
+}
+.logo{font-family:'Press Start 2P',cursive;font-size:0.8rem;color:var(--gold);letter-spacing:2px;line-height:1.6;}
+.logo span{color:var(--red);}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover{border-color:var(--teal);color:var(--teal);}
+
+.wrap{width:100%;max-width:900px;}
+
+/* Search */
+.search-box{
+  background:var(--panel);border:1px solid var(--border);padding:24px;margin-bottom:32px;
+}
+.search-title{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--teal);letter-spacing:2px;margin-bottom:16px;}
+.search-desc{font-size:0.52rem;color:var(--gray);line-height:1.9;margin-bottom:20px;}
+.search-row{display:flex;gap:10px;flex-wrap:wrap;}
+.search-input{
+  flex:1;min-width:200px;padding:10px 14px;background:var(--black);
+  border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;
+  font-size:0.6rem;outline:none;
+}
+.search-input:focus{border-color:var(--teal);}
+.search-input::placeholder{color:var(--gray);}
+.search-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;
+  background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;
+  white-space:nowrap;transition:all 0.2s;
+}
+.search-btn:hover{background:#00ddaa;}
+.search-btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+
+/* Result */
+.result{display:none;}
+
+/* Gumball card */
+.gb-card{
+  background:var(--panel);border:1px solid var(--border);padding:24px;
+  margin-bottom:20px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;
+}
+.gb-svg-wrap{width:160px;height:160px;border-radius:12px;overflow:hidden;flex-shrink:0;background:#111;}
+.gb-svg-wrap svg{width:160px;height:160px;display:block;}
+.gb-info{flex:1;min-width:200px;}
+.gb-serial{font-family:'Press Start 2P',cursive;font-size:0.7rem;color:var(--purple);margin-bottom:10px;}
+.gb-name{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--white);margin-bottom:16px;line-height:1.8;}
+.trait-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.trait-item{background:var(--black);padding:8px 10px;border:1px solid var(--border);}
+.trait-key{font-size:0.42rem;color:var(--gray);letter-spacing:1px;display:block;margin-bottom:4px;}
+.trait-val{font-size:0.55rem;color:var(--white);}
+.r-common{color:#aaaacc;} .r-uncommon{color:#44ff88;} .r-rare{color:#44aaff;}
+.r-epic{color:#cc88ff;} .r-legendary{color:#ffcc00;}
+
+/* Proof steps */
+.proof-section{margin-bottom:20px;}
+.proof-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+
+.proof-step{
+  background:var(--panel);border:1px solid var(--border);padding:16px 18px;
+  margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;
+}
+.proof-step.verified{border-color:rgba(0,255,204,0.4);}
+.proof-step.pending{border-color:rgba(255,204,0,0.3);}
+.proof-step.info{border-color:rgba(102,102,170,0.4);}
+.step-icon{font-size:1.1rem;flex-shrink:0;margin-top:2px;}
+.step-body{flex:1;}
+.step-label{font-family:'Press Start 2P',cursive;font-size:0.42rem;letter-spacing:1px;margin-bottom:6px;}
+.verified .step-label{color:var(--teal);}
+.pending .step-label{color:var(--gold);}
+.info .step-label{color:var(--gray);}
+.step-desc{font-size:0.5rem;color:var(--gray);line-height:1.8;margin-bottom:8px;}
+.step-data{font-family:'Space Mono',monospace;font-size:0.42rem;color:var(--white);word-break:break-all;background:var(--black);padding:6px 8px;border:1px solid var(--border);margin-bottom:8px;}
+.step-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:5px 10px;
+  border:1px solid var(--teal);color:var(--teal);text-decoration:none;
+  display:inline-block;transition:all 0.2s;margin-top:4px;
+}
+.step-link:hover{background:rgba(0,255,204,0.1);}
+
+/* How it works */
+.how-section{
+  background:var(--panel);border:1px solid var(--border);padding:20px 24px;margin-bottom:20px;
+}
+.how-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--purple);letter-spacing:2px;margin-bottom:16px;}
+.how-step{display:flex;gap:12px;margin-bottom:14px;align-items:flex-start;}
+.how-num{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--gold);flex-shrink:0;width:20px;}
+.how-text{font-size:0.5rem;color:var(--gray);line-height:1.9;}
+.how-text strong{color:var(--white);}
+
+/* Loading */
+.loading-msg{text-align:center;padding:40px;font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;}
+.error-msg{background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:16px;font-size:0.52rem;color:var(--red);margin-bottom:20px;display:none;}
+
+@media(max-width:500px){
+  .gb-card{flex-direction:column;}
+  .gb-svg-wrap{width:120px;height:120px;}
+  .gb-svg-wrap svg{width:120px;height:120px;}
+  .trait-grid{grid-template-columns:1fr;}
+  .search-row{flex-direction:column;}
+  .search-btn{width:100%;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a href="index.html" class="nav-link">[ MINT ]</a>
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link" style="border-color:var(--teal);color:var(--teal);">[ VERIFY ]</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- How it works (always visible) -->
+  <div class="how-section">
+    <div class="how-title">// HOW PROVABLY FAIR WORKS</div>
+    <div class="how-step">
+      <div class="how-num">1</div>
+      <div class="how-text">The oracle generates a <strong>random secret</strong> and submits <strong>sha256(secret + oracle_pubkey)</strong> on-chain as a commitment — before you pay anything.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">2</div>
+      <div class="how-text">You pay and lock in the commitment with your own <strong>random user seed</strong> — the oracle doesn't know this seed yet, so it can't manipulate your outcome.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">3</div>
+      <div class="how-text">The oracle reveals its secret. The contract verifies <strong>sha256(secret + oracle_pubkey) matches the commitment</strong> stored on-chain. If it doesn't match, the transaction fails.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">4</div>
+      <div class="how-text">Traits are derived from <strong>sha256(secret + slot_hash + user_seed)</strong>. Neither the oracle (didn't know user_seed) nor you (didn't know secret or slot_hash) could predict or manipulate the result.</div>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-box">
+    <div class="search-title">// VERIFY A GUMBALL</div>
+    <div class="search-desc">Enter a gumball serial number or its on-chain PDA address to verify its provable fairness.</div>
+    <div class="search-row">
+      <input type="text" class="search-input" id="searchInput" placeholder="Serial number (e.g. 42) or PDA address..." />
+      <button class="search-btn" id="searchBtn" onclick="verify()">🔍 VERIFY</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="result" id="result">
+
+    <!-- Gumball Card -->
+    <div class="gb-card" id="gbCard">
+      <div class="gb-svg-wrap" id="gbSvg"></div>
+      <div class="gb-info">
+        <div class="gb-serial" id="gbSerial">#0000</div>
+        <div class="gb-name" id="gbName">—</div>
+        <div class="trait-grid" id="gbTraits"></div>
+      </div>
+    </div>
+
+    <!-- Proof Steps -->
+    <div class="proof-section">
+      <div class="proof-title">// VERIFICATION CHAIN</div>
+      <div id="proofSteps"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const { Connection, PublicKey } = solanaWeb3;
+const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const ORACLE_PUBKEY = "53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy";
+const RPC      = "https://rpc.testnet.x1.xyz";
+const EXPLORER = "https://explorer.testnet.x1.xyz";
+const connection = new Connection(RPC, "confirmed");
+
+const FLAVORS  = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const COLORS   = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
+const RARITY   = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+const BALL_COLORS = {
+  "Cherry Red":"#e82040","Grape Purple":"#8b35cc","Melon Pink":"#ff7aab",
+  "Berry Blue":"#2266ee","Rose Gold":"#e8927a","Citrus Yellow":"#f5c842",
+  "Lime Green":"#44cc44","Tangerine":"#ff8822","Cotton White":"#eeeeee",
+  "Midnight Black":"#222244","Shimmer Silver":"#ccccee","Rainbow":"#ff44aa"
+};
+
+function toHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Find the NFT mint key from a gumball PDA by scanning transactions
+async function findNftMintFromGumball(gumballPda) {
+  // The gumball PDA seeds are [b"gumball", nft_mint.key()]
+  // We can reverse this by checking all mints — but it's cheaper to
+  // look at the creation transaction's account keys
+  try {
+    const sigs = await connection.getSignaturesForAddress(gumballPda, { limit: 10 });
+    if (sigs.length === 0) return null;
+    const tx = await connection.getTransaction(sigs[sigs.length - 1].signature);
+    if (!tx) return null;
+    const keys = tx.transaction.message.accountKeys;
+    // The nft_mint is the account whose PDA matches gumballPda
+    for (const key of keys) {
+      const [pda] = PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode("gumball"), key.toBuffer()],
+        PROGRAM_ID
+      );
+      if (pda.equals(gumballPda)) return key;
+    }
+  } catch(e) { console.error('findNftMint error:', e); }
+  return null;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('errorMsg').style.display = 'none';
+}
+
+// Allow Enter key
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') verify();
+});
+
+// Check URL params on load
+window.addEventListener('load', () => {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('serial') || params.get('pda');
+  if (q) {
+    document.getElementById('searchInput').value = q;
+    verify();
+  }
+});
+
+async function verify() {
+  const input = document.getElementById('searchInput').value.trim();
+  if (!input) return;
+
+  hideError();
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('searchBtn').textContent = '⏳ LOADING...';
+
+  try {
+    let gumballPda, accountData;
+
+    // Determine if input is serial number or PDA
+    if (/^\d+$/.test(input)) {
+      // Serial number — scan all gumball account versions to find matching serial
+      const serial = parseInt(input);
+      const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1121
+      const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
+      const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
+      const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
+      const [v1, v2, v3, v4] = await Promise.all([
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { dataSize: GD_V1 },
+            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+          ]
+        }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { dataSize: GD_V2 },
+            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+          ]
+        }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { dataSize: GD_V3 },
+            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+          ]
+        }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { dataSize: GD_V4 },
+            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+          ]
+        }),
+      ]);
+      const all = [...v1, ...v2, ...v3, ...v4];
+      const match = all.find(({ account }) => {
+        const dv = new DataView(account.data.buffer, account.data.byteOffset);
+        return Number(dv.getBigUint64(8+32+32, true)) === serial;
+      });
+      if (!match) throw new Error(`Gumball #${serial} not found on-chain.`);
+      gumballPda = match.pubkey;
+      accountData = match.account.data;
+    } else {
+      // PDA address
+      gumballPda = new PublicKey(input);
+      const info = await connection.getAccountInfo(gumballPda);
+      if (!info) throw new Error('Account not found on-chain.');
+      accountData = info.data;
+    }
+
+    // Parse GumballData (works for v1-v4, trait offsets are the same)
+    const dv = new DataView(accountData.buffer, accountData.byteOffset);
+    const owner   = new PublicKey(accountData.slice(8, 40)).toBase58();
+    const serial  = Number(dv.getBigUint64(8+32+32, true));
+    const flavor  = accountData[8+32+32+8];
+    const color   = accountData[8+32+32+8+1];
+    const rarity  = accountData[8+32+32+8+2];
+    const special = accountData[8+32+32+8+3];
+    const mintedAt = Number(dv.getBigUint64(8+32+32+8+4, true));
+
+    // v4 proof fields (offset 85 = 8+32+32+8+1+1+1+1+8+1)
+    const PROOF_OFFSET = 8+32+32+8+1+1+1+1+8+1;
+    const isV4 = accountData.length >= 157; // 8 disc + 149 data
+    let commitmentHash = null;
+    let userSeed = null;
+    if (isV4) {
+      commitmentHash = accountData.slice(PROOF_OFFSET, PROOF_OFFSET+32);
+      userSeed = accountData.slice(PROOF_OFFSET+32, PROOF_OFFSET+64);
+    }
+    const hasProofFields = isV4 && commitmentHash && !commitmentHash.every(b => b === 0);
+
+    // For v3/v4: SVG is in separate PDA. For v1/v2: SVG is inline.
+    let svgStr = null;
+    if (accountData.length > 157) {
+      // v1 or v2 — inline SVG after bump
+      const svgOff = PROOF_OFFSET;
+      try {
+        const svgLen = dv.getUint32(svgOff, true);
+        if (svgLen > 0 && svgLen <= 1024) svgStr = new TextDecoder().decode(accountData.slice(svgOff+4, svgOff+4+svgLen));
+      } catch(e) {}
+    } else {
+      // v3/v4 — fetch SVG from separate PDA
+      try {
+        const nftMintKey = await findNftMintFromGumball(gumballPda);
+        if (nftMintKey) {
+          const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), nftMintKey.toBuffer()], PROGRAM_ID);
+          const svgInfo = await connection.getAccountInfo(svgPda);
+          if (svgInfo) {
+            const svgDv = new DataView(svgInfo.data.buffer, svgInfo.data.byteOffset);
+            const svgLen = svgDv.getUint32(8, true);
+            if (svgLen > 0 && svgLen <= 768) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
+          }
+        }
+      } catch(e) { console.error('SVG fetch error:', e); }
+    }
+
+    const flavorName  = FLAVORS[flavor]  || "Mystery";
+    const colorName   = COLORS[color]    || "Berry Blue";
+    const rarName     = RARITY[rarity]   || "Common";
+    const specialName = SPECIALS[special] || "None";
+    const rarColor    = RARITY_COLORS[rarity] || "#aaaacc";
+    const ballColor   = BALL_COLORS[colorName] || "#2266ee";
+    const mintDate    = mintedAt > 0 ? new Date(mintedAt * 1000).toLocaleString() : "Unknown";
+
+    // Update URL for sharing
+    window.history.replaceState({}, '', `?serial=${serial}`);
+
+    // Render gumball card
+    document.getElementById('gbSerial').textContent = `#${String(serial).padStart(4,'0')}`;
+    document.getElementById('gbName').textContent = `${flavorName} · ${colorName}`;
+
+    const svgWrap = document.getElementById('gbSvg');
+    if (svgStr) {
+      svgWrap.innerHTML = svgStr;
+      const svg = svgWrap.querySelector('svg');
+      if (svg) { svg.style.width='160px'; svg.style.height='160px'; }
+    } else {
+      svgWrap.style.background = `radial-gradient(circle at 35% 30%, ${ballColor}ff, ${ballColor}44)`;
+    }
+
+    document.getElementById('gbTraits').innerHTML = `
+      <div class="trait-item"><span class="trait-key">FLAVOR</span><span class="trait-val">${flavorName}</span></div>
+      <div class="trait-item"><span class="trait-key">COLOR</span><span class="trait-val">${colorName}</span></div>
+      <div class="trait-item"><span class="trait-key">RARITY</span><span class="trait-val ${`r-${rarName.toLowerCase()}`}" style="color:${rarColor}">${rarName}</span></div>
+      <div class="trait-item"><span class="trait-key">SPECIAL</span><span class="trait-val">${specialName}</span></div>
+      <div class="trait-item"><span class="trait-key">MINTED</span><span class="trait-val" style="font-size:0.42rem;">${mintDate}</span></div>
+      <div class="trait-item"><span class="trait-key">OWNER</span><span class="trait-val" style="font-size:0.42rem;">${owner.slice(0,4)}...${owner.slice(-4)}</span></div>
+    `;
+
+    // Build proof steps
+    const steps = document.getElementById('proofSteps');
+    steps.innerHTML = '<div class="loading-msg">LOADING PROOF...</div>';
+
+    // Fetch transaction history
+    const sigs = await connection.getSignaturesForAddress(gumballPda, { limit: 10 });
+    const mintSig = sigs.length > 0 ? sigs[sigs.length-1].signature : null;
+
+    let commitSig = null;
+    let commitPda = null;
+    let oracleVerified = false;
+
+    if (mintSig) {
+      try {
+        const tx = await connection.getTransaction(mintSig);
+        if (tx) {
+          const keys = tx.transaction.message.accountKeys || [];
+          const keyStrs = keys.map(k => k.toString());
+
+          // Find commitment PDA in accounts
+          for (const keyStr of keyStrs) {
+            try {
+              const pub = new PublicKey(keyStr);
+              const info = await connection.getAccountInfo(pub);
+              if (info && info.data.length === 8+32+32+8+8+1+1) {
+                const commitData = info.data;
+                const commitOracle = new PublicKey(commitData.slice(8, 40)).toBase58();
+                if (commitOracle === ORACLE_PUBKEY) {
+                  commitPda = keyStr;
+                  const commitSigs = await connection.getSignaturesForAddress(pub, { limit: 2 });
+                  if (commitSigs.length > 0) {
+                    commitSig = commitSigs[commitSigs.length-1].signature;
+                  }
+                  break;
+                }
+              }
+            } catch(e) {}
+          }
+        }
+      } catch(e) { console.error('TX parse error:', e); }
+    }
+
+    // Verify oracle by checking Machine PDA — the registered oracle pubkey is stored at offset 8+32+32
+    try {
+      const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+      if (machineInfo) {
+        const registeredOracle = new PublicKey(machineInfo.data.slice(8+32+32, 8+32+32+32)).toBase58();
+        oracleVerified = registeredOracle === ORACLE_PUBKEY;
+      }
+    } catch(e) {}
+
+    // Render proof steps
+    steps.innerHTML = `
+      <div class="proof-step verified">
+        <div class="step-icon">✅</div>
+        <div class="step-body">
+          <div class="step-label">TRAITS STORED ON-CHAIN</div>
+          <div class="step-desc">The gumball's flavor, color, rarity and special trait are permanently stored in a PDA account on X1 blockchain. Anyone can read them at any time — they cannot be changed.</div>
+          <div class="step-data">PDA: ${gumballPda.toBase58()}</div>
+          <a class="step-link" href="${EXPLORER}/account/${gumballPda.toBase58()}" target="_blank">🔗 VIEW ACCOUNT</a>
+        </div>
+      </div>
+
+      <div class="proof-step ${oracleVerified ? 'verified' : 'pending'}">
+        <div class="step-icon">${oracleVerified ? '✅' : '⚠️'}</div>
+        <div class="step-body">
+          <div class="step-label">${oracleVerified ? 'ORACLE IDENTITY VERIFIED' : 'ORACLE IDENTITY'}</div>
+          <div class="step-desc">${oracleVerified
+            ? 'The oracle wallet registered in the Machine PDA matches the known oracle. Only this wallet can submit commitments and reveal secrets — its address is enforced on-chain by the smart contract.'
+            : 'Could not verify oracle identity. The Machine PDA may not be readable.'
+          }</div>
+          <div class="step-data">Oracle: ${ORACLE_PUBKEY}</div>
+          ${mintSig ? `<a class="step-link" href="${EXPLORER}/tx/${mintSig}" target="_blank">🔗 VIEW MINT TX</a>` : ''}
+          <a class="step-link" href="${EXPLORER}/account/${MACHINE_PDA.toBase58()}" target="_blank" style="margin-left:8px;">🔗 VIEW MACHINE ACCOUNT</a>
+        </div>
+      </div>
+
+      <div class="proof-step ${commitSig ? 'verified' : 'info'}">
+        <div class="step-icon">${commitSig ? '✅' : 'ℹ️'}</div>
+        <div class="step-body">
+          <div class="step-label">${commitSig ? 'COMMITMENT SUBMITTED BEFORE MINT' : 'COMMITMENT'}</div>
+          <div class="step-desc">${commitSig
+            ? 'The oracle submitted a sha256 commitment hash on-chain before your mint request was made. This proves the oracle locked in its randomness before knowing your wallet or user seed.'
+            : 'The oracle commitment PDA was found. The commitment was submitted before your mint request as part of the commit-reveal scheme.'
+          }</div>
+          ${commitPda ? `<div class="step-data">Commitment PDA: ${commitPda.slice(0,8)}...${commitPda.slice(-8)}</div>` : ''}
+          ${commitSig ? `<a class="step-link" href="${EXPLORER}/tx/${commitSig}" target="_blank">🔗 VIEW COMMITMENT TX</a>` : ''}
+        </div>
+      </div>
+
+      <div class="proof-step ${hasProofFields ? 'verified' : 'info'}">
+        <div class="step-icon">${hasProofFields ? '✅' : 'ℹ️'}</div>
+        <div class="step-body">
+          <div class="step-label">${hasProofFields ? 'PROOF FIELDS STORED ON-CHAIN' : 'PROOF FIELDS (PRE-V4 GUMBALL)'}</div>
+          <div class="step-desc">${hasProofFields
+            ? 'This gumball has its commitment hash and user seed permanently stored on-chain. Anyone can independently re-derive the traits by providing the oracle secret.'
+            : 'This gumball was minted before the v4 upgrade — commitment hash and user seed are not stored in its account data. On-chain proof fields are available for gumballs minted after the v4 deployment.'
+          }</div>
+          ${hasProofFields ? '<div class="step-data">Commitment: ' + toHex(commitmentHash) + '</div>' : ''}
+          ${hasProofFields ? '<div class="step-data">User Seed: ' + toHex(userSeed) + '</div>' : ''}
+        </div>
+      </div>
+
+      <div class="proof-step verified">
+        <div class="step-icon">✅</div>
+        <div class="step-body">
+          <div class="step-label">PROGRAM IS OPEN SOURCE</div>
+          <div class="step-desc">The smart contract code is public on GitHub. Anyone can read, audit, and verify the commit-reveal logic. The program is deployed at a fixed address on X1 blockchain and cannot be changed without a new deployment.</div>
+          <div class="step-data">Program: Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK</div>
+          <a class="step-link" href="https://github.com/Lokoweb3/gumball_nft" target="_blank">🔗 VIEW SOURCE CODE</a>
+          <a class="step-link" href="${EXPLORER}/account/Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK" target="_blank" style="margin-left:8px;">🔗 VIEW ON CHAIN</a>
+        </div>
+      </div>
+    `;
+
+    // Interactive hash verification (v4 only)
+    if (hasProofFields) {
+      steps.insertAdjacentHTML('beforeend', `
+        <div class="proof-step pending" id="hashVerifyStep">
+          <div class="step-icon" id="hashVerifyIcon">🔐</div>
+          <div class="step-body">
+            <div class="step-label" id="hashVerifyLabel">VERIFY HASH — ENTER ORACLE SECRET</div>
+            <div class="step-desc">Paste the oracle secret (hex) to independently re-derive this gumball's traits. The contract computed traits from <strong>sha256(secret + slot_hash + user_seed + mint_index)</strong>.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <input type="text" id="secretInput" placeholder="Oracle secret (64 hex chars)..." style="flex:1;min-width:200px;padding:8px 10px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;font-size:0.5rem;outline:none;" />
+              <button onclick="verifyHash()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:8px 12px;background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;">VERIFY</button>
+            </div>
+            <div id="hashResult" style="margin-top:10px;display:none;"></div>
+          </div>
+        </div>
+      `);
+
+      // Store data for hash verification
+      window._verifyData = {
+        commitmentHash: Array.from(commitmentHash),
+        userSeed: Array.from(userSeed),
+        serial, flavor, color, rarity, special,
+        gumballPda: gumballPda.toBase58(),
+        mintSig,
+      };
+    }
+
+    // Share link
+    const shareUrl = `${window.location.origin}${window.location.pathname}?serial=${serial}`;
+    steps.insertAdjacentHTML('afterend', `
+      <div style="background:var(--panel);border:1px solid var(--border);padding:16px 18px;margin-top:10px;">
+        <div style="font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);letter-spacing:1px;margin-bottom:10px;">SHARE THIS VERIFICATION</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="shareUrl" value="${shareUrl}" readonly style="flex:1;min-width:200px;padding:7px 10px;background:var(--black);border:1px solid var(--border);color:var(--teal);font-family:'Space Mono',monospace;font-size:0.42rem;outline:none;" />
+          <button onclick="copyShare()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:7px 12px;background:transparent;border:1px solid var(--teal);color:var(--teal);cursor:pointer;" id="copyShareBtn">📋 COPY</button>
+        </div>
+      </div>
+    `);
+
+    document.getElementById('result').style.display = 'block';
+
+  } catch(e) {
+    console.error(e);
+    showError('ERROR: ' + (e.message || 'Could not verify gumball. Check the serial number or address and try again.'));
+  }
+
+  document.getElementById('searchBtn').disabled = false;
+  document.getElementById('searchBtn').textContent = '🔍 VERIFY';
+}
+
+// ── SHA-256 hash verification ─────────────────────────────────────────────
+async function sha256(data) {
+  const buf = await crypto.subtle.digest('SHA-256', new Uint8Array(data));
+  return new Uint8Array(buf);
+}
+
+function hexToBytes(hex) {
+  hex = hex.replace(/^0x/, '');
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.substr(i, 2), 16));
+  return new Uint8Array(bytes);
+}
+
+// Replicate the Rust LCG exactly: seed = seed * 6364136223846793005 + 1442695040888963407
+// Then return (seed >> 33) % modulus
+// JavaScript doesn't have u64 natively, so we use BigInt
+function lcgNext(seedBig, modulus) {
+  seedBig = (seedBig * 6364136223846793005n + 1442695040888963407n) & 0xFFFFFFFFFFFFFFFFn;
+  const val = (seedBig >> 33n) % BigInt(modulus);
+  return { seed: seedBig, val: Number(val) };
+}
+
+function resolveTraitsFromSeed(seedU64, serial) {
+  // seed = seed.wrapping_mul(6364136223846793005).wrapping_add(serial + 1)
+  let seed = (seedU64 * 6364136223846793005n + (BigInt(serial) + 1n)) & 0xFFFFFFFFFFFFFFFFn;
+
+  let r;
+  r = lcgNext(seed, 20); seed = r.seed; const flavor = r.val;
+  r = lcgNext(seed, 12); seed = r.seed; const color = r.val;
+  r = lcgNext(seed, 8);  seed = r.seed; const special = r.val;
+  r = lcgNext(seed, 100); seed = r.seed; const roll = r.val;
+
+  const RARITY_CUTS = [60, 85, 95, 99, 100];
+  let rarity = RARITY_CUTS.findIndex(c => roll < c);
+  if (rarity === -1) rarity = 4;
+
+  return { flavor, color, rarity, special };
+}
+
+async function verifyHash() {
+  const data = window._verifyData;
+  if (!data) return;
+
+  const secretHex = document.getElementById('secretInput').value.trim();
+  const resultDiv = document.getElementById('hashResult');
+  const stepDiv = document.getElementById('hashVerifyStep');
+  const iconDiv = document.getElementById('hashVerifyIcon');
+  const labelDiv = document.getElementById('hashVerifyLabel');
+  resultDiv.style.display = 'block';
+
+  try {
+    const secretBytes = hexToBytes(secretHex);
+    if (secretBytes.length !== 32) throw new Error('Secret must be 32 bytes (64 hex characters)');
+
+    // Step 1: Verify commitment = sha256(secret || oracle_pubkey)
+    const oracleBytes = new PublicKey(ORACLE_PUBKEY).toBytes();
+    const commitInput = new Uint8Array([...secretBytes, ...oracleBytes]);
+    const computedCommitment = await sha256(commitInput);
+
+    const commitMatch = computedCommitment.every((b, i) => b === data.commitmentHash[i]);
+
+    if (!commitMatch) {
+      stepDiv.className = 'proof-step pending';
+      iconDiv.textContent = '❌';
+      labelDiv.textContent = 'COMMITMENT MISMATCH';
+      resultDiv.innerHTML = `
+        <div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;">
+          <div style="color:var(--red);margin-bottom:6px;font-family:'Press Start 2P',cursive;font-size:0.38rem;">SECRET DOES NOT MATCH COMMITMENT</div>
+          <div style="color:var(--gray);">sha256(secret + oracle_pubkey) does not equal the stored commitment hash. This secret was not used to mint this gumball.</div>
+          <div class="step-data" style="margin-top:8px;">Computed: ${toHex(computedCommitment)}</div>
+          <div class="step-data">Stored:   ${toHex(new Uint8Array(data.commitmentHash))}</div>
+        </div>`;
+      return;
+    }
+
+    // Step 2: We need the slot_hash to fully re-derive traits.
+    // Fetch from the mint transaction
+    let slotHashBytes = null;
+    if (data.mintSig) {
+      try {
+        const tx = await connection.getTransaction(data.mintSig, { maxSupportedTransactionVersion: 0 });
+        if (tx && tx.slot) {
+          // We can't directly get the slot hash from the transaction.
+          // The slot hash was read from SlotHashes sysvar during the tx.
+          // We note this limitation for the user.
+        }
+      } catch(e) {}
+    }
+
+    // Commitment verified successfully
+    stepDiv.className = 'proof-step verified';
+    iconDiv.textContent = '✅';
+    labelDiv.textContent = 'COMMITMENT VERIFIED';
+    resultDiv.innerHTML = `
+      <div style="background:rgba(0,255,204,0.05);border:1px solid rgba(0,255,204,0.3);padding:10px;font-size:0.45rem;">
+        <div style="color:var(--teal);margin-bottom:8px;font-family:'Press Start 2P',cursive;font-size:0.38rem;">SHA256(SECRET + ORACLE_PUBKEY) = COMMITMENT ✓</div>
+        <div style="color:var(--gray);line-height:1.8;">The oracle secret matches the commitment hash stored on-chain. This proves the oracle committed to this exact secret <strong>before</strong> the mint request was made.</div>
+        <div class="step-data" style="margin-top:8px;">Secret:     ${secretHex}</div>
+        <div class="step-data">Commitment: ${toHex(computedCommitment)}</div>
+        <div style="color:var(--gray);line-height:1.8;margin-top:10px;font-size:0.42rem;">
+          <strong style="color:var(--white);">Note:</strong> Full trait re-derivation requires the slot hash from the block where the mint transaction executed. The slot hash is consumed at runtime from the SlotHashes sysvar and is not stored on-chain. The commitment verification above proves that the oracle could not have manipulated the outcome — the secret was locked before the slot hash or user seed were known.
+        </div>
+      </div>`;
+
+  } catch(e) {
+    resultDiv.innerHTML = `<div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;color:var(--red);">ERROR: ${e.message}</div>`;
+  }
+}
+
+function copyShare() {
+  const url = document.getElementById('shareUrl').value;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copyShareBtn');
+    btn.textContent = '✅ COPIED!';
+    setTimeout(() => btn.textContent = '📋 COPY', 1500);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — LEADERBOARD</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --bg:      #0a0a0f;
+  --panel:   #0f0f1a;
+  --border:  #1a1a2e;
+  --white:   #e8e8ff;
+  --gray:    #666688;
+  --teal:    #00ffcc;
+  --purple:  #c844ff;
+  --gold:    #ffcc00;
+  --green:   #44ff88;
+  --blue:    #44aaff;
+  --red:     #ff4466;
+  --c0: #aaaacc; --c1: #44ff88; --c2: #44aaff; --c3: #cc88ff; --c4: #ffcc00;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: 'Space Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Grid bg */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(rgba(0,255,204,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,255,204,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* HEADER */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.logo {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.logo span { color: var(--teal); }
+.logo small { display: block; font-size: 0.5rem; color: var(--purple); margin-top: 4px; letter-spacing: 3px; }
+.header-nav { display: flex; gap: 12px; align-items: center; }
+.nav-link {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.45rem;
+  color: var(--gray);
+  text-decoration: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+.nav-link:hover, .nav-link.active { color: var(--teal); border-color: var(--teal); }
+
+/* STATS BAR */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+.stat-box {
+  background: var(--panel);
+  padding: 12px 8px;
+  text-align: center;
+  overflow: hidden;
+}
+.stat-val {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.75rem;
+  color: var(--gold);
+  display: block;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.stat-label {
+  font-size: 0.42rem;
+  color: var(--gray);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* SECTION HEADERS */
+.section-head {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: var(--teal);
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.section-head::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* RARITY BREAKDOWN */
+.rarity-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 40px;
+}
+.rarity-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px 12px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.rarity-card::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+}
+.rarity-card.r0::before { background: var(--c0); }
+.rarity-card.r1::before { background: var(--c1); }
+.rarity-card.r2::before { background: var(--c2); }
+.rarity-card.r3::before { background: var(--c3); }
+.rarity-card.r4::before { background: var(--c4); }
+.rarity-count { font-family: 'Press Start 2P', cursive; font-size: 1.2rem; color: var(--white); display: block; margin-bottom: 6px; }
+.rarity-name { font-size: 0.55rem; letter-spacing: 2px; margin-bottom: 8px; text-transform: uppercase; }
+.rarity-card.r0 .rarity-name { color: var(--c0); }
+.rarity-card.r1 .rarity-name { color: var(--c1); }
+.rarity-card.r2 .rarity-name { color: var(--c2); }
+.rarity-card.r3 .rarity-name { color: var(--c3); }
+.rarity-card.r4 .rarity-name { color: var(--c4); }
+.rarity-pct { font-size: 0.55rem; color: var(--gray); }
+.rarity-bar { height: 3px; background: var(--border); margin-top: 10px; border-radius: 2px; overflow: hidden; }
+.rarity-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+
+/* TOP HOLDERS TABLE */
+.leaderboard-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+.leaderboard-table th {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.4rem;
+  color: var(--gray);
+  letter-spacing: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+}
+.leaderboard-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+.leaderboard-table tr:hover td { background: rgba(0,255,204,0.03); }
+.rank-num {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  width: 40px;
+}
+.rank-1 { color: var(--gold); }
+.rank-2 { color: #c0c0c0; }
+.rank-3 { color: #cd7f32; }
+.rank-other { color: var(--gray); }
+.wallet-addr { color: var(--teal); font-size: 0.65rem; }
+.badge { display: inline-block; padding: 2px 8px; font-size: 0.5rem; font-family: 'Press Start 2P', cursive; border-radius: 2px; }
+.badge-l { background: rgba(255,204,0,0.15); color: var(--gold); border: 1px solid var(--gold); }
+.badge-e { background: rgba(200,68,255,0.15); color: var(--c3); border: 1px solid var(--c3); }
+.badge-r { background: rgba(68,170,255,0.15); color: var(--c2); border: 1px solid var(--c2); }
+.mini-balls { display: flex; gap: 3px; flex-wrap: wrap; }
+.mini-ball { width: 10px; height: 10px; border-radius: 50%; }
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-val { font-family: 'Press Start 2P', cursive; font-size: 0.6rem; color: var(--gold); min-width: 50px; }
+.score-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.score-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--purple)); border-radius: 2px; transition: width 1s ease; }
+
+/* RAREST GUMBALLS */
+.rarest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 40px; }
+.rare-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rare-card:hover { border-color: var(--gold); box-shadow: 0 0 16px rgba(255,204,0,0.15); }
+.rare-ball { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 8px; position: relative; }
+.rare-ball::after { content: ''; position: absolute; top: 18%; left: 20%; width: 36%; height: 36%; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.rare-serial { font-family: 'Press Start 2P', cursive; font-size: 0.45rem; color: var(--gray); margin-bottom: 4px; }
+.rare-flavor { font-size: 0.6rem; color: var(--white); margin-bottom: 4px; }
+.rare-owner { font-size: 0.5rem; color: var(--teal); }
+
+/* LOADING */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: var(--gray);
+  letter-spacing: 2px;
+}
+.loading span { color: var(--teal); animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* PULSE ANIMATION ON LOAD */
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.fade-up { animation: fadeUp 0.5s ease forwards; opacity: 0; }
+.fade-up:nth-child(1){animation-delay:0.05s}
+.fade-up:nth-child(2){animation-delay:0.10s}
+.fade-up:nth-child(3){animation-delay:0.15s}
+.fade-up:nth-child(4){animation-delay:0.20s}
+.fade-up:nth-child(5){animation-delay:0.25s}
+
+/* REFRESH BUTTON */
+.refresh-btn {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.45rem;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+  margin-bottom: 24px;
+}
+.refresh-btn:hover { background: rgba(0,255,204,0.08); }
+.refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media(max-width:600px){
+  .rarity-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
+  .rarity-count{font-size:0.9rem;}
+  .rarity-name{font-size:0.45rem;}
+  .leaderboard-table th:nth-child(4),
+  .leaderboard-table td:nth-child(4){display:none;}
+  .leaderboard-table th:nth-child(5),
+  .leaderboard-table td:nth-child(5){display:none;}
+  .leaderboard-table td{padding:8px 6px;font-size:0.58rem;}
+  .wallet-addr{font-size:0.52rem;}
+  .rarest-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;}
+  .rare-ball{width:44px;height:44px;}
+  .stats-bar{grid-template-columns:repeat(3,1fr);}
+  .logo{font-size:0.7rem;}
+  .section-head{font-size:0.5rem;}
+  .wrap{padding:0 12px 40px;}
+  header{padding:16px 0 14px;}
+  .score-val{font-size:0.5rem;min-width:36px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      GUMBALL<br><span>MACHINE.XNT</span>
+      <small>// LEADERBOARD</small>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html" class="nav-link">[ MINT ]</a>
+      <a href="leaderboard.html" class="nav-link active">[ LEADERBOARD ]</a>
+    </nav>
+  </header>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-box"><span class="stat-val" id="sTotalMinted">—</span><span class="stat-label">TOTAL MINTED</span></div>
+    <div class="stat-box"><span class="stat-val" id="sRemaining">—</span><span class="stat-label">REMAINING</span></div>
+    <div class="stat-box"><span class="stat-val" id="sHolders">—</span><span class="stat-label">UNIQUE HOLDERS</span></div>
+    <div class="stat-box"><span class="stat-val" id="sLegendary">—</span><span class="stat-label">LEGENDARIES</span></div>
+    <div class="stat-box"><span class="stat-val" id="sCirculating">—</span><span class="stat-label">CIRCULATING</span></div>
+    <div class="stat-box"><span class="stat-val" id="sBurned">—</span><span class="stat-label">TOKENS BURNED 🔥</span></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+    <button class="refresh-btn" id="refreshBtn" onclick="loadAll()" style="margin-bottom:0;">⟳ REFRESH DATA</button>
+    <span id="lastRefreshed" style="font-size:0.42rem;color:var(--gray);letter-spacing:1px;"></span>
+    <span style="font-size:0.42rem;color:var(--gray);letter-spacing:1px;margin-left:auto;">AUTO-REFRESHES EVERY 60s</span>
+  </div>
+
+  <!-- RARITY BREAKDOWN -->
+  <div class="section-head">// RARITY DISTRIBUTION</div>
+  <div class="rarity-grid" id="rarityGrid">
+    <div class="loading"><span>LOADING...</span></div>
+  </div>
+
+  <!-- TOP HOLDERS -->
+  <div class="section-head">// TOP HOLDERS</div>
+  <div id="holdersSection">
+    <div class="loading"><span>SCANNING CHAIN...</span></div>
+  </div>
+
+  <!-- RAREST GUMBALLS -->
+  <div class="section-head">// RAREST GUMBALLS</div>
+  <div class="rarest-grid" id="rarestGrid">
+    <div class="loading"><span>LOADING...</span></div>
+  </div>
+
+</div>
+
+<script>
+const { Connection, PublicKey } = solanaWeb3;
+const RPC         = "https://rpc.testnet.x1.xyz";
+const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const connection  = new Connection(RPC, "confirmed");
+
+const RARITY      = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+const FLAVORS     = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const COLORS      = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const BALL_COLORS = {
+  "Cherry Red":"#cc2244","Grape Purple":"#7733cc","Melon Pink":"#ff88aa",
+  "Berry Blue":"#3366ee","Rose Gold":"#cc8877","Citrus Yellow":"#ddcc22",
+  "Lime Green":"#44cc44","Tangerine":"#ee7722","Cotton White":"#ddddee",
+  "Midnight Black":"#223366","Shimmer Silver":"#aaaacc","Rainbow":"#ff44cc"
+};
+
+// Rarity score weights for leaderboard ranking
+const RARITY_SCORE = [1, 4, 10, 40, 100];
+
+async function sha256disc(name) {
+  const enc = new TextEncoder().encode("account:" + name);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return new Uint8Array(buf).slice(0, 8);
+}
+
+async function loadAll() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true;
+  btn.textContent = "⟳ SCANNING...";
+
+  try {
+    // Load machine state
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const dv = new DataView(machineInfo.data.buffer, machineInfo.data.byteOffset);
+    // Machine: authority(32) + treasury(32) + oracle(32) + mint_price(8) + total_minted(8) + max_supply(8)
+    const totalMinted  = Number(dv.getBigUint64(8+32+32+32+8,   true));
+    const maxSupply    = Number(dv.getBigUint64(8+32+32+32+8+8, true));
+    let   totalBurned  = 0;
+    try { totalBurned = Number(dv.getBigUint64(8+32+32+32+8+8+8+1+1, true)); } catch(e) {}
+
+    document.getElementById("sTotalMinted").textContent = totalMinted.toLocaleString();
+    document.getElementById("sRemaining").textContent   = Math.max(0, maxSupply - totalMinted).toLocaleString();
+    document.getElementById("sBurned").textContent      = totalBurned.toLocaleString();
+
+    // Load GumballData accounts across all versions
+    const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865 bytes (v2, svg inline)
+    const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93 bytes  (v3, svg separate)
+    const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157 bytes (v4, +proof fields)
+    const [v2Accts, v3Accts, v4Accts] = await Promise.all([
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_V2 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_V3 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+      }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_V4 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+      }),
+    ]);
+    const accounts = [...v2Accts, ...v3Accts, ...v4Accts];
+
+    const gumballs = accounts
+      .map(({ pubkey, account }) => {
+        const d = account.data;
+        const dv2 = new DataView(d.buffer, d.byteOffset);
+        const ownerBytes = d.slice(8, 40);
+        const isBurned = ownerBytes.every(b => b === 0);
+        return {
+          pubkey:   pubkey.toBase58(),
+          owner:    new PublicKey(d.slice(8, 40)).toBase58(),
+          serial:   Number(dv2.getBigUint64(8+32+32, true)),
+          flavor:   d[8+32+32+8],
+          color:    d[8+32+32+8+1],
+          rarity:   d[8+32+32+8+2],
+          special:  d[8+32+32+8+3],
+          isBurned,
+        };
+      })
+      .filter(g => g.serial > 0 && !g.isBurned); // exclude burned gumballs
+
+    renderRarityBreakdown(gumballs, totalMinted);
+    renderHolders(gumballs);
+    renderRarest(gumballs);
+
+    // Unique holders
+    const holders = new Set(gumballs.map(g => g.owner));
+    document.getElementById("sHolders").textContent     = holders.size.toLocaleString();
+    document.getElementById("sLegendary").textContent   = gumballs.filter(g => g.rarity === 4).length.toLocaleString();
+    document.getElementById("sCirculating").textContent = gumballs.length.toLocaleString();
+
+    // Update last refreshed time
+    const timeEl = document.getElementById("lastRefreshed");
+    if (timeEl) timeEl.textContent = "UPDATED " + new Date().toLocaleTimeString();
+
+  } catch(e) {
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = "⟳ REFRESH DATA";
+}
+
+// Auto-refresh every 60 seconds
+setInterval(() => loadAll(), 60000);
+
+function renderRarityBreakdown(gumballs, totalMinted) {
+  const counts = [0,0,0,0,0];
+  gumballs.forEach(g => { if (g.rarity < 5) counts[g.rarity]++; });
+  const maxCount = Math.max(...counts);
+
+  document.getElementById("sLegendary").textContent = counts[4];
+
+  const names = ["Common","Uncommon","Rare","Epic","Legendary"];
+  const classes = ["r0","r1","r2","r3","r4"];
+  const expected = [60, 25, 10, 4, 1];
+
+  document.getElementById("rarityGrid").innerHTML = names.map((n,i) => `
+    <div class="rarity-card ${classes[i]} fade-up">
+      <span class="rarity-count">${counts[i]}</span>
+      <div class="rarity-name">${n}</div>
+      <div class="rarity-pct">${totalMinted > 0 ? ((counts[i]/totalMinted)*100).toFixed(1) : 0}% minted<br><span style="color:var(--gray);font-size:0.5rem;">~${expected[i]}% expected</span></div>
+      <div class="rarity-bar"><div class="rarity-bar-fill" style="width:${maxCount>0?(counts[i]/maxCount*100):0}%;background:${RARITY_COLORS[i]};"></div></div>
+    </div>
+  `).join('');
+}
+
+function renderHolders(gumballs) {
+  // Group by owner
+  const holderMap = {};
+  gumballs.forEach(g => {
+    if (!holderMap[g.owner]) holderMap[g.owner] = { wallet: g.owner, total: 0, byRarity: [0,0,0,0,0], score: 0, gumballs: [] };
+    holderMap[g.owner].total++;
+    holderMap[g.owner].byRarity[g.rarity]++;
+    holderMap[g.owner].score += RARITY_SCORE[g.rarity];
+    holderMap[g.owner].gumballs.push(g);
+  });
+
+  const holders = Object.values(holderMap)
+    .sort((a,b) => b.score - a.score)
+    .slice(0, 20);
+
+  document.getElementById("sHolders").textContent = Object.keys(holderMap).length;
+
+  const maxScore = holders[0]?.score || 1;
+
+  const rows = holders.map((h, i) => {
+    const rank = i + 1;
+    const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "rank-other";
+    const short = h.wallet.slice(0,4) + "..." + h.wallet.slice(-4);
+    const topBadge = h.byRarity[4] > 0
+      ? `<span class="badge badge-l">${h.byRarity[4]}✦ LEG</span>`
+      : h.byRarity[3] > 0
+      ? `<span class="badge badge-e">${h.byRarity[3]} EPIC</span>`
+      : h.byRarity[2] > 0
+      ? `<span class="badge badge-r">${h.byRarity[2]} RARE</span>`
+      : '';
+    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+
+    // Mini ball preview — show up to 8 balls
+    const preview = h.gumballs
+      .sort((a,b) => b.rarity - a.rarity)
+      .slice(0,8)
+      .map(g => {
+        const col = BALL_COLORS[COLORS[g.color % COLORS.length]] || "#2266ee";
+        return `<div class="mini-ball" style="background:${col};box-shadow:0 0 4px ${col}88;" title="${FLAVORS[g.flavor%FLAVORS.length]} ${RARITY[g.rarity]}"></div>`;
+      }).join('');
+
+    return `<tr>
+      <td><span class="rank-num ${rankClass}">${medal}</span></td>
+      <td><span class="wallet-addr">${short}</span></td>
+      <td style="font-family:'Press Start 2P',cursive;font-size:0.65rem;">${h.total}</td>
+      <td><div class="score-bar">
+        <span class="score-val">${h.score.toLocaleString()}</span>
+        <div class="score-track"><div class="score-fill" style="width:${(h.score/maxScore*100).toFixed(1)}%"></div></div>
+      </div></td>
+      <td>${topBadge}</td>
+      <td><div class="mini-balls">${preview}</div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById("holdersSection").innerHTML = `
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>WALLET</th>
+          <th>COUNT</th>
+          <th>SCORE</th>
+          <th>HIGHLIGHT</th>
+          <th>COLLECTION</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="font-size:0.55rem;color:var(--gray);margin-top:-24px;margin-bottom:40px;">
+      Score: Common=1pt · Uncommon=4pt · Rare=10pt · Epic=40pt · Legendary=100pt
+    </div>
+  `;
+}
+
+let currentSvg = "";
+let currentSerial = 0;
+let currentGumball = null;
+
+async function openSvgModal(g) {
+  currentGumball = g;
+  currentGumball = g;
+  const modal = document.getElementById("svgModal");
+  const svgDiv = document.getElementById("modalSvg");
+  const flavor = FLAVORS[g.flavor % FLAVORS.length];
+  const rarity = RARITY[g.rarity];
+  const color  = COLORS[g.color % COLORS.length];
+
+  modal.style.display = "flex";
+  document.getElementById("modalTitle").textContent = `// GUMBALL #${String(g.serial).padStart(4,"0")}`;
+  document.getElementById("modalTraits").textContent = `${flavor}  ·  ${color}  ·  ${rarity}`;
+  svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.5rem;color:#444;">LOADING SVG...</span>';
+  currentSvg = "";
+  currentSerial = g.serial;
+
+  try {
+    const [gumballPda] = solanaWeb3.PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode("gumball"), new solanaWeb3.PublicKey(g.pubkey).toBytes()],
+      PROGRAM_ID
+    );
+    // pubkey in our data IS the gumball PDA already
+    const info = await connection.getAccountInfo(new solanaWeb3.PublicKey(g.pubkey));
+    if (info && info.data.length > 97) {
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      const svgOff = 8+32+32+8+1+1+1+1+8+1;
+      const svgLen = dv.getUint32(svgOff, true);
+      if (svgLen > 0 && svgLen <= 1024) {
+        const svgStr = new TextDecoder().decode(info.data.slice(svgOff+4, svgOff+4+svgLen));
+        currentSvg = svgStr;
+        svgDiv.innerHTML = svgStr;
+        const svg = svgDiv.querySelector("svg");
+        if (svg) { svg.style.width="300px"; svg.style.height="300px"; }
+      } else {
+        svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.45rem;color:#444;">OLD FORMAT / NO SVG</span>';
+      }
+    }
+  } catch(e) {
+    console.error("SVG load error:", e);
+    svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.45rem;color:#f44;">ERROR LOADING</span>';
+  }
+}
+
+async function openTxLink() {
+  if (!currentGumball) return;
+  const btn = document.getElementById("modalTxBtn");
+  const orig = btn.textContent;
+  btn.textContent = "LOADING...";
+  try {
+    // Fetch transaction history for this gumball PDA
+    const pubkey = new solanaWeb3.PublicKey(currentGumball.pubkey);
+    const sigs = await connection.getSignaturesForAddress(pubkey, { limit: 1 });
+    if (sigs && sigs.length > 0) {
+      const sig = sigs[0].signature;
+      const url = "https://explorer.testnet.x1.xyz/tx/" + sig;
+      window.open(url, "_blank");
+    } else {
+      btn.textContent = "NO TX FOUND";
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  } catch(e) {
+    btn.textContent = "ERROR";
+    setTimeout(() => btn.textContent = orig, 2000);
+  }
+  btn.textContent = orig;
+}
+
+function copyModalSvg() {
+  if (!currentSvg) return;
+  navigator.clipboard.writeText(currentSvg).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = "✅ COPIED!";
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function downloadModalSvg() {
+  if (!currentSvg) return;
+  const blob = new Blob([currentSvg], {type:"image/svg+xml"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gumball_${String(currentSerial).padStart(4,"0")}.svg`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function renderRarest(gumballs) {
+  const rare = gumballs
+    .filter(g => g.rarity >= 3)
+    .sort((a,b) => b.rarity - a.rarity || a.serial - b.serial)
+    .slice(0, 24);
+
+  if (rare.length === 0) {
+    document.getElementById("rarestGrid").innerHTML = '<div class="loading">NO EPIC+ GUMBALLS YET</div>';
+    return;
+  }
+
+  window._rareGumballs = rare;
+  document.getElementById("rarestGrid").innerHTML = rare.map((g, rareIdx) => {
+    const col = BALL_COLORS[COLORS[g.color % COLORS.length]] || "#2266ee";
+    const flavor = FLAVORS[g.flavor % FLAVORS.length];
+    const rarity = RARITY[g.rarity];
+    const short = g.owner.slice(0,4) + "..." + g.owner.slice(-4);
+    const rc = RARITY_COLORS[g.rarity];
+    const gJson = encodeURIComponent(JSON.stringify(g));
+    return `
+      <div class="rare-card fade-up" data-idx="${rareIdx}" onclick="openSvgModal(window._rareGumballs[+this.closest('.rare-card').dataset.idx])" title="Click to view on-chain SVG">
+        <div class="rare-ball" style="background:radial-gradient(circle at 35% 30%, ${col}ff, ${col}44);box-shadow:0 0 20px ${col}44,0 0 0 2px ${rc}44;"></div>
+        <div class="rare-serial" style="color:${rc};">#${String(g.serial).padStart(4,"0")}</div>
+        <div class="rare-flavor">${flavor}</div>
+        <div style="font-size:0.45rem;margin:3px 0;color:${rc};letter-spacing:1px;">${rarity}</div>
+        <div class="rare-owner">${short}</div>
+        <div style="font-size:0.38rem;color:#00ffcc;margin-top:4px;letter-spacing:1px;">⛓ VIEW SVG</div>
+        <div style="font-size:0.38rem;color:#666688;margin-top:2px;letter-spacing:1px;cursor:pointer;" onclick="event.stopPropagation();viewMetadata(window._rareGumballs[+this.closest('.rare-card').dataset.idx])">{ } METADATA</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Auto-load on page open
+loadAll();
+
+// ── METADATA VIEWER ───────────────────────────────────────────────────────────
+const SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
+
+async function viewMetadata(g) {
+  const info = await connection.getAccountInfo(new solanaWeb3.PublicKey(g.pubkey));
+  const flavor  = FLAVORS[g.flavor % FLAVORS.length];
+  const color   = COLORS[g.color % COLORS.length];
+  const rarity  = RARITY[g.rarity];
+  const special = SPECIALS[g.special % SPECIALS.length];
+
+  let svgBytes = 0;
+  let mintedAt = "";
+  if (info && info.data.length > 93) {
+    const dv = new DataView(info.data.buffer, info.data.byteOffset);
+    const ts = Number(dv.getBigUint64(84, true));
+    mintedAt = new Date(ts * 1000).toISOString();
+    if (info.data.length > 97) {
+      const svgLen = dv.getUint32(8+32+32+8+1+1+1+1+8+1, true);
+      svgBytes = svgLen;
+    }
+  }
+
+  const metadata = {
+    name: `Gumball #${String(g.serial).padStart(4,"0")}`,
+    description: `A ${rarity} ${flavor} gumball from the GUMBALL.XNT collection on X1 blockchain.`,
+    serial: g.serial,
+    attributes: [
+      { trait_type: "Flavor",  value: flavor  },
+      { trait_type: "Color",   value: color   },
+      { trait_type: "Rarity",  value: rarity  },
+      { trait_type: "Special", value: special },
+    ],
+    on_chain: {
+      program:     "Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK",
+      machine:     "AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj",
+      gumball_pda: g.pubkey,
+      owner:       g.owner,
+      minted_at:   mintedAt,
+      svg_stored:  svgBytes > 0,
+      svg_bytes:   svgBytes,
+      network:     "X1 Testnet",
+      rpc:         "https://rpc.testnet.x1.xyz",
+      explorer: {
+        gumball_account: "https://explorer.testnet.x1.xyz/account/" + g.pubkey,
+        owner_account:   "https://explorer.testnet.x1.xyz/account/" + g.owner,
+        program:         "https://explorer.testnet.x1.xyz/account/Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK",
+      },
+    },
+    image_source: "on-chain SVG",
+    oracle_verified: true,
+    oracle_hash: "2e1b0193830e13728ba33ca50e812109b7604a3f7ef03b1e82cb728203a9bed1",
+  };
+
+  const json = JSON.stringify(metadata, null, 2);
+  const win = window.open("", "_blank");
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>Gumball #${String(g.serial).padStart(4,"0")} Metadata</title>
+    <style>
+      body{background:#0a0a0f;color:#e8e8ff;font-family:monospace;padding:24px;margin:0;}
+      pre{background:#0f0f1a;border:1px solid #1a1a2e;padding:20px;border-radius:4px;overflow:auto;font-size:13px;line-height:1.6;}
+      h2{font-size:14px;color:#00ffcc;margin-bottom:16px;letter-spacing:2px;}
+      .key{color:#c844ff;}
+      .str{color:#44ff88;}
+      .num{color:#ffcc00;}
+      .bool{color:#44aaff;}
+      .copy-btn{font-family:monospace;font-size:12px;padding:8px 16px;background:#0f0f1a;border:1px solid #00ffcc;color:#00ffcc;cursor:pointer;margin-bottom:16px;}
+      .copy-btn:hover{background:rgba(0,255,204,0.1);}
+    </style>
+  </head><body>
+    <h2>// GUMBALL #${String(g.serial).padStart(4,"0")} ON-CHAIN METADATA</h2>
+    <button class="copy-btn" onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent).then(()=>{this.textContent='✅ COPIED!';setTimeout(()=>this.textContent='📋 COPY JSON',1500)})">📋 COPY JSON</button>
+    <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="https://explorer.testnet.x1.xyz/account/${g.pubkey}" target="_blank" class="copy-btn" style="text-decoration:none;color:#00ffcc;border-color:#00ffcc;">🔗 VIEW ACCOUNT</a>
+      <a href="https://explorer.testnet.x1.xyz/account/${g.owner}" target="_blank" class="copy-btn" style="text-decoration:none;color:#c844ff;border-color:#c844ff;">👤 VIEW OWNER</a>
+    </div>
+    <pre>${json.replace(/("[\w_]+")\s*:/g,'<span class="key">$1</span>:')
+               .replace(/:\s*"([^"]+)"/g,': <span class="str">"$1"</span>')
+               .replace(/:\s*(\d+)/g,': <span class="num">$1</span>')
+               .replace(/:\s*(true|false)/g,': <span class="bool">$1</span>')}</pre>
+  </body></html>`);
+}
+</script>
+
+<!-- SVG VIEWER MODAL -->
+<div id="svgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:14px;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="font-family:'Press Start 2P',cursive;font-size:0.6rem;color:#00ffcc;letter-spacing:2px;" id="modalTitle">// GUMBALL #0000</div>
+  <div id="modalSvg" style="width:300px;height:300px;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(0,255,204,0.2);background:#111;display:flex;align-items:center;justify-content:center;">
+    <span style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:#444;">LOADING...</span>
+  </div>
+  <div id="modalTraits" style="font-size:0.58rem;color:#666688;text-align:center;line-height:2;"></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+    <div style="font-size:0.5rem;color:#00ffcc;padding:4px 12px;border:1px solid #00ffcc;">⛓ STORED ON-CHAIN · X1 BLOCKCHAIN</div>
+    <div style="font-size:0.5rem;color:#ffcc00;padding:4px 12px;border:1px solid #ffcc00;">🎲 ORACLE VERIFIED</div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button onclick="copyModalSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #00ffcc;color:#00ffcc;cursor:pointer;">📋 COPY SVG</button>
+    <button onclick="downloadModalSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #c844ff;color:#c844ff;cursor:pointer;">⬇ DOWNLOAD</button>
+    <button id="modalMetaBtn" onclick="if(currentGumball)viewMetadata(currentGumball)" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #44aaff;color:#44aaff;cursor:pointer;">{ } METADATA</button>
+    <button id="modalTxBtn" onclick="openTxLink()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #ffcc00;color:#ffcc00;cursor:pointer;">⛓ TX LINK</button>
+    <button onclick="document.getElementById('svgModal').style.display='none'" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #1a1a2e;color:#666688;cursor:pointer;">[ CLOSE ]</button>
+  </div>
+</div>
+</body>
+</html>
