@@ -485,13 +485,18 @@ pub mod gumball_nft {
         let new_rarity = burn_rarity + 1;
 
         // Use slot hash + burn context as seed for upgrade traits
+        // MED-4 FIX: use 32-byte hash [16..48] instead of 8-byte slot number [8..16]
         let slot_hash_data = &ctx.accounts.slot_hashes.data.borrow();
-        let hash_bytes: [u8; 8] = slot_hash_data[8..16].try_into()
+        let hash_bytes: [u8; 32] = slot_hash_data[16..48].try_into()
             .map_err(|_| error!(GumballError::InvalidSlotHash))?;
-        let mut seed = u64::from_le_bytes(hash_bytes);
-        seed ^= clock.unix_timestamp as u64;
-        seed ^= machine.total_minted;
-        seed ^= burn_rarity as u64 * 12345;
+        let seed_hash = hashv(&[
+            &hash_bytes,
+            &clock.unix_timestamp.to_le_bytes(),
+            &machine.total_minted.to_le_bytes(),
+            &[burn_rarity],
+        ]);
+        let mut seed = u64::from_le_bytes(seed_hash.to_bytes()[..8].try_into()
+            .map_err(|_| error!(GumballError::InvalidSlotHash))?);
 
         let flavor  = lcg_next(&mut seed, FLAVORS.len()  as u64) as u8;
         let color   = lcg_next(&mut seed, COLORS.len()   as u64) as u8;
