@@ -903,14 +903,8 @@ pub mod gumball_nft {
     }
 
     /// Cancel an offer and return escrowed XNT to buyer.
+    /// Anchor `close = buyer` handles lamport return + account cleanup.
     pub fn cancel_offer(ctx: Context<CancelOffer>) -> Result<()> {
-        let offer_info = ctx.accounts.offer.to_account_info();
-        let lamports = offer_info.lamports();
-
-        // Return all lamports (escrowed amount + rent) to buyer
-        **offer_info.try_borrow_mut_lamports()? = 0;
-        **ctx.accounts.buyer.try_borrow_mut_lamports()? += lamports;
-
         emit!(OfferCancelledEvent {
             buyer: ctx.accounts.offer.buyer, nft_mint: ctx.accounts.offer.nft_mint,
         });
@@ -937,10 +931,11 @@ pub mod gumball_nft {
             **ctx.accounts.treasury.try_borrow_mut_lamports()? += royalty;
         }
 
-        // Return remaining rent to buyer
+        // Return remaining rent to buyer and close Offer account
         let remaining = offer_info.lamports();
         **offer_info.try_borrow_mut_lamports()? = 0;
         **ctx.accounts.buyer.try_borrow_mut_lamports()? += remaining;
+        offer_info.try_borrow_mut_data()?.fill(0);
 
         // Transfer NFT from seller to buyer
         anchor_spl::token::transfer(
@@ -1434,6 +1429,7 @@ pub struct CancelOffer<'info> {
     pub buyer: Signer<'info>,
     #[account(
         mut,
+        close = buyer,
         seeds = [b"offer", offer.nft_mint.as_ref(), buyer.key().as_ref()],
         bump = offer.bump,
         constraint = offer.buyer == buyer.key() @ GumballError::Unauthorized,

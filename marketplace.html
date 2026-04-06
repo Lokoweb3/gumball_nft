@@ -222,7 +222,7 @@ const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgra
 const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
 const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
 const RPC         = "https://rpc.testnet.x1.xyz";
-const connection  = new Connection(RPC, "confirmed");
+const connection  = new Connection(RPC, { commitment: "confirmed", confirmTransactionInitialTimeout: 60000 });
 
 const TOKEN_PID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOC_PID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -241,6 +241,7 @@ let walletPubkey = null;
 let currentTab = 'listings';
 let allListings = [];
 let allOffers = [];
+let incomingOffers = [];
 let myCollection = [];
 let _listingMint = null;
 let _offerMint = null;
@@ -326,6 +327,7 @@ async function connectWallet() {
     walletPubkey = null;
     btn.classList.remove("connected");
     btn.textContent = "[ CONNECT WALLET ]";
+    localStorage.removeItem('walletConnected');
     render();
     return;
   }
@@ -336,6 +338,7 @@ async function connectWallet() {
     walletPubkey = resp.publicKey;
     btn.classList.add("connected");
     btn.textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+    localStorage.setItem('walletConnected', 'true');
     loadAll();
   } catch(e) { toast("WALLET CONNECTION FAILED", "error"); }
 }
@@ -374,56 +377,49 @@ async function loadListings() {
 async function loadMyCollection() {
   if (!walletPubkey) return;
   try {
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        { dataSize: GD_V4 },
-        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-      ],
-    });
     myCollection = [];
-    for (const { pubkey, account } of accounts) {
-      const gb = parseGumball(account.data);
-      // Find the mint key by deriving PDAs
-      // We need to find a mint whose PDA matches this pubkey
-      gb.gbPda = pubkey;
-      myCollection.push(gb);
-    }
-    // Try to find mint keys via token accounts
+    // Start from token accounts — each NFT the user holds
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
     for (const ta of tokenAccounts.value) {
       const parsed = ta.account.data.parsed.info;
-      if (parsed.tokenAmount.uiAmount === 1) {
-        const mintKey = new PublicKey(parsed.mint);
-        const [expectedPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
-        const match = myCollection.find(g => g.gbPda.equals(expectedPda));
-        if (match) {
-          match.mintPubkey = mintKey;
-          match.ataPubkey = ta.pubkey;
-        }
-      }
+      if (parsed.tokenAmount.uiAmount !== 1) continue;
+
+      const mintKey = new PublicKey(parsed.mint);
+      const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+
+      try {
+        const gbInfo = await connection.getAccountInfo(gumballPda);
+        if (!gbInfo || gbInfo.owner.toBase58() !== PROGRAM_ID.toBase58()) continue;
+        const gb = parseGumball(gbInfo.data);
+        if (gb.serial === 0) continue;
+        gb.gbPda = gumballPda;
+        gb.mintPubkey = mintKey;
+        gb.ataPubkey = ta.pubkey;
+        // Check if listed
+        gb.isListed = allListings.some(l => l.mintPubkey && l.mintPubkey.equals(mintKey));
+        myCollection.push(gb);
+      } catch(e) {}
     }
-    // Check which are listed
-    for (const g of myCollection) {
-      g.isListed = allListings.some(l => l.mintPubkey && g.mintPubkey && l.mintPubkey.equals(g.mintPubkey));
-    }
+    myCollection.sort((a, b) => a.serial - b.serial);
   } catch(e) { console.error("loadMyCollection:", e); }
 }
 
 async function loadOffers() {
   if (!walletPubkey) return;
   try {
-    // Load offers made BY this wallet
+    // Load ALL offers on-chain (filter by size only)
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        { dataSize: OFFER_SIZE },
-        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-      ],
+      filters: [{ dataSize: OFFER_SIZE }],
     });
-    allOffers = accounts.map(({ pubkey, account }) => ({
+    const parsed = accounts.map(({ pubkey, account }) => ({
       ...parseOffer(account.data),
       offerPda: pubkey,
     }));
+    // My outgoing offers
+    allOffers = parsed.filter(o => o.buyer === walletPubkey.toBase58());
+    // Incoming offers on my NFTs
+    const myMints = new Set(myCollection.map(g => g.mintPubkey?.toBase58()).filter(Boolean));
+    incomingOffers = parsed.filter(o => myMints.has(o.nftMint) && o.buyer !== walletPubkey.toBase58());
   } catch(e) { console.error("loadOffers:", e); }
 }
 
@@ -470,11 +466,33 @@ function renderListings(el) {
 
 function renderMyListings(el) {
   const mine = allListings.filter(l => l.seller === walletPubkey.toBase58());
+  let html = '';
   if (mine.length === 0) {
-    el.innerHTML = '<div class="empty-msg">YOU HAVE NO ACTIVE LISTINGS</div>';
-    return;
+    html += '<div class="empty-msg">YOU HAVE NO ACTIVE LISTINGS</div>';
+  } else {
+    html += `<div class="grid">${mine.map(l => listingCard(l, true)).join('')}</div>`;
   }
-  el.innerHTML = `<div class="grid">${mine.map(l => listingCard(l, true)).join('')}</div>`;
+  if (incomingOffers.length > 0) {
+    html += `<div class="section-title" style="margin-top:24px;">// INCOMING OFFERS</div>`;
+    html += incomingOffers.map(o => incomingOfferRow(o)).join('');
+  }
+  el.innerHTML = html;
+}
+
+function incomingOfferRow(o) {
+  const amountXNT = (o.amount / 1e9).toFixed(4);
+  const buyerShort = `${o.buyer.slice(0,4)}...${o.buyer.slice(-4)}`;
+  const mintShort = `${o.nftMint.slice(0,6)}...${o.nftMint.slice(-4)}`;
+  const gb = myCollection.find(g => g.mintPubkey?.toBase58() === o.nftMint);
+  const serial = gb ? `#${String(gb.serial).padStart(4,'0')}` : mintShort;
+  return `
+    <div class="offer-row">
+      <div class="offer-info">
+        <div class="offer-buyer">FROM: ${buyerShort} ON ${serial}</div>
+        <div class="offer-amount">${amountXNT} XNT</div>
+      </div>
+      <button class="offer-btn" onclick="acceptOffer('${o.nftMint}', '${o.buyer}')" style="border-color:var(--gold);color:var(--gold);">ACCEPT</button>
+    </div>`;
 }
 
 function renderMyCollection(el) {
@@ -511,7 +529,7 @@ function listingCard(l, isMine) {
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
       <div class="card-price">${priceXNT} XNT</div>
       <div class="card-seller">Seller: ${sellerShort}</div>
-      ${isMine
+      ${isMine || (walletPubkey && l.seller === walletPubkey.toBase58())
         ? `<button class="card-btn delist" onclick="delistGumball('${mintKey}')">DELIST</button>`
         : `<button class="card-btn buy" onclick="buyGumball('${mintKey}')" ${!walletPubkey?'disabled':''}>BUY NOW</button>
            <button class="card-btn" onclick="openOfferModal('${mintKey}', ${l.serial})" style="margin-top:6px;">MAKE OFFER</button>`
@@ -531,7 +549,7 @@ function collectionCard(g) {
       <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
-      <button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>
+      ${mintKey ? `<button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>` : `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">MINT KEY NOT FOUND — REFRESH</div>`}
     </div>`;
 }
 
@@ -551,10 +569,11 @@ function offerRow(o) {
 // ── SVG LOADING ──────────────────────────────────────────────────────────────
 
 async function loadSvgs() {
-  const svgEls = document.querySelectorAll('.card-svg[data-mint]');
+  const svgEls = document.querySelectorAll('.card-svg[data-mint]:not([data-loaded])');
   for (const el of svgEls) {
     const mintStr = el.dataset.mint;
     if (!mintStr) continue;
+    el.dataset.loaded = "1"; // prevent re-fetch
     try {
       const mintKey = new PublicKey(mintStr);
       const [svgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
@@ -563,7 +582,16 @@ async function loadSvgs() {
         const dv = new DataView(info.data.buffer, info.data.byteOffset);
         const svgLen = dv.getUint32(8, true);
         if (svgLen > 0 && svgLen <= 768) {
-          const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+          let svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+          // Make gradient IDs unique to avoid collisions across cards
+          const uid = mintStr.slice(0, 8);
+          svgStr = svgStr.replace(/id="b"/g, `id="b_${uid}"`);
+          svgStr = svgStr.replace(/url\(#b\)/g, `url(#b_${uid})`);
+          svgStr = svgStr.replace(/id="hl"/g, `id="hl_${uid}"`);
+          svgStr = svgStr.replace(/url\(#hl\)/g, `url(#hl_${uid})`);
+          // Sanitize: strip event handlers to prevent XSS
+          svgStr = svgStr.replace(/\bon\w+\s*=/gi, 'data-blocked=');
+          svgStr = svgStr.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
           el.innerHTML = svgStr;
         }
       }
@@ -574,6 +602,7 @@ async function loadSvgs() {
 // ── MARKETPLACE ACTIONS ──────────────────────────────────────────────────────
 
 function openListModal(mintKey, serial) {
+  if (!mintKey || mintKey === '') { toast("MINT KEY NOT FOUND — REFRESH PAGE", "error"); return; }
   _listingMint = mintKey;
   document.getElementById('listModalInfo').textContent = `Gumball #${String(serial).padStart(4,'0')}`;
   document.getElementById('listPriceInput').value = '';
@@ -596,15 +625,16 @@ function closeOfferModal() {
 }
 
 async function confirmList() {
-  if (!_listingMint || !walletPubkey) return;
+  if (!_listingMint || _listingMint === '' || !walletPubkey) { toast("NO MINT SELECTED", "error"); return; }
   const priceXNT = parseFloat(document.getElementById('listPriceInput').value);
   if (!priceXNT || priceXNT <= 0) { toast("ENTER A VALID PRICE", "error"); return; }
   const priceLamports = Math.floor(priceXNT * 1e9);
 
+  const mintToList = _listingMint; // capture before modal closes
   closeListModal();
   try {
     const provider = getProvider();
-    const mintKey = new PublicKey(_listingMint);
+    const mintKey = new PublicKey(mintToList);
     const [listingPda] = PublicKey.findProgramAddressSync([strToU8("listing"), mintKey.toBytes()], PROGRAM_ID);
     const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
     const escrowAta = getAta(mintKey, escrowAuth);
@@ -756,10 +786,11 @@ async function confirmOffer() {
   if (!amountXNT || amountXNT <= 0) { toast("ENTER A VALID AMOUNT", "error"); return; }
   const amountLamports = Math.floor(amountXNT * 1e9);
 
+  const mintToOffer = _offerMint; // capture before modal closes
   closeOfferModal();
   try {
     const provider = getProvider();
-    const mintKey = new PublicKey(_offerMint);
+    const mintKey = new PublicKey(mintToOffer);
     const [offerPda] = PublicKey.findProgramAddressSync([strToU8("offer"), mintKey.toBytes(), walletPubkey.toBytes()], PROGRAM_ID);
 
     const discBytes = await disc("make_offer");
@@ -826,7 +857,85 @@ async function cancelOffer(nftMintStr) {
   }
 }
 
+async function acceptOffer(nftMintStr, buyerStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(nftMintStr);
+    const buyerPubkey = new PublicKey(buyerStr);
+    const [offerPda] = PublicKey.findProgramAddressSync([strToU8("offer"), mintKey.toBytes(), buyerPubkey.toBytes()], PROGRAM_ID);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+    const sellerAta = getAta(mintKey, walletPubkey);
+    const buyerAta = getAta(mintKey, buyerPubkey);
+
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
+
+    const discBytes = await disc("accept_offer");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // seller
+        { pubkey: buyerPubkey,         isSigner: false, isWritable: true  }, // buyer
+        { pubkey: MACHINE_PDA,         isSigner: false, isWritable: false }, // machine
+        { pubkey: treasuryPubkey,      isSigner: false, isWritable: true  }, // treasury
+        { pubkey: mintKey,             isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: offerPda,            isSigner: false, isWritable: true  }, // offer
+        { pubkey: sellerAta,           isSigner: false, isWritable: true  }, // seller_ata
+        { pubkey: buyerAta,            isSigner: false, isWritable: true  }, // buyer_ata
+        { pubkey: gumballPda,          isSigner: false, isWritable: true  }, // gumball_data
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false }, // token_program
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false }, // associated_token_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false }, // rent
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast("OFFER ACCEPTED — NFT SOLD", "success");
+    await loadAll();
+  } catch(e) {
+    console.error("accept offer error:", e);
+    toast("ACCEPT FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────────
+
+// Auto-connect wallet on page load
+(function autoConnect() {
+  if (localStorage.getItem('walletConnected') !== 'true') return;
+
+  function onConnected(pubkey) {
+    if (walletPubkey) return; // already connected
+    walletPubkey = pubkey;
+    const btn = document.getElementById("walletBtn");
+    btn.classList.add("connected");
+    btn.textContent = `[ ${pubkey.toBase58().slice(0,4)}...${pubkey.toBase58().slice(-4)} ]`;
+    loadAll();
+  }
+
+  // Poll until wallet provider is ready and connected
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const provider = getProvider();
+    if (provider && provider.isConnected && provider.publicKey) {
+      clearInterval(poll);
+      onConnected(provider.publicKey);
+    } else if (attempts > 20) { // 4 seconds max
+      clearInterval(poll);
+    }
+  }, 200);
+})();
 
 // Auto-refresh every 30s
 setInterval(async () => {
@@ -836,9 +945,18 @@ setInterval(async () => {
   }
 }, 30000);
 
-// Load SVGs after render
-const observer = new MutationObserver(() => loadSvgs());
-observer.observe(document.getElementById('content'), { childList: true, subtree: true });
+// Load SVGs after render — debounced to prevent infinite loop
+let _svgTimeout = null;
+const observer = new MutationObserver(() => {
+  if (_svgTimeout) clearTimeout(_svgTimeout);
+  _svgTimeout = setTimeout(() => {
+    observer.disconnect();
+    loadSvgs().then(() => {
+      observer.observe(document.getElementById('content'), { childList: true });
+    });
+  }, 500);
+});
+observer.observe(document.getElementById('content'), { childList: true });
 
 </script>
 </body>

@@ -768,6 +768,7 @@ async function connectWallet() {
     btn.textContent = "[ CONNECT WALLET ]";
     document.getElementById("mintBtn").disabled = true;
     document.getElementById("mintBtn").textContent = "► CONNECT WALLET FIRST ◄";
+    localStorage.removeItem('walletConnected');
     setStatus("WALLET DISCONNECTED");
     return;
   }
@@ -782,6 +783,7 @@ async function connectWallet() {
     btn.textContent = `[ ${short} ]`;
     document.getElementById("mintBtn").disabled = false;
     document.getElementById("mintBtn").textContent = "► TURN THE CRANK ◄";
+    localStorage.setItem('walletConnected', 'true');
     setStatus("WALLET CONNECTED!");
     toast(`CONNECTED: ${short}`, 'success');
     await fetchMachineState();
@@ -1462,7 +1464,9 @@ function openSvgModal(g) {
             const ballDiv = card.querySelector('div[style*="border-radius:50%"]');
             if (ballDiv) {
               const uid = `g${g.serial}`;
-              const innerContent = svgStr.replace(/id="b"/g, `id="b_${uid}"`).replace(/fill="url\(#b\)"/g, `fill="url(#b_${uid})"`).replace(/<svg[^>]*>/, '').replace(/<\/svg>/, '');
+              let sanitized = svgStr.replace(/id="b"/g, `id="b_${uid}"`).replace(/fill="url\(#b\)"/g, `fill="url(#b_${uid})"`).replace(/<svg[^>]*>/, '').replace(/<\/svg>/, '');
+              sanitized = sanitized.replace(/\bon\w+\s*=/gi, 'data-blocked=').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+              const innerContent = sanitized;
               ballDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" width="60" height="60">${innerContent}</svg>`;
             }
           }
@@ -1820,6 +1824,35 @@ async function refundExpiredMint() {
 }
 
 // reclaim_burned removed — burns now auto-reclaim rent
+
+// Auto-connect wallet on page load
+(function autoConnect() {
+  if (localStorage.getItem('walletConnected') !== 'true') return;
+
+  function onConnected(pubkey) {
+    if (walletPubkey) return;
+    walletPubkey = pubkey;
+    const btn = document.getElementById("walletBtn");
+    btn.classList.add("connected");
+    const short = pubkey.toBase58().slice(0,4)+"..."+pubkey.toBase58().slice(-4);
+    btn.textContent = `[ ${short} ]`;
+    document.getElementById("mintBtn").disabled = false;
+    document.getElementById("mintBtn").textContent = "► TURN THE CRANK ◄";
+    fetchMachineState().then(() => fetchWalletGumballs());
+  }
+
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const provider = getProvider();
+    if (provider && provider.isConnected && provider.publicKey) {
+      clearInterval(poll);
+      onConnected(provider.publicKey);
+    } else if (attempts > 20) {
+      clearInterval(poll);
+    }
+  }, 200);
+})();
 </script>
 </body>
 </html>
