@@ -1,0 +1,16 @@
+{
+  "name": "gumball-nft",
+  "version": "1.0.0",
+  "description": "Gumball Machine NFT — on-chain NFTs on X1",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.87.6",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
