@@ -43,7 +43,28 @@ header{
   color:var(--gold);text-shadow:0 0 12px rgba(255,204,0,0.5);letter-spacing:2px;line-height:1.6;
 }
 .logo span{color:var(--red);text-shadow:0 0 12px rgba(255,34,68,0.6);}
-.header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.hamburger{display:none;background:none;border:1px solid var(--border);color:var(--teal);font-size:1.2rem;padding:6px 10px;cursor:pointer;border-radius:4px;}
+.hamburger:hover{border-color:var(--teal);background:rgba(0,255,204,0.05);}
+.mobile-menu{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;
+  background:rgba(10,10,15,0.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+.mobile-menu.open{display:flex;}
+.mobile-menu a,.mobile-menu button{
+  font-family:'Press Start 2P',cursive;font-size:0.5rem;letter-spacing:2px;
+  padding:12px 24px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.3s;
+  border-radius:6px;min-width:200px;text-align:center;
+}
+.mobile-menu a:hover,.mobile-menu a.active{border-color:var(--teal);color:var(--teal);}
+.mobile-close{position:absolute;top:20px;right:20px;background:none;border:1px solid var(--border);color:var(--gray);font-size:1.2rem;padding:8px 12px;cursor:pointer;border-radius:4px;}
+.mobile-close:hover{border-color:var(--red);color:var(--red);}
+@media(max-width:700px){
+  .hamburger{display:block;}
+  .header-right .nav-link{display:none;}
+}
 .nav-link{
   font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
   padding:7px 10px;border:1px solid var(--border);background:transparent;
@@ -390,8 +411,19 @@ svg#gm{width:100%;}
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
+    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
   </div>
 </header>
+
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <a href="index.html" class="active">MINT</a>
+  <a href="marketplace.html">MARKET</a>
+  <a href="activity.html">ACTIVITY</a>
+  <a href="leaderboard.html">LEADERBOARD</a>
+  <a href="verify.html">VERIFY</a>
+  <button class="wallet-btn" id="walletBtnMobile" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+</div>
 
 <div id="liveTicker" style="width:100%;max-width:980px;overflow:hidden;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(15,15,26,0.6);backdrop-filter:blur(8px);padding:8px 14px;display:none;border-radius:8px;">
   <div id="tickerContent" style="white-space:nowrap;animation:tickerScroll 20s linear infinite;font-size:0.4rem;color:var(--gray);"></div>
