@@ -5,6 +5,14 @@ const { fork } = require("child_process");
 const PORT = process.env.PORT || 3000;
 const app = express();
 
+// Write oracle wallet from env var to temp file if needed
+if (process.env.ORACLE_WALLET_KEY && !process.env.ORACLE_WALLET) {
+  const walletPath = path.join(__dirname, ".wallet-temp.json");
+  require("fs").writeFileSync(walletPath, process.env.ORACLE_WALLET_KEY, { mode: 0o600 });
+  process.env.ORACLE_WALLET = walletPath;
+  console.log("Wrote wallet from ORACLE_WALLET_KEY to temp file");
+}
+
 // Serve static files (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname), {
   extensions: ["html"],

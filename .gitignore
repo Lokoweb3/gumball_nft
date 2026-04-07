@@ -17,3 +17,4 @@ localhost-key.pem
 logs/
 node_modules/
 .env
+.wallet-temp.json
