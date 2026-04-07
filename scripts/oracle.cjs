@@ -103,10 +103,18 @@ function saveSecret(commitPdaStr, secret) {
 }
 
 // Oracle wallet — must match machine.oracle on-chain
-const walletPath    = process.env.ORACLE_WALLET || (require("os").homedir() + "/.config/solana/id.json");
-const oracleKeypair = Keypair.fromSecretKey(
-  Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf-8")))
-);
+// Supports: ORACLE_WALLET_KEY env var (JSON array string) or ORACLE_WALLET file path
+let oracleKeypair;
+if (process.env.ORACLE_WALLET_KEY) {
+  oracleKeypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(process.env.ORACLE_WALLET_KEY))
+  );
+} else {
+  const walletPath = process.env.ORACLE_WALLET || (require("os").homedir() + "/.config/solana/id.json");
+  oracleKeypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf-8")))
+  );
+}
 console.log(`Oracle wallet: ${oracleKeypair.publicKey.toBase58()}`);
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
