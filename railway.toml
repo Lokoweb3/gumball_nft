@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacks]
+providers = ["node"]
+
+[deploy]
+startCommand = "node server.cjs"
