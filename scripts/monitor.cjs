@@ -7,8 +7,8 @@ const http = require("http");
 const TELEGRAM_TOKEN  = process.env.TELEGRAM_TOKEN || "YOUR_BOT_TOKEN_HERE";
 const TELEGRAM_CHAT   = process.env.TELEGRAM_CHAT  || "529787973";
 
-const PROGRAM_ID      = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
-const MACHINE_PDA     = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const PROGRAM_ID      = new PublicKey("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
+const MACHINE_PDA     = new PublicKey("BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX");
 const ORACLE_PUBKEY   = new PublicKey("53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy");
 const RPC             = "https://rpc.testnet.x1.xyz";
 

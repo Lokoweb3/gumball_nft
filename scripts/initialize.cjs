@@ -5,7 +5,7 @@ const {
 const crypto = require("crypto");
 const fs     = require("fs");
 
-const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+const PROGRAM_ID  = new PublicKey("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
 const RPC         = "https://rpc.testnet.x1.xyz";
 const walletPath  = process.env.WALLET || (require("os").homedir() + "/.config/solana/id.json");
 const secretKey   = Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf-8")));
@@ -110,7 +110,7 @@ async function main() {
   const sig2 = await sendAndConfirmTransaction(connection, new Transaction().add(activateIx), [wallet]);
   console.log("✅ Activate tx:", sig2);
   console.log("\n🎰 Gumball machine is LIVE!");
-  console.log("   Program:     Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+  console.log("   Program:     2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
   console.log("   Machine PDA:", machinePda.toBase58());
 }
 
@@ -159,7 +159,7 @@ async function main() {
     console.log("   Run this CLI command to close it, then re-run this script:\n");
     console.log(`   solana account close ${machinePda.toBase58()} --url https://rpc.testnet.x1.xyz --keypair ${walletPath}\n`);
     console.log("   If that fails, use:\n");
-    console.log(`   solana program close Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK --url https://rpc.testnet.x1.xyz\n`);
+    console.log(`   solana program close 2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4 --url https://rpc.testnet.x1.xyz\n`);
     console.log("   Then re-run: node scripts/initialize.cjs");
 
     // Try to realloc + reinit by calling initialize_machine which will fail
@@ -234,7 +234,7 @@ async function main() {
   const sig2 = await sendAndConfirmTransaction(connection, new Transaction().add(activateIx), [wallet]);
   console.log("✅ Activate tx:", sig2);
   console.log("\n🎰 Gumball machine is LIVE on X1 testnet!");
-  console.log("   Program:     Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+  console.log("   Program:     2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
   console.log("   Machine PDA:", machinePda.toBase58());
 }
 

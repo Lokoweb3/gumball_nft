@@ -1,0 +1,37 @@
+{
+  "name": "Gumball #2269",
+  "symbol": "GBALL",
+  "description": "A one-of-a-kind XNT gumball from the Gumball Machine on X1.",
+  "image": "https://img.gumball.x1.xyz/2269.png",
+  "attributes": [
+    {
+      "trait_type": "Flavor",
+      "value": "Mango"
+    },
+    {
+      "trait_type": "Color",
+      "value": "Grape Purple"
+    },
+    {
+      "trait_type": "Special",
+      "value": "Double Bubble"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Epic"
+    },
+    {
+      "trait_type": "Serial",
+      "value": 2269
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://img.gumball.x1.xyz/2269.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}

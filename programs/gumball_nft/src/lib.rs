@@ -6,7 +6,7 @@ use anchor_spl::{
     token::{burn, mint_to, Burn, Mint, MintTo, Token, TokenAccount},
 };
 
-declare_id!("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
+declare_id!("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ fn generate_svg(serial: u64, flavor: u8, color: u8, rarity: u8, special: u8) -> 
         "Glitter"       => r##"<circle cx="125" cy="115" r="2" fill="#fff" opacity=".9"/><circle cx="170" cy="130" r="1.5" fill="#fff" opacity=".8"/><circle cx="140" cy="160" r="2" fill="#fff" opacity=".7"/><circle cx="165" cy="110" r="1.5" fill="#fff" opacity=".85"/>"##,
         "Double Bubble"  => r##"<circle cx="205" cy="90" r="45" fill="url(#b)" opacity=".5"/><ellipse cx="192" cy="78" rx="12" ry="8" fill="#fff" opacity=".3"/>"##,
         "Holographic"    => r##"<circle cx="150" cy="145" r="85" fill="none" stroke="url(#hl)" stroke-width="4" opacity=".4"/>"##,
-        "Crystal"        => r#"<polygon points="150,60 195,115 185,170 150,190 115,170 105,115" fill="none" stroke="#fff" stroke-width="1" opacity=".25"/>"#,
+        "Crystal"        => r##"<polygon points="150,60 195,115 185,170 150,190 115,170 105,115" fill="none" stroke="#fff" stroke-width="1" opacity=".25"/>"##,
         _                => "",
     };
 
@@ -99,14 +99,14 @@ fn generate_svg(serial: u64, flavor: u8, color: u8, rarity: u8, special: u8) -> 
     svg.push_str(&format!(r#"<rect width="300" height="300" fill="{bg}"/>"#));
     svg.push_str(legend_el);
     svg.push_str(&format!(r#"<circle cx="150" cy="145" r="106" fill="{gl}" opacity=".08"/>"#));
-    svg.push_str(r#"<ellipse cx="150" cy="250" rx="55" ry="7" fill="#000" opacity=".3"/>"#);
-    svg.push_str(r#"<circle cx="150" cy="145" r="100" fill="url(#b)"/>"#);
+    svg.push_str(r##"<ellipse cx="150" cy="250" rx="55" ry="7" fill="#000" opacity=".3"/>"##);
+    svg.push_str(r##"<circle cx="150" cy="145" r="100" fill="url(#b)"/>"##);
     svg.push_str(special_el);
-    svg.push_str(r#"<ellipse cx="120" cy="110" rx="28" ry="18" fill="#fff" opacity=".4" transform="rotate(-30,120,110)"/>"#);
-    svg.push_str(&format!(r#"<circle cx="150" cy="145" r="100" fill="none" stroke="{rc}" stroke-width="2" opacity=".4"/>"#));
-    svg.push_str(r#"<rect x="0" y="250" width="300" height="50" fill="#000" opacity=".6"/>"#);
-    svg.push_str(&format!(r#"<text x="150" y="270" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#fff">{fl}</text>"#));
-    svg.push_str(&format!(r#"<text x="150" y="288" text-anchor="middle" font-family="monospace" font-size="9" fill="{rc}">{rn} #{serial:04}</text>"#));
+    svg.push_str(r##"<ellipse cx="120" cy="110" rx="28" ry="18" fill="#fff" opacity=".4" transform="rotate(-30,120,110)"/>"##);
+    svg.push_str(&format!(r##"<circle cx="150" cy="145" r="100" fill="none" stroke="{rc}" stroke-width="2" opacity=".4"/>"##));
+    svg.push_str(r##"<rect x="0" y="250" width="300" height="50" fill="#000" opacity=".6"/>"##);
+    svg.push_str(&format!(r##"<text x="150" y="270" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#fff">{fl}</text>"##));
+    svg.push_str(&format!(r##"<text x="150" y="288" text-anchor="middle" font-family="monospace" font-size="9" fill="{rc}">{rn} #{serial:04}</text>"##));
     svg.push_str("</svg>");
 
     let bytes = svg.into_bytes();

@@ -1,0 +1,37 @@
+{
+  "name": "Gumball #4996",
+  "symbol": "GBALL",
+  "description": "A one-of-a-kind XNT gumball from the Gumball Machine on X1.",
+  "image": "https://img.gumball.x1.xyz/4996.png",
+  "attributes": [
+    {
+      "trait_type": "Flavor",
+      "value": "Blueberry"
+    },
+    {
+      "trait_type": "Color",
+      "value": "Rose Gold"
+    },
+    {
+      "trait_type": "Special",
+      "value": "Holographic"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Rare"
+    },
+    {
+      "trait_type": "Serial",
+      "value": 4996
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://img.gumball.x1.xyz/4996.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}

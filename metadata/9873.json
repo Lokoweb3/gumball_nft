@@ -1,0 +1,37 @@
+{
+  "name": "Gumball #9873",
+  "symbol": "GBALL",
+  "description": "A one-of-a-kind XNT gumball from the Gumball Machine on X1.",
+  "image": "https://img.gumball.x1.xyz/9873.png",
+  "attributes": [
+    {
+      "trait_type": "Flavor",
+      "value": "Green Apple"
+    },
+    {
+      "trait_type": "Color",
+      "value": "Cotton White"
+    },
+    {
+      "trait_type": "Special",
+      "value": "Crystal"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Legendary"
+    },
+    {
+      "trait_type": "Serial",
+      "value": 9873
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://img.gumball.x1.xyz/9873.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}

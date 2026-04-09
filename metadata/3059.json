@@ -1,0 +1,37 @@
+{
+  "name": "Gumball #3059",
+  "symbol": "GBALL",
+  "description": "A one-of-a-kind XNT gumball from the Gumball Machine on X1.",
+  "image": "https://img.gumball.x1.xyz/3059.png",
+  "attributes": [
+    {
+      "trait_type": "Flavor",
+      "value": "Root Beer"
+    },
+    {
+      "trait_type": "Color",
+      "value": "Cotton White"
+    },
+    {
+      "trait_type": "Special",
+      "value": "Double Bubble"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Rare"
+    },
+    {
+      "trait_type": "Serial",
+      "value": 3059
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://img.gumball.x1.xyz/3059.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}

@@ -33,8 +33,8 @@ A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users
 
 | | Address |
 |---|---|
-| Program ID | `Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK` |
-| Machine PDA | `AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj` |
+| Program ID | `2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4` |
+| Machine PDA | `BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX` |
 | Oracle wallet | `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy` |
 
 ---

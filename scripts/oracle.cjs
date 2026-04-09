@@ -27,8 +27,8 @@ const crypto = require("crypto");
 const fs     = require("fs");
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const PROGRAM_ID  = new PublicKey("Bsbc5gd22aRWHgHGJXwNugHHHDAR6Q2Hmoj1xB88QmKK");
-const MACHINE_PDA = new PublicKey("AV8PXFSuVuZaYSBuVf2qcqF9TKfThRJaiUg4U2MVRWcj");
+const PROGRAM_ID  = new PublicKey("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
+const MACHINE_PDA = new PublicKey("BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX");
 const RPC         = process.env.RPC_URL || "https://rpc.testnet.x1.xyz";
 const POLL_MS     = 2000;
 const MAX_AGE_S   = 270; // slightly less than MINT_TIMEOUT (300s)
