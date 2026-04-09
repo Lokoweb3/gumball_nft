@@ -17,7 +17,9 @@
 <meta name="twitter:title" content="Gumball Machine NFT">
 <meta name="twitter:description" content="Mint, burn, upgrade. 10,000 unique on-chain SVG gumballs with provably fair randomness.">
 
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 <style>
 :root {
   --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
@@ -268,8 +270,9 @@ body{
   </div>
 
   <div class="hero-stats">
-    <div class="hero-stat"><span class="hero-stat-val">10,000</span><span class="hero-stat-lbl">MAX SUPPLY</span></div>
-    <div class="hero-stat"><span class="hero-stat-val">0.25</span><span class="hero-stat-lbl">STARTING PRICE (XNT)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val" id="heroMinted">--</span><span class="hero-stat-lbl">MINTED</span></div>
+    <div class="hero-stat"><span class="hero-stat-val" id="heroRemaining">10,000</span><span class="hero-stat-lbl">REMAINING</span></div>
+    <div class="hero-stat"><span class="hero-stat-val" id="heroPrice">0.25</span><span class="hero-stat-lbl">CURRENT PRICE (XNT)</span></div>
     <div class="hero-stat"><span class="hero-stat-val">5</span><span class="hero-stat-lbl">RARITY TIERS</span></div>
     <div class="hero-stat"><span class="hero-stat-val">100%</span><span class="hero-stat-lbl">ON-CHAIN</span></div>
   </div>
@@ -661,6 +664,33 @@ const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1 });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Live mint counter
+const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
+function getMintPrice(t) {
+  if (t >= 10000) return 1.0;
+  const s = t * 10, b = Math.floor(s/10000), r = s % 10000;
+  if (b >= 10) return 1.0;
+  return 0.25 * (PRICE_TABLE[b] + (PRICE_TABLE[b+1]-PRICE_TABLE[b]) * r / 10000) / 10000;
+}
+async function updateHeroStats() {
+  try {
+    const { Connection, PublicKey } = solanaWeb3;
+    const conn = new Connection('https://rpc.testnet.x1.xyz', 'confirmed');
+    const pda = new PublicKey('BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX');
+    const info = await conn.getAccountInfo(pda);
+    if (info) {
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      const minted = Number(dv.getBigUint64(8+32+32+32+8, true));
+      const supply = Number(dv.getBigUint64(8+32+32+32+8+8, true));
+      document.getElementById('heroMinted').textContent = minted.toLocaleString();
+      document.getElementById('heroRemaining').textContent = Math.max(0, supply - minted).toLocaleString();
+      document.getElementById('heroPrice').textContent = getMintPrice(minted).toFixed(4);
+    }
+  } catch(e) {}
+}
+updateHeroStats();
+setInterval(updateHeroStats, 30000);
 </script>
 </body>
 </html>
