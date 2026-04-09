@@ -395,6 +395,31 @@ svg#gm{width:100%;}
 .corner-decor::before,.corner-decor::after{content:'';position:absolute;width:8px;height:8px;}
 .corner-decor::before{top:-1px;left:-1px;border-top:2px solid var(--gold);border-left:2px solid var(--gold);}
 .corner-decor::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold);}
+
+/* ── SKELETON LOADING ── */
+.skeleton{position:relative;overflow:hidden;background:var(--panel2);border-radius:6px;}
+.skeleton::after{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent);
+  animation:shimmerSlide 1.5s infinite;
+}
+@keyframes shimmerSlide{0%{left:-100%;}100%{left:100%;}}
+.skeleton-stat{height:40px;margin-bottom:4px;}
+.skeleton-card{height:180px;border-radius:10px;}
+.skeleton-text{height:14px;margin-bottom:8px;width:60%;}
+.skeleton-text.short{width:40%;}
+.skeleton-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:16px;}
+
+/* ── CONFETTI ── */
+.confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;overflow:hidden;}
+.confetti-piece{
+  position:absolute;width:10px;height:10px;top:-20px;
+  animation:confettiFall 3s ease-in forwards;
+}
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0deg);opacity:1;}
+  100%{transform:translateY(100vh) rotate(720deg);opacity:0;}
+}
 </style>
 </head>
 <body>
@@ -727,6 +752,36 @@ let _countdownInterval = null;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // ── TOAST SYSTEM ──────────────────────────────────────────────────────────────
+// ── FRIENDLY ERROR MESSAGES ───────────────────────────────────────────────────
+function friendlyError(msg) {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('user rejected') || m.includes('user denied') || m.includes('cancelled'))
+    return 'Transaction cancelled by user';
+  if (m.includes('insufficient') || m.includes('0x1'))
+    return 'Not enough XNT in your wallet';
+  if (m.includes('blockhash'))
+    return 'Transaction expired — please try again';
+  if (m.includes('machine is not active') || m.includes('machineinactive'))
+    return 'Minting is currently paused';
+  if (m.includes('sold out'))
+    return 'Sold out! No more gumballs available';
+  if (m.includes('commitment already used'))
+    return 'Oracle is refreshing — try again in a few seconds';
+  if (m.includes('already fulfilled'))
+    return 'This mint request was already completed';
+  if (m.includes('timeout') || m.includes('timed out'))
+    return 'Transaction timed out — oracle may be busy, try again';
+  if (m.includes('failed to fetch') || m.includes('network') || m.includes('502'))
+    return 'Network error — check your connection and try again';
+  if (m.includes('rarity mismatch'))
+    return 'Selected gumballs must be the same rarity';
+  if (m.includes('unauthorized'))
+    return 'You don\'t own this gumball';
+  if (m.includes('simulation failed'))
+    return 'Transaction would fail — check your balance and try again';
+  return msg.slice(0, 80);
+}
+
 function toast(msg, type='info', duration=3500) {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -885,10 +940,20 @@ async function connectWallet() {
 }
 
 // ── FETCH WALLET GUMBALLS ─────────────────────────────────────────────────────
+function showCollectionSkeleton() {
+  const grid = document.getElementById("collGrid");
+  const area = document.getElementById("collArea");
+  if (area) area.style.display = "block";
+  grid.innerHTML = Array(6).fill('').map(() =>
+    '<div class="skeleton skeleton-card"></div>'
+  ).join('');
+}
+
 async function fetchWalletGumballs() {
   if (!walletPubkey) return;
   try {
     setStatus("SCANNING YOUR GUMBALLS...");
+    showCollectionSkeleton();
 
     // Build gumballPda → { mintPubkey, ataPubkey } from wallet's token accounts
     const gumballMintMap = {};
@@ -1280,8 +1345,9 @@ async function mintGumball() {
     setStep(1, 'error');
     stopCountdown();
     const msg = e.message || "failed";
-    setStatus("ERROR: " + msg.slice(0, 100));
-    toast("MINT FAILED: " + msg.slice(0,60), 'error', 6000);
+    const friendly = friendlyError(msg);
+    setStatus("ERROR: " + friendly);
+    toast("MINT FAILED: " + friendly, 'error', 6000);
     hideSteps();
     if (mintedCount > 0) {
       await fetchMachineState();
@@ -1787,8 +1853,9 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
   } catch(e) {
     console.error("Burn error:", e);
     const msg = e.message || "unknown error";
-    statusEl.textContent = "ERROR: " + msg.slice(0, 80);
-    toast("BURN FAILED: " + msg.slice(0, 60), 'error', 6000);
+    const friendly = friendlyError(msg);
+    statusEl.textContent = "ERROR: " + friendly;
+    toast("BURN FAILED: " + friendly, 'error', 6000);
   }
   isMinting = false;
 }
