@@ -202,13 +202,18 @@ No migration needed unless Machine struct changed.
 
 | File | Purpose |
 |---|---|
-| `programs/gumball_nft/src/lib.rs` | Anchor smart contract |
+| `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
+| `server.cjs` | Express server for Railway deployment |
+| `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
+| `marketplace.html` | Marketplace (list, buy, sell, offers, 5% royalty) |
+| `activity.html` | Activity feed + collection analytics |
 | `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
 | `verify.html` | Provably fair verification page |
+| `favicon.svg` | SVG gumball icon for browser tabs |
 | `ecosystem.config.cjs` | PM2 config for oracle + monitor |
 | `.env` | Secrets (Telegram token, encryption key) — gitignored |
 | `NOTES.md` | Technical decisions and architecture notes |

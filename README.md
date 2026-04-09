@@ -72,7 +72,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burned PDAs auto-reclaim rent to the burner immediately. No zombie PDAs.
+Burned PDAs are marked as zombies. Use the "Reclaim Burn Rent" button to recover rent in batches.
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -95,6 +95,13 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
+| `reclaim_burned` | Anyone | Recover rent from zombie PDAs left by burns |
+| `list_gumball` | User | List NFT for sale at fixed price (escrowed) |
+| `delist_gumball` | Seller | Cancel listing, NFT returned |
+| `buy_gumball` | User | Buy listed NFT (95% to seller, 5% royalty to treasury) |
+| `make_offer` | User | Place bid with XNT escrowed in PDA |
+| `cancel_offer` | Buyer | Cancel bid, XNT returned |
+| `accept_offer` | Seller | Accept bid, NFT transferred (95/5 split) |
 
 ---
 
@@ -216,14 +223,24 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 
 - Batch minting — up to 10 NFTs with a single wallet approval
 - Dynamic pricing — live price display updates from on-chain state
-- Live collection — on-chain SVG rendering with rarity-colored borders
+- Live collection — on-chain SVG rendering with rarity-colored glow effects
 - Rarity filters — filter by Common / Uncommon / Rare / Epic / Legendary
 - Burn to upgrade — all 4 upgrade paths with upgrade fee display and pre-simulation
-- Automatic rent reclaim — burned PDAs return rent to burner immediately
+- Reclaim burn rent — batch reclaim zombie PDAs from burns
 - Refund expired — claim XNT back if oracle was down during your mint
 - Oracle countdown — live timer showing mint request timeout
+- Marketplace — list, buy, sell, make/accept offers with 5% royalty
+- Activity feed — live feed of mints, burns, sales with filters
+- Collection analytics — rarity score, portfolio value, completion tracker
 - Leaderboard — top holders, rarity distribution, auto-refreshes every 60s
 - Provably fair verification — verify.html with on-chain proof fields
+- Landing page — project homepage with live mint counter
+- Wallet auto-connect — stays connected across page navigation
+- Mobile responsive — hamburger menu on all pages
+- Loading skeletons — shimmer placeholders while data loads
+- Friendly error messages — human-readable error translations
+- Confetti animation — celebration on successful mint/burn
+- SVG favicon — gumball icon on browser tab
 
 ---
 
@@ -268,18 +285,36 @@ For v4 gumballs, the commitment hash and user seed are stored on-chain. Anyone c
 
 ```
 GumballData  seeds: [b"gumball", mint.key()]  — 157 bytes (v4, traits + proof fields)
-GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG artwork)
+GumballSvg   seeds: [b"svg", mint.key()]       — 1408 bytes (on-chain SVG artwork)
+Listing      seeds: [b"listing", mint.key()]  — 89 bytes (marketplace listing)
+Offer        seeds: [b"offer", mint, buyer]   — 89 bytes (marketplace offer)
 ```
 
 SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 157 bytes each, well within limits.
 
 ---
 
+## Deployment
+
+The project runs on Railway with a single Express server serving frontend + oracle + monitor:
+
+```bash
+# Local development
+npx serve . -p 3001 --ssl-cert localhost.pem --ssl-key localhost-key.pem
+
+# Railway (automatic via git push)
+# Set env vars: ORACLE_WALLET_KEY, ORACLE_ENCRYPTION_KEY, TELEGRAM_TOKEN, TELEGRAM_CHAT
+```
+
+Live URL: `https://gumballnft-production.up.railway.app`
+
+---
+
 ## Known Limitations
 
-- Oracle must be running for mints to fulfill — PM2 auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
-- `update_owner` only works on v4 gumballs (157 bytes) — not an issue on mainnet (fresh deploy, all v4)
-- Oracle can choose when to reveal within the 5-min window (slot timing), but cannot predict or control traits (slot hash + user seed are unknown at commit time)
+- Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
+- Burns create zombie PDAs — use "Reclaim Burn Rent" button to batch-recover rent
+- Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
 
 ---
 
@@ -287,13 +322,18 @@ SVG is stored in a separate PDA to keep GumballData lean for burn instructions (
 
 | File | Purpose |
 |---|---|
-| `programs/gumball_nft/src/lib.rs` | Anchor smart contract |
+| `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
+| `server.cjs` | Express server for Railway (frontend + oracle + monitor) |
+| `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
+| `marketplace.html` | Marketplace (list, buy, sell, offers) |
+| `activity.html` | Activity feed + collection analytics |
 | `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
 | `verify.html` | Provably fair verification page |
+| `favicon.svg` | Gumball icon for browser tab |
 | `ecosystem.config.cjs` | PM2 config for oracle + monitor |
 | `setup.sh` | Automated server setup script |
 | `DEPLOY.md` | Server deployment checklist |
