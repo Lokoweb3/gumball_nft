@@ -26,6 +26,11 @@ if (process.env.ORACLE_WALLET_KEY && !process.env.ORACLE_WALLET) {
 // Express app
 const app = express();
 
+// Serve landing.html as the homepage
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "landing.html"));
+});
+
 app.use(express.static(path.join(__dirname), {
   extensions: ["html"],
 }));
