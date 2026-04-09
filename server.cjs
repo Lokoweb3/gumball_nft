@@ -28,9 +28,9 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Frontend serving on port ${PORT}`);
+// Start the server — bind to 0.0.0.0 for Railway
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Frontend serving on 0.0.0.0:${PORT}`);
 });
 
 // Start oracle as child process
