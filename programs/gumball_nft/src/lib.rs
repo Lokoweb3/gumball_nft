@@ -159,6 +159,12 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    pub fn reset_counts(ctx: Context<AdminOnly>) -> Result<()> {
+        ctx.accounts.machine.total_minted = 0;
+        ctx.accounts.machine.total_burned = 0;
+        Ok(())
+    }
+
     // ── C-2 FIX: Step 1 — Oracle submits commitment BEFORE knowing slot ───────
     // Oracle generates: secret = random_bytes()
     // Computes: commitment = sha256(secret || oracle_pubkey)
