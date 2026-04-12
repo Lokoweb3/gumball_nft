@@ -1624,7 +1624,7 @@ function openSvgModal(g) {
     svgDiv.innerHTML = g.svgStr;
     const svg = svgDiv.querySelector("svg");
     if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
-  } else if ((g.version === 3 || g.version === 4) && g.mintPubkey) {
+  } else if ((g.version === 3 || g.version === 4 || g.version === 5) && g.mintPubkey) {
     // V3: fetch SVG from separate PDA
     svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">LOADING SVG...</span></div>`;
     fetchGumballSvg(g.mintPubkey).then(svgStr => {

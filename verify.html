@@ -387,7 +387,7 @@ async function verify() {
     const hasProofFields = isV4Plus && commitmentHash && !commitmentHash.every(b => b === 0);
     const hasOracleSecret = isV5 && oracleSecret && !oracleSecret.every(b => b === 0);
 
-    // For v3/v4: SVG is in separate PDA. For v1/v2: SVG is inline.
+    // For v3/v4/v5: SVG is in separate PDA. For v1/v2: SVG is inline.
     let svgStr = null;
     if (accountData.length > 189) {
       // v1 or v2 — inline SVG after bump
