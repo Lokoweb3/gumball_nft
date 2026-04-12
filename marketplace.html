@@ -166,6 +166,7 @@ header{
     <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
     <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
     <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
   </div>
@@ -177,6 +178,7 @@ header{
   <a href="activity.html">ACTIVITY</a>
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
+  <a href="faucet.html">FAUCET</a>
   <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
 </div>
 
@@ -254,6 +256,7 @@ const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
 const LISTING_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
 const OFFER_SIZE   = 8 + 32 + 32 + 8 + 8 + 1; // 89
 const GD_V4       = 8 + 32 + 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1 + 32 + 32; // 157
+const GD_V5       = 8 + 32 + 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1 + 32 + 32 + 32; // 189
 
 let walletPubkey = null;
 let currentTab = 'listings';

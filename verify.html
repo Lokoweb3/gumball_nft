@@ -148,6 +148,7 @@ header{
     <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link active">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
     <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
   </div>
 </header>
@@ -158,6 +159,7 @@ header{
   <a href="activity.html">ACTIVITY</a>
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html" class="active">VERIFY</a>
+  <a href="faucet.html">FAUCET</a>
 </div>
 
 <div class="wrap">
@@ -309,7 +311,8 @@ async function verify() {
       const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
       const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
       const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
-      const [v1, v2, v3, v4] = await Promise.all([
+      const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189
+      const [v1, v2, v3, v4, v5] = await Promise.all([
         connection.getProgramAccounts(PROGRAM_ID, {
           filters: [
             { dataSize: GD_V1 },
@@ -334,8 +337,14 @@ async function verify() {
             { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
           ]
         }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { dataSize: GD_V5 },
+            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+          ]
+        }),
       ]);
-      const all = [...v1, ...v2, ...v3, ...v4];
+      const all = [...v1, ...v2, ...v3, ...v4, ...v5];
       const match = all.find(({ account }) => {
         const dv = new DataView(account.data.buffer, account.data.byteOffset);
         return Number(dv.getBigUint64(8+32+32, true)) === serial;
@@ -361,20 +370,26 @@ async function verify() {
     const special = accountData[8+32+32+8+3];
     const mintedAt = Number(dv.getBigUint64(8+32+32+8+4, true));
 
-    // v4 proof fields (offset 85 = 8+32+32+8+1+1+1+1+8+1)
+    // v4+ proof fields (offset 93 = 8+32+32+8+1+1+1+1+8+1)
     const PROOF_OFFSET = 8+32+32+8+1+1+1+1+8+1;
-    const isV4 = accountData.length >= 157; // 8 disc + 149 data
+    const isV4Plus = accountData.length >= 157; // 8 disc + 149 data (v4 or v5)
+    const isV5 = accountData.length >= 189; // 8 disc + 181 data (v5)
     let commitmentHash = null;
     let userSeed = null;
-    if (isV4) {
+    let oracleSecret = null;
+    if (isV4Plus) {
       commitmentHash = accountData.slice(PROOF_OFFSET, PROOF_OFFSET+32);
       userSeed = accountData.slice(PROOF_OFFSET+32, PROOF_OFFSET+64);
     }
-    const hasProofFields = isV4 && commitmentHash && !commitmentHash.every(b => b === 0);
+    if (isV5) {
+      oracleSecret = accountData.slice(PROOF_OFFSET+64, PROOF_OFFSET+96);
+    }
+    const hasProofFields = isV4Plus && commitmentHash && !commitmentHash.every(b => b === 0);
+    const hasOracleSecret = isV5 && oracleSecret && !oracleSecret.every(b => b === 0);
 
     // For v3/v4: SVG is in separate PDA. For v1/v2: SVG is inline.
     let svgStr = null;
-    if (accountData.length > 157) {
+    if (accountData.length > 189) {
       // v1 or v2 — inline SVG after bump
       const svgOff = PROOF_OFFSET;
       try {
@@ -523,13 +538,14 @@ async function verify() {
       <div class="proof-step ${hasProofFields ? 'verified' : 'info'}">
         <div class="step-icon">${hasProofFields ? '✅' : 'ℹ️'}</div>
         <div class="step-body">
-          <div class="step-label">${hasProofFields ? 'PROOF FIELDS STORED ON-CHAIN' : 'PROOF FIELDS (PRE-V4 GUMBALL)'}</div>
+          <div class="step-label">${hasProofFields ? 'PROOF FIELDS STORED ON-CHAIN' : 'PROOF FIELDS (PRE-V5 GUMBALL)'}</div>
           <div class="step-desc">${hasProofFields
-            ? 'This gumball has its commitment hash and user seed permanently stored on-chain. Anyone can independently re-derive the traits by providing the oracle secret.'
-            : 'This gumball was minted before the v4 upgrade — commitment hash and user seed are not stored in its account data. On-chain proof fields are available for gumballs minted after the v4 deployment.'
+            ? 'This gumball has its commitment hash, user seed' + (hasOracleSecret ? ', and oracle secret' : '') + ' permanently stored on-chain.' + (hasOracleSecret ? ' Anyone can independently verify the commitment and re-derive the traits — no external data needed.' : ' The oracle secret is needed to complete verification.')
+            : 'This gumball was minted before the v5 upgrade — proof fields are not stored in its account data. On-chain proof fields are available for gumballs minted after the v5 deployment.'
           }</div>
           ${hasProofFields ? '<div class="step-data">Commitment: ' + toHex(commitmentHash) + '</div>' : ''}
           ${hasProofFields ? '<div class="step-data">User Seed: ' + toHex(userSeed) + '</div>' : ''}
+          ${hasOracleSecret ? '<div class="step-data">Oracle Secret: ' + toHex(oracleSecret) + '</div>' : ''}
         </div>
       </div>
 
@@ -545,31 +561,49 @@ async function verify() {
       </div>
     `;
 
-    // Interactive hash verification (v4 only)
+    // Interactive hash verification
     if (hasProofFields) {
-      steps.insertAdjacentHTML('beforeend', `
-        <div class="proof-step pending" id="hashVerifyStep">
-          <div class="step-icon" id="hashVerifyIcon">🔐</div>
-          <div class="step-body">
-            <div class="step-label" id="hashVerifyLabel">VERIFY HASH — ENTER ORACLE SECRET</div>
-            <div class="step-desc">Paste the oracle secret (hex) to independently re-derive this gumball's traits. The contract computed traits from <strong>sha256(secret + slot_hash + user_seed + mint_index)</strong>.</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-              <input type="text" id="secretInput" placeholder="Oracle secret (64 hex chars)..." style="flex:1;min-width:200px;padding:8px 10px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;font-size:0.5rem;outline:none;" />
-              <button onclick="verifyHash()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:8px 12px;background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;">VERIFY</button>
-            </div>
-            <div id="hashResult" style="margin-top:10px;display:none;"></div>
-          </div>
-        </div>
-      `);
-
       // Store data for hash verification
       window._verifyData = {
         commitmentHash: Array.from(commitmentHash),
         userSeed: Array.from(userSeed),
+        oracleSecret: hasOracleSecret ? Array.from(oracleSecret) : null,
         serial, flavor, color, rarity, special,
         gumballPda: gumballPda.toBase58(),
         mintSig,
       };
+
+      if (hasOracleSecret) {
+        // v5: auto-verify — oracle secret is on-chain, no paste needed
+        steps.insertAdjacentHTML('beforeend', `
+          <div class="proof-step pending" id="hashVerifyStep">
+            <div class="step-icon" id="hashVerifyIcon">⏳</div>
+            <div class="step-body">
+              <div class="step-label" id="hashVerifyLabel">VERIFYING COMMITMENT HASH...</div>
+              <div class="step-desc">Automatically verifying sha256(oracle_secret + oracle_pubkey) matches the stored commitment hash using on-chain data.</div>
+              <div id="hashResult" style="margin-top:10px;display:none;"></div>
+            </div>
+          </div>
+        `);
+        // Auto-run verification
+        setTimeout(() => verifyHashAuto(), 300);
+      } else {
+        // v4: manual paste — oracle secret not stored on-chain
+        steps.insertAdjacentHTML('beforeend', `
+          <div class="proof-step pending" id="hashVerifyStep">
+            <div class="step-icon" id="hashVerifyIcon">🔐</div>
+            <div class="step-body">
+              <div class="step-label" id="hashVerifyLabel">VERIFY HASH — ENTER ORACLE SECRET</div>
+              <div class="step-desc">Paste the oracle secret (hex) to independently re-derive this gumball's traits. The contract computed traits from <strong>sha256(secret + slot_hash + user_seed + mint_index)</strong>.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <input type="text" id="secretInput" placeholder="Oracle secret (64 hex chars)..." style="flex:1;min-width:200px;padding:8px 10px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;font-size:0.5rem;outline:none;" />
+                <button onclick="verifyHash()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:8px 12px;background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;">VERIFY</button>
+              </div>
+              <div id="hashResult" style="margin-top:10px;display:none;"></div>
+            </div>
+          </div>
+        `);
+      }
     }
 
     // Share link
@@ -634,6 +668,60 @@ function resolveTraitsFromSeed(seedU64, serial) {
   return { flavor, color, rarity, special };
 }
 
+// v5 auto-verification using on-chain oracle_secret
+async function verifyHashAuto() {
+  const data = window._verifyData;
+  if (!data || !data.oracleSecret) return;
+
+  const resultDiv = document.getElementById('hashResult');
+  const stepDiv = document.getElementById('hashVerifyStep');
+  const iconDiv = document.getElementById('hashVerifyIcon');
+  const labelDiv = document.getElementById('hashVerifyLabel');
+  resultDiv.style.display = 'block';
+
+  try {
+    const secretBytes = new Uint8Array(data.oracleSecret);
+    const secretHex = toHex(secretBytes);
+
+    // Verify commitment = sha256(secret || oracle_pubkey)
+    const oracleBytes = new PublicKey(ORACLE_PUBKEY).toBytes();
+    const commitInput = new Uint8Array([...secretBytes, ...oracleBytes]);
+    const computedCommitment = await sha256(commitInput);
+
+    const commitMatch = computedCommitment.every((b, i) => b === data.commitmentHash[i]);
+
+    if (!commitMatch) {
+      stepDiv.className = 'proof-step pending';
+      iconDiv.textContent = '❌';
+      labelDiv.textContent = 'COMMITMENT MISMATCH';
+      resultDiv.innerHTML = `
+        <div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;">
+          <div style="color:var(--red);margin-bottom:6px;font-family:'Press Start 2P',cursive;font-size:0.38rem;">COMMITMENT DOES NOT MATCH</div>
+          <div style="color:var(--gray);">sha256(oracle_secret + oracle_pubkey) does not match the stored commitment hash.</div>
+          <div class="step-data" style="margin-top:8px;">Computed: ${toHex(computedCommitment)}</div>
+          <div class="step-data">Stored:   ${toHex(new Uint8Array(data.commitmentHash))}</div>
+        </div>`;
+      return;
+    }
+
+    // Commitment verified
+    stepDiv.className = 'proof-step verified';
+    iconDiv.textContent = '✅';
+    labelDiv.textContent = 'COMMITMENT VERIFIED AUTOMATICALLY';
+    resultDiv.innerHTML = `
+      <div style="background:rgba(0,255,204,0.05);border:1px solid rgba(0,255,204,0.3);padding:10px;font-size:0.45rem;">
+        <div style="color:var(--teal);margin-bottom:8px;font-family:'Press Start 2P',cursive;font-size:0.38rem;">SHA256(SECRET + ORACLE_PUBKEY) = COMMITMENT ✓</div>
+        <div style="color:var(--gray);line-height:1.8;">The oracle secret stored on-chain matches the commitment hash. This was verified automatically using <strong>only on-chain data</strong> — no external input needed. The oracle committed to this secret <strong>before</strong> the mint request was made.</div>
+        <div class="step-data" style="margin-top:8px;">Secret:     ${secretHex}</div>
+        <div class="step-data">Commitment: ${toHex(computedCommitment)}</div>
+      </div>`;
+
+  } catch(e) {
+    resultDiv.innerHTML = `<div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;color:var(--red);">ERROR: ${e.message}</div>`;
+  }
+}
+
+// v4 manual verification — user pastes oracle secret
 async function verifyHash() {
   const data = window._verifyData;
   if (!data) return;

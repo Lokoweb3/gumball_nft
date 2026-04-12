@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — TESTNET FAUCET</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --teal:#00ffcc; --purple:#cc44ff; --gold:#ffcc00; --white:#e8e8f8;
+  --gray:#6666aa; --red:#ff2244; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+header{
+  width:100%;max-width:900px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:32px;flex-wrap:wrap;gap:12px;
+}
+.logo{font-family:'Press Start 2P',cursive;font-size:0.8rem;color:var(--gold);letter-spacing:2px;line-height:1.6;}
+.logo span{color:var(--red);}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover,.nav-link.active{border-color:var(--teal);color:var(--teal);}
+.hamburger{display:none;background:none;border:1px solid var(--border);color:var(--teal);font-size:1.2rem;padding:6px 10px;cursor:pointer;border-radius:4px;}
+.mobile-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;background:rgba(10,10,15,0.95);backdrop-filter:blur(12px);flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.mobile-menu.open{display:flex;}
+.mobile-menu a{font-family:'Press Start 2P',cursive;font-size:0.5rem;padding:12px 24px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;text-decoration:none;border-radius:6px;min-width:200px;text-align:center;}
+.mobile-menu a:hover,.mobile-menu a.active{border-color:var(--teal);color:var(--teal);}
+.mobile-close{position:absolute;top:20px;right:20px;background:none;border:1px solid var(--border);color:var(--gray);font-size:1.2rem;padding:8px 12px;cursor:pointer;border-radius:4px;}
+@media(max-width:700px){.hamburger{display:block;}.nav-link{display:none;}}
+
+.wrap{width:100%;max-width:900px;}
+
+.faucet-box{
+  background:var(--panel);border:1px solid var(--border);padding:32px;margin-bottom:24px;
+}
+.faucet-title{
+  font-family:'Press Start 2P',cursive;font-size:0.7rem;color:var(--teal);letter-spacing:2px;margin-bottom:8px;
+}
+.faucet-sub{
+  font-size:0.52rem;color:var(--gray);line-height:1.9;margin-bottom:24px;
+}
+.faucet-amount{
+  font-family:'Press Start 2P',cursive;font-size:1.8rem;color:var(--gold);text-align:center;
+  margin:24px 0;letter-spacing:2px;
+}
+.faucet-amount span{font-size:0.6rem;color:var(--gray);display:block;margin-top:8px;letter-spacing:1px;}
+.faucet-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.faucet-input{
+  flex:1;min-width:200px;padding:12px 14px;background:var(--black);
+  border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;
+  font-size:0.55rem;outline:none;
+}
+.faucet-input:focus{border-color:var(--teal);}
+.faucet-input::placeholder{color:var(--gray);}
+.faucet-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:12px 20px;
+  background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;
+  white-space:nowrap;transition:all 0.2s;
+}
+.faucet-btn:hover{background:#00ddaa;}
+.faucet-btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+
+.faucet-status{
+  margin-top:16px;padding:14px 16px;font-size:0.5rem;line-height:1.8;display:none;
+}
+.faucet-status.success{
+  background:rgba(0,255,204,0.05);border:1px solid rgba(0,255,204,0.3);color:var(--teal);display:block;
+}
+.faucet-status.error{
+  background:rgba(255,34,68,0.08);border:1px solid rgba(255,34,68,0.3);color:var(--red);display:block;
+}
+.faucet-status.loading{
+  background:rgba(255,204,0,0.05);border:1px solid rgba(255,204,0,0.2);color:var(--gold);display:block;
+}
+
+.faucet-info{
+  background:var(--panel);border:1px solid var(--border);padding:20px 24px;
+}
+.info-title{
+  font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);letter-spacing:1px;margin-bottom:12px;
+}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:500px){.info-grid{grid-template-columns:1fr;}}
+.info-item{background:var(--black);padding:10px 12px;border:1px solid var(--border);}
+.info-key{font-size:0.38rem;color:var(--gray);letter-spacing:1px;display:block;margin-bottom:4px;}
+.info-val{font-size:0.5rem;color:var(--white);}
+
+.sig-link{
+  color:var(--teal);text-decoration:none;word-break:break-all;font-size:0.42rem;
+}
+.sig-link:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <a href="index.html" class="nav-link">[ MINT ]</a>
+    <a href="marketplace.html" class="nav-link">[ MARKET ]</a>
+    <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link active">[ FAUCET ]</a>
+    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <a href="index.html">MINT</a>
+  <a href="marketplace.html">MARKET</a>
+  <a href="activity.html">ACTIVITY</a>
+  <a href="leaderboard.html">LEADERBOARD</a>
+  <a href="verify.html">VERIFY</a>
+  <a href="faucet.html" class="active">FAUCET</a>
+</div>
+
+<div class="wrap">
+  <div class="faucet-box">
+    <div class="faucet-title">// TESTNET FAUCET</div>
+    <div class="faucet-sub">Get free testnet XNT to mint gumball NFTs. One request per wallet every 24 hours.</div>
+
+    <div class="faucet-amount">0.1 XNT<span>PER REQUEST</span></div>
+
+    <div class="faucet-row">
+      <input type="text" class="faucet-input" id="walletInput" placeholder="Paste your wallet address..." />
+      <button class="faucet-btn" id="faucetBtn" onclick="requestFaucet()">REQUEST XNT</button>
+    </div>
+
+    <div class="faucet-status" id="faucetStatus"></div>
+  </div>
+
+  <div class="faucet-info">
+    <div class="info-title">// HOW IT WORKS</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-key">AMOUNT</span>
+        <span class="info-val">0.1 XNT per request</span>
+      </div>
+      <div class="info-item">
+        <span class="info-key">COOLDOWN</span>
+        <span class="info-val">24 hours per wallet</span>
+      </div>
+      <div class="info-item">
+        <span class="info-key">NETWORK</span>
+        <span class="info-val">X1 Testnet</span>
+      </div>
+      <div class="info-item">
+        <span class="info-key">USE FOR</span>
+        <span class="info-val">Minting + upgrades</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXPLORER = 'https://explorer.testnet.x1.xyz';
+
+async function requestFaucet() {
+  const input = document.getElementById('walletInput');
+  const btn = document.getElementById('faucetBtn');
+  const status = document.getElementById('faucetStatus');
+  const wallet = input.value.trim();
+
+  if (!wallet) {
+    status.className = 'faucet-status error';
+    status.textContent = 'Please enter a wallet address.';
+    return;
+  }
+
+  // Basic base58 validation
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+    status.className = 'faucet-status error';
+    status.textContent = 'Invalid wallet address format.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'SENDING...';
+  status.className = 'faucet-status loading';
+  status.textContent = 'Requesting 0.1 XNT...';
+
+  try {
+    const res = await fetch('/api/faucet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      status.className = 'faucet-status success';
+      status.innerHTML = `Sent ${data.amount} to ${wallet.slice(0,8)}...${wallet.slice(-8)}<br><br><a class="sig-link" href="${EXPLORER}/tx/${data.signature}" target="_blank">View transaction on explorer</a>`;
+    } else {
+      status.className = 'faucet-status error';
+      status.textContent = data.error || 'Request failed.';
+    }
+  } catch(e) {
+    status.className = 'faucet-status error';
+    status.textContent = 'Network error. Please try again.';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'REQUEST XNT';
+}
+
+// Allow Enter key
+document.getElementById('walletInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') requestFaucet();
+});
+</script>
+</body>
+</html>

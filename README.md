@@ -14,7 +14,8 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 | **Machine PDA** | `BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX` |
 | **Network** | X1 Testnet (`https://rpc.testnet.x1.xyz`) |
 | **Explorer** | `https://explorer.testnet.x1.xyz` |
-| **Mint Price** | 0.25 – 1.00 XNT (exponential curve) |
+| **Mint Price** | 0.01 – 0.04 XNT testnet (exponential curve) |
+| **Faucet** | 0.1 XNT per wallet per 24h |
 | **Max Supply** | 10,000 |
 | **Max Per Tx** | 10 mints per transaction |
 | **Mint Timeout** | 300 seconds (5 min) before refund eligible |
@@ -35,6 +36,7 @@ The oracle cannot predict or manipulate outcomes: slot hash (32 bytes) is unknow
 | | |
 |---|---|
 | **Oracle wallet** | `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy` |
+| **Faucet wallet** | `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ` |
 
 ---
 
@@ -72,7 +74,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burned PDAs are marked as zombies. Use the "Reclaim Burn Rent" button to recover rent in batches.
+Burns now auto-reclaim rent in the same transaction. No zombie PDAs are created.
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -95,7 +97,6 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
-| `reclaim_burned` | Anyone | Recover rent from zombie PDAs left by burns |
 | `list_gumball` | User | List NFT for sale at fixed price (escrowed) |
 | `delist_gumball` | Seller | Cancel listing, NFT returned |
 | `buy_gumball` | User | Buy listed NFT (95% to seller, 5% royalty to treasury) |
@@ -181,6 +182,7 @@ Create a `.env` file (gitignored) with:
 TELEGRAM_TOKEN=your_bot_token
 TELEGRAM_CHAT=your_chat_id
 ORACLE_ENCRYPTION_KEY=your_256bit_hex_key
+FAUCET_WALLET=./faucet-wallet.json
 ```
 
 Generate an encryption key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
@@ -226,14 +228,14 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 - Live collection — on-chain SVG rendering with rarity-colored glow effects
 - Rarity filters — filter by Common / Uncommon / Rare / Epic / Legendary
 - Burn to upgrade — all 4 upgrade paths with upgrade fee display and pre-simulation
-- Reclaim burn rent — batch reclaim zombie PDAs from burns
 - Refund expired — claim XNT back if oracle was down during your mint
+- Testnet faucet — get 0.1 XNT per wallet per 24h to test minting
 - Oracle countdown — live timer showing mint request timeout
 - Marketplace — list, buy, sell, make/accept offers with 5% royalty
 - Activity feed — live feed of mints, burns, sales with filters
 - Collection analytics — rarity score, portfolio value, completion tracker
 - Leaderboard — top holders, rarity distribution, auto-refreshes every 60s
-- Provably fair verification — verify.html with on-chain proof fields
+- Provably fair verification — verify.html with on-chain proof fields + auto-verification (v5)
 - Landing page — project homepage with live mint counter
 - Wallet auto-connect — stays connected across page navigation
 - Mobile responsive — hamburger menu on all pages
@@ -253,23 +255,20 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 
 ### Dynamic Mint Pricing
 
-Mint price follows an exponential curve: `price = 0.25 * 4^(total_minted / 10,000)` XNT.
+Mint price follows an exponential curve: `price = BASE_PRICE * 4^(total_minted / 10,000)` XNT.
 
 Early minters pay less. Price increases as supply fills up.
 
+**Testnet pricing:**
 | Mint # | Price |
 |---|---|
-| 1 | 0.2500 XNT |
-| 1,000 | 0.2872 XNT |
-| 2,500 | 0.3536 XNT |
-| 5,000 | 0.5000 XNT |
-| 7,500 | 0.7071 XNT |
-| 9,000 | 0.8706 XNT |
-| 10,000 | 1.0000 XNT |
+| 1 | 0.01 XNT |
+| 2,500 | 0.014 XNT |
+| 5,000 | 0.02 XNT |
+| 7,500 | 0.028 XNT |
+| 10,000 | 0.04 XNT |
 
 Batch mints (up to 10) sum each mint's individual price. Upgrade fees also follow this curve.
-
-Total projected revenue at full sellout: **~4,080 XNT** from mints + upgrade fees.
 
 ---
 
@@ -277,20 +276,20 @@ Total projected revenue at full sellout: **~4,080 XNT** from mints + upgrade fee
 
 Visit `verify.html?serial=42` to independently verify any gumball's provable fairness.
 
-For v4 gumballs, the commitment hash and user seed are stored on-chain. Anyone can paste the oracle secret to confirm `sha256(secret + oracle_pubkey)` matches the stored commitment — proving the oracle could not have manipulated the outcome.
+For v5 gumballs, the commitment hash, user seed, and oracle secret are all stored on-chain. The verify page automatically computes `sha256(secret + oracle_pubkey)` and confirms it matches the stored commitment — fully trustless, no external input needed. For older v4 gumballs, users can paste the oracle secret manually.
 
 ---
 
 ## Architecture
 
 ```
-GumballData  seeds: [b"gumball", mint.key()]  — 157 bytes (v4, traits + proof fields)
-GumballSvg   seeds: [b"svg", mint.key()]       — 1408 bytes (on-chain SVG artwork)
+GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, traits + proof fields + oracle_secret)
+GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG artwork)
 Listing      seeds: [b"listing", mint.key()]  — 89 bytes (marketplace listing)
 Offer        seeds: [b"offer", mint, buyer]   — 89 bytes (marketplace offer)
 ```
 
-SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 157 bytes each, well within limits.
+SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 189 bytes each, well within limits.
 
 ---
 
@@ -303,7 +302,7 @@ The project runs on Railway with a single Express server serving frontend + orac
 npx serve . -p 3001 --ssl-cert localhost.pem --ssl-key localhost-key.pem
 
 # Railway (automatic via git push)
-# Set env vars: ORACLE_WALLET_KEY, ORACLE_ENCRYPTION_KEY, TELEGRAM_TOKEN, TELEGRAM_CHAT
+# Set env vars: ORACLE_WALLET_KEY, ORACLE_ENCRYPTION_KEY, TELEGRAM_TOKEN, TELEGRAM_CHAT, FAUCET_WALLET_KEY
 ```
 
 Live URL: `https://gumballnft-production.up.railway.app`
@@ -313,8 +312,8 @@ Live URL: `https://gumballnft-production.up.railway.app`
 ## Known Limitations
 
 - Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
-- Burns create zombie PDAs — use "Reclaim Burn Rent" button to batch-recover rent
 - Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
+- Faucet cooldowns are in-memory — reset on server restart
 
 ---
 
@@ -326,13 +325,14 @@ Live URL: `https://gumballnft-production.up.railway.app`
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
-| `server.cjs` | Express server for Railway (frontend + oracle + monitor) |
+| `server.cjs` | Express server for Railway (frontend + oracle + monitor + faucet API) |
 | `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
 | `marketplace.html` | Marketplace (list, buy, sell, offers) |
 | `activity.html` | Activity feed + collection analytics |
 | `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
-| `verify.html` | Provably fair verification page |
+| `verify.html` | Provably fair verification page (auto-verifies v5) |
+| `faucet.html` | Testnet XNT faucet (0.1 XNT per wallet per 24h) |
 | `favicon.svg` | Gumball icon for browser tab |
 | `ecosystem.config.cjs` | PM2 config for oracle + monitor |
 | `setup.sh` | Automated server setup script |

@@ -15,12 +15,12 @@ const MAX_PER_TX:     u8    = 10;
 const MAX_SVG_LEN:    usize = 1400;
 const MINT_TIMEOUT:   i64   = 300; // 5 min before request expires — M-2 fix
 
-// Exponential pricing: 0.25 XNT at mint #0, 1.00 XNT at mint #10,000
+// Exponential pricing: 0.01 XNT at mint #0, 0.04 XNT at mint #10,000
 // Formula: price = BASE_PRICE * 4^(total_minted / MAX_SUPPLY)
 // Implemented via integer approximation using linear interpolation over
 // a precomputed table of 4^(x/10) for x = 0..10
-const BASE_PRICE: u64 = 250_000_000; // 0.25 XNT in lamports
-const MAX_PRICE:  u64 = 1_000_000_000; // 1.00 XNT in lamports
+const BASE_PRICE: u64 = 10_000_000; // 0.01 XNT in lamports
+const MAX_PRICE:  u64 = 40_000_000; // 0.04 XNT in lamports
 
 const RARITY_LEGENDARY: u8 = 4;
 const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
@@ -347,9 +347,10 @@ pub mod gumball_nft {
         gumball.special         = traits.special;
         gumball.minted_at       = clock.unix_timestamp as u64;
         gumball.bump            = ctx.bumps.gumball_data;
-        // v4: store proof fields for independent verification
+        // v5: store proof fields for independent verification
         gumball.commitment_hash = ctx.accounts.oracle_commit.commitment;
         gumball.user_seed       = ctx.accounts.mint_request.user_seed;
+        gumball.oracle_secret   = secret;
 
         // Store SVG in separate PDA — keeps GumballData lean for burn instructions
         ctx.accounts.gumball_svg.svg = svg_bytes;
@@ -522,6 +523,7 @@ pub mod gumball_nft {
         ng.bump             = ctx.bumps.new_gumball_data;
         ng.commitment_hash  = [0u8; 32]; // upgrade — no commit-reveal
         ng.user_seed        = [0u8; 32];
+        ng.oracle_secret    = [0u8; 32];
 
         ctx.accounts.new_gumball_svg.svg = svg_bytes;
 
@@ -681,6 +683,7 @@ pub mod gumball_nft {
         ng.bump             = ctx.bumps.new_gumball_data;
         ng.commitment_hash  = [0u8; 32]; // upgrade — no commit-reveal
         ng.user_seed        = [0u8; 32];
+        ng.oracle_secret    = [0u8; 32];
 
         ctx.accounts.new_gumball_svg.svg = svg_bytes;
 
@@ -1558,9 +1561,11 @@ pub struct GumballData {
     // v4: proof fields for verify.html — enables full hash verification
     pub commitment_hash: [u8; 32],  // sha256(secret || oracle_pubkey) from OracleCommit
     pub user_seed:       [u8; 32],  // user-provided entropy from MintRequest
+    // v5: oracle secret stored after reveal — enables trustless auto-verification
+    pub oracle_secret:   [u8; 32],  // revealed oracle secret (zeroed for upgrades)
 }
 impl GumballData {
-    pub const LEN: usize = 32+32+8+1+1+1+1+8+1+32+32;
+    pub const LEN: usize = 32+32+8+1+1+1+1+8+1+32+32+32;
     pub fn flavor_name(&self)  -> &'static str { FLAVORS [self.flavor  as usize % FLAVORS.len()]  }
     pub fn color_name(&self)   -> &'static str { COLORS  [self.color   as usize % COLORS.len()]   }
     pub fn rarity_name(&self)  -> &'static str { RARITY_NAMES[self.rarity as usize % 5]           }

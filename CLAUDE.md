@@ -46,7 +46,7 @@ A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users
 Each NFT creates two on-chain accounts:
 
 ```
-GumballData  seeds: [b"gumball", mint.key()]  — 157 bytes (v4, metadata + proof fields)
+GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, metadata + proof fields + oracle_secret)
 GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG)
 ```
 
@@ -58,16 +58,17 @@ The SVG is still 100% on-chain. It's just in a sibling PDA that burn instruction
 
 ### 2. GumballData versions coexist
 
-Four formats exist on testnet from different deploy iterations:
+Five formats exist on testnet from different deploy iterations:
 
 ```
 v1 = 1129 bytes  (original, inline SVG 1024 bytes)
 v2 = 873 bytes   (inline SVG 768 bytes)
 v3 = 93 bytes    (SVG in separate PDA, no proof fields)
-v4 = 157 bytes   (current, v3 + commitment_hash + user_seed proof fields)
+v4 = 157 bytes   (v3 + commitment_hash + user_seed proof fields)
+v5 = 189 bytes   (current, v4 + oracle_secret for trustless auto-verification)
 ```
 
-The frontend fetches all four sizes in parallel via `getProgramAccounts` with `dataSize` filters
+The frontend fetches all five sizes in parallel via `getProgramAccounts` with `dataSize` filters
 and handles SVG parsing differently per version. Always add new versions to the filter list
 — never remove old ones.
 
@@ -112,7 +113,7 @@ NEVER be committed to GitHub — it's in `.gitignore`. Encryption key is in `.en
 
 ---
 
-## GumballData Layout (v4, current)
+## GumballData Layout (v5, current)
 
 ```
 Offset  Size  Field
@@ -128,6 +129,7 @@ Offset  Size  Field
 92      1     bump (u8)
 93      32    commitment_hash ([u8; 32], sha256(secret || oracle_pubkey) — zeroed for upgrades)
 125     32    user_seed ([u8; 32], user-provided entropy — zeroed for upgrades)
+157     32    oracle_secret ([u8; 32], revealed oracle secret — zeroed for upgrades)
 ```
 
 GumballSvg layout:
@@ -174,7 +176,7 @@ Offset  Size  Field
 1. Update struct in `lib.rs`
 2. Update `GumballData::LEN`
 3. Add migration instruction if existing accounts need updating
-4. Add new `dataSize` filter in frontend (`GD_V4 = ...`)
+4. Add new `dataSize` filter in frontend (`GD_V5 = ...`)
 5. Update SVG offset parsing if fields added before SVG
 6. Update leaderboard `GD_SIZE` constant
 7. Run `node scripts/initialize.cjs --migrate` if Machine struct changed
@@ -192,7 +194,7 @@ No migration needed unless Machine struct changed.
 ### Adding a new frontend page
 
 1. Copy header/footer structure from `index.html`
-2. Add nav link to all pages (`index.html`, `leaderboard.html`, `verify.html`)
+2. Add nav link to all pages (`index.html`, `leaderboard.html`, `verify.html`, `faucet.html`)
 3. Use same constants: `PROGRAM_ID_STR`, `MACHINE_PDA_STR`, `RPC`, `EXPLORER`
 4. Use same trait arrays: `FLAVORS`, `COLORS`, `RARITY`, `SPECIALS`, `BALL_COLORS`
 
@@ -206,16 +208,18 @@ No migration needed unless Machine struct changed.
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
-| `server.cjs` | Express server for Railway deployment |
+| `server.cjs` | Express server for Railway deployment + faucet API |
 | `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
 | `marketplace.html` | Marketplace (list, buy, sell, offers, 5% royalty) |
 | `activity.html` | Activity feed + collection analytics |
 | `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
-| `verify.html` | Provably fair verification page |
+| `verify.html` | Provably fair verification page (auto-verifies v5 gumballs) |
+| `faucet.html` | Testnet XNT faucet (0.1 XNT per wallet per 24h) |
 | `favicon.svg` | SVG gumball icon for browser tabs |
 | `ecosystem.config.cjs` | PM2 config for oracle + monitor |
-| `.env` | Secrets (Telegram token, encryption key) — gitignored |
+| `.env` | Secrets (Telegram token, encryption key, faucet wallet) — gitignored |
+| `faucet-wallet.json` | Faucet wallet keypair — gitignored |
 | `NOTES.md` | Technical decisions and architecture notes |
 | `DEPLOY.md` | Server deployment checklist |
 | `setup.sh` | Automated server setup script |
@@ -224,7 +228,7 @@ No migration needed unless Machine struct changed.
 
 ## What NOT to do
 
-- **Never commit** `oracle-secrets.json`, `oracle-wallet.json`, `*.pem`, `.env`, `target/`
+- **Never commit** `oracle-secrets.json`, `oracle-wallet.json`, `faucet-wallet.json`, `*.pem`, `.env`, `target/`
 - **Never add SVG back inline** to `GumballData` — it will cause heap OOM in burns
 - **Never remove old dataSize filters** from frontend — old format gumballs still exist
 - **Never call `.close()`** manually on Anchor accounts that have `close = X` in struct
@@ -462,8 +466,8 @@ Anchor deserialization. This is acceptable for testnet; for mainnet, consider sw
 **Files:** `lib.rs`, `index.html`
 
 **What:** Replaced fixed `MINT_PRICE` (0.25 XNT) with exponential curve:
-`price = 0.25 * 4^(total_minted / 10000)` XNT. Price starts at 0.25 XNT (mint #1)
-and reaches 1.00 XNT (mint #10,000). Uses 11-point lookup table with linear
+`price = 0.01 * 4^(total_minted / 10000)` XNT. Price starts at 0.01 XNT (mint #1)
+and reaches 0.04 XNT (mint #10,000). Uses 11-point lookup table with linear
 interpolation — no floating point on-chain. `request_mint` sums per-mint prices
 for batch mints. Frontend mirrors the formula in JS and updates price display
 live from `total_minted` in Machine PDA. `machine.mint_price` field still exists
@@ -471,16 +475,16 @@ but is unused by the dynamic curve — kept for backward compat with `set_mint_p
 
 **Why:** Flat pricing undervalues later mints when supply is scarce. Exponential curve
 rewards early minters with cheap prices while capturing more revenue as demand proves
-itself. Total revenue ~4,080 XNT vs 2,500 XNT flat (1.6x increase).
+itself. Testnet pricing set low (0.01 XNT) for easy testing.
 
-**Price curve:**
+**Price curve (testnet):**
 | Mint # | Price |
 |---|---|
-| 1 | 0.25 XNT |
-| 2,500 | 0.35 XNT |
-| 5,000 | 0.50 XNT |
-| 7,500 | 0.71 XNT |
-| 10,000 | 1.00 XNT |
+| 1 | 0.01 XNT |
+| 2,500 | 0.014 XNT |
+| 5,000 | 0.02 XNT |
+| 7,500 | 0.028 XNT |
+| 10,000 | 0.04 XNT |
 
 ---
 
@@ -594,4 +598,52 @@ burner). Removing it eliminates the attack surface for mainnet.
 vulnerabilities. Verified: access control, arithmetic safety, commit-reveal
 randomness, payment handling, secrets management, frontend security, oracle
 implementation, monitoring, and file protection.
+
+---
+
+### [2026-04-12] Testnet mint price lowered to 0.01 XNT
+
+**Files:** `lib.rs`, `index.html`, `landing.html`, `activity.html`, `initialize.cjs`
+
+**What:** Changed `BASE_PRICE` from 250,000,000 (0.25 XNT) to 10,000,000 (0.01 XNT)
+and `MAX_PRICE` from 1,000,000,000 (1.00 XNT) to 40,000,000 (0.04 XNT). Updated all
+frontend display values, JS pricing functions, and initialize script to match.
+
+**Why:** Testnet faucet provides 0.1 XNT per request. At 0.25 XNT per mint, users
+couldn't even mint once. At 0.01 XNT, a single faucet request funds 10 mints.
+
+---
+
+### [2026-04-12] GumballData v5 — oracle_secret on-chain
+
+**Files:** `lib.rs`, `index.html`, `leaderboard.html`, `activity.html`, `marketplace.html`, `verify.html`
+
+**What:** Added `oracle_secret: [u8; 32]` to GumballData struct (LEN: 149 → 181,
+on-chain: 157 → 189 bytes). `reveal_and_mint` stores the revealed oracle secret
+directly in the gumball. Burns set it to zeros. Frontend updated with `GD_V5 = 189`
+filter across all pages. `verify.html` now auto-verifies v5 gumballs — reads the
+oracle secret from on-chain data and computes `sha256(secret + oracle_pubkey)` to
+verify against the stored commitment hash. No user input needed.
+
+**Why:** The v4 verify page required users to paste the oracle secret manually, but
+regular users had no way to obtain it. The secret is already revealed to the contract
+during `reveal_and_mint` and is no longer sensitive after that. Storing it on-chain
+enables fully trustless, automatic verification with zero external dependencies.
+
+---
+
+### [2026-04-12] Testnet faucet
+
+**Files:** `server.cjs`, `faucet.html`, all nav pages
+
+**What:** Added `POST /api/faucet` endpoint to `server.cjs` that sends 0.1 XNT from
+a dedicated faucet wallet. Rate limited to one request per wallet address per 24 hours.
+Validates pubkey format, checks faucet balance before sending. Created `faucet.html`
+page matching site style. Added `[ FAUCET ]` nav link to all pages. Faucet uses a
+separate wallet from the oracle (`FAUCET_WALLET` or `FAUCET_WALLET_KEY` env var).
+
+**Why:** X1 testnet does not support `requestAirdrop` via RPC. Users need free testnet
+XNT to try minting. A dedicated faucet wallet prevents draining the oracle's funds.
+
+**Faucet wallet:** `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ`
 

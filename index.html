@@ -436,6 +436,7 @@ svg#gm{width:100%;}
     <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
     <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
     <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
   </div>
@@ -448,6 +449,7 @@ svg#gm{width:100%;}
   <a href="activity.html">ACTIVITY</a>
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
+  <a href="faucet.html">FAUCET</a>
   <button class="wallet-btn" id="walletBtnMobile" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
 </div>
 
@@ -458,7 +460,7 @@ svg#gm{width:100%;}
 <div class="stats-bar">
   <div class="stat"><span class="stat-val" id="sMinted">—</span><span class="stat-lbl">Total Minted</span></div>
   <div class="stat"><span class="stat-val" id="sRemain">—</span><span class="stat-lbl">Remaining</span></div>
-  <div class="stat"><span class="stat-val" id="sPrice">0.25</span><span class="stat-lbl">XNT / Ball</span></div>
+  <div class="stat"><span class="stat-val" id="sPrice">0.01</span><span class="stat-lbl">XNT / Ball</span></div>
   <div class="stat"><span class="stat-val" id="sBurned">0</span><span class="stat-lbl">Burned 🔥</span></div>
   <div class="stat"><span class="stat-val" id="sOwned">0</span><span class="stat-lbl">You Own</span></div>
 </div>
@@ -512,7 +514,7 @@ svg#gm{width:100%;}
         <rect x="80" y="265" width="140" height="28" rx="7" fill="rgba(255,255,255,0.1)"/>
         <rect x="92" y="300" width="76" height="44" rx="4" fill="rgba(0,0,0,0.25)" stroke="rgba(255,204,0,0.35)" stroke-width="0.8"/>
         <text x="130" y="317" text-anchor="middle" font-family="'Press Start 2P'" font-size="7.5" fill="#ffcc00">NFT</text>
-        <text x="130" y="330" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.8)" id="svgPrice">0.25 XNT</text>
+        <text x="130" y="330" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.8)" id="svgPrice">0.01 XNT</text>
         <text x="130" y="340" text-anchor="middle" font-family="'Press Start 2P'" font-size="4" fill="rgba(255,204,0,0.55)">PER BALL</text>
         <rect x="178" y="278" width="32" height="8" rx="4" fill="#111" stroke="#333" stroke-width="0.6"/>
         <rect x="180" y="280" width="28" height="4" rx="2" fill="#090909"/>
@@ -572,7 +574,7 @@ svg#gm{width:100%;}
         <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
       </div>
       <div class="price-row">
-        <div><div class="price-big" id="currentPrice">0.25 XNT</div><div class="price-sub">per gumball NFT</div></div>
+        <div><div class="price-big" id="currentPrice">0.01 XNT</div><div class="price-sub">per gumball NFT</div></div>
       </div>
       <div class="qty-row">
         <span class="qty-lbl">QUANTITY</span>
@@ -582,7 +584,7 @@ svg#gm{width:100%;}
           <button class="qty-btn" onclick="changeQty(1)">+</button>
         </div>
       </div>
-      <div class="total-cost">TOTAL: <span id="totalCost">0.2500 XNT</span></div>
+      <div class="total-cost">TOTAL: <span id="totalCost">0.0100 XNT</span></div>
       <button class="mint-btn" id="mintBtn" onclick="mintGumball()" disabled>► CONNECT WALLET FIRST ◄</button>
       <div class="trait-preview" id="traitPreview">
         <div style="font-size:0.52rem;color:var(--gray);letter-spacing:2px;margin-bottom:8px;">LAST MINT TRAITS</div>
@@ -717,17 +719,17 @@ let walletPubkey = null, qty = 1, isMinting = false, collection = [];
 let _currentSvg = "", _currentSerial = 0;
 let currentMinted = 0; // updated by fetchMachineState
 
-// Exponential pricing: 0.25 * 4^(totalMinted/10000) XNT
+// Exponential pricing: 0.01 * 4^(totalMinted/10000) XNT
 // Matches on-chain get_mint_price() exactly
 const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
 const MAX_SUPPLY_PRICE = 10000;
-const BASE_PRICE_XNT = 0.25;
+const BASE_PRICE_XNT = 0.01;
 function getMintPrice(totalMinted) {
-  if (totalMinted >= MAX_SUPPLY_PRICE) return 1.0;
+  if (totalMinted >= MAX_SUPPLY_PRICE) return 0.04;
   const scaled = totalMinted * 10;
   const bucket = Math.floor(scaled / MAX_SUPPLY_PRICE);
   const remainder = scaled % MAX_SUPPLY_PRICE;
-  if (bucket >= 10) return 1.0;
+  if (bucket >= 10) return 0.04;
   const lo = PRICE_TABLE[bucket];
   const hi = PRICE_TABLE[bucket + 1];
   const interp = lo + (hi - lo) * remainder / MAX_SUPPLY_PRICE;
@@ -976,12 +978,14 @@ async function fetchWalletGumballs() {
     // GD_V1: 1121 bytes (original, svg inline, MAX_SVG_LEN=1024)
     // GD_V2: 865 bytes  (svg inline, MAX_SVG_LEN=768)
     // GD_V3: 93 bytes   (svg in separate PDA, no proof fields)
-    // GD_V4: 157 bytes  (current, +commitment_hash +user_seed for verification)
+    // GD_V4: 157 bytes  (+commitment_hash +user_seed for verification)
+    // GD_V5: 189 bytes  (current, +oracle_secret for trustless auto-verification)
     const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1121
     const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
     const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
     const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
-    const [v1Accounts, v2Accounts, v3Accounts, v4Accounts] = await Promise.all([
+    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189
+    const [v1Accounts, v2Accounts, v3Accounts, v4Accounts, v5Accounts] = await Promise.all([
       connection.getProgramAccounts(PROGRAM_ID, {
         filters: [
           { dataSize: GD_V1 },
@@ -1010,12 +1014,20 @@ async function fetchWalletGumballs() {
           { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
         ],
       }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V5 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+        ],
+      }),
     ]);
     const accounts = [
       ...v1Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 1 })),
       ...v2Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 2 })),
       ...v3Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 3 })),
       ...v4Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 4 })),
+      ...v5Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 5 })),
     ];
     collection = [];
     document.getElementById("collGrid").innerHTML = "";

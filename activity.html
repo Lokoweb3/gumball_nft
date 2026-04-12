@@ -131,6 +131,7 @@ header{
     <a href="activity.html" class="nav-link active">[ ACTIVITY ]</a>
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
     <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
     <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
   </div>
@@ -142,6 +143,7 @@ header{
   <a href="activity.html" class="active">ACTIVITY</a>
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
+  <a href="faucet.html">FAUCET</a>
   <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
 </div>
 
@@ -191,18 +193,19 @@ const RARITY_SCORES = [1, 4, 10, 40, 100];
 
 const GD_V3 = 8+32+32+8+1+1+1+1+8+1;
 const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;
+const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32;
 const LISTING_SIZE = 8+32+32+8+8+1;
 
 // Pricing (mirrors on-chain)
 const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
 function getMintPrice(totalMinted) {
-  if (totalMinted >= 10000) return 1.0;
+  if (totalMinted >= 10000) return 0.04;
   const scaled = totalMinted * 10;
   const bucket = Math.floor(scaled / 10000);
   const remainder = scaled % 10000;
-  if (bucket >= 10) return 1.0;
+  if (bucket >= 10) return 0.04;
   const lo = PRICE_TABLE[bucket], hi = PRICE_TABLE[bucket + 1];
-  return 0.25 * (lo + (hi - lo) * remainder / 10000) / 10000;
+  return 0.01 * (lo + (hi - lo) * remainder / 10000) / 10000;
 }
 
 let walletPubkey = null;

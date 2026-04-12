@@ -18,3 +18,7 @@ logs/
 node_modules/
 .env
 .wallet-temp.json
+faucet-wallet.json
+.claude/
+main
+scripts/mint-legendary*.cjs

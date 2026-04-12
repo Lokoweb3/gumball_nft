@@ -75,13 +75,13 @@ Burn instructions now load: 85 bytes x 5 accounts = 425 bytes. Well within heap 
 
 ---
 
-### Now Safe: Proof Fields (v4) — DEPLOYED
+### Now Safe: Proof Fields (v4) + Oracle Secret (v5) — DEPLOYED
 
 With `GumballData` lean at 85 bytes, we safely added the proof fields that previously
 caused the heap overflow:
 
 ```
-GumballData v4 (current)
+GumballData v5 (current)
 ────────────────────────────────────
 owner:           Pubkey    (32)
 machine:         Pubkey    (32)
@@ -94,19 +94,23 @@ minted_at:       u64       (8)
 bump:            u8        (1)
 commitment_hash: [u8; 32]  (32)  <- sha256(secret || oracle_pubkey)
 user_seed:       [u8; 32]  (32)  <- user-provided entropy
+oracle_secret:   [u8; 32]  (32)  <- revealed oracle secret (v5)
 ────────────────────────────────────
-TOTAL: 149 bytes (+ 8 disc = 157)
+TOTAL: 181 bytes (+ 8 disc = 189)
 ```
 
-Burn instructions with v4: 157 bytes x 5 = 785 bytes — still well within heap limits.
+Burn instructions with v5: 189 bytes x 5 = 945 bytes — still well within heap limits.
 
-`commitment_hash` and `user_seed` are set to `[0; 32]` for upgrade-created gumballs
-(no commit-reveal for burns). `verify.html` detects this and shows appropriate messaging.
+`commitment_hash`, `user_seed`, and `oracle_secret` are set to `[0; 32]` for
+upgrade-created gumballs (no commit-reveal for burns). `verify.html` detects this
+and shows appropriate messaging.
 
-This enables full on-chain verification:
+This enables fully trustless on-chain verification:
   sha256(oracle_secret || oracle_pubkey) == commitment_hash (stored on gumball)
 
 Anyone can independently verify any gumball's randomness without trusting the oracle.
+The oracle secret is stored on-chain after reveal — `verify.html` auto-verifies v5
+gumballs with no user input needed.
 
 ---
 
@@ -115,10 +119,10 @@ Anyone can independently verify any gumball's randomness without trusting the or
 ### Formula
 
 ```
-price = 0.25 * 4^(total_minted / 10,000) XNT
+price = BASE_PRICE * 4^(total_minted / 10,000) XNT
 ```
 
-Starts at 0.25 XNT, ends at 1.00 XNT. The multiplier is 4x over the full supply.
+Testnet: starts at 0.01 XNT, ends at 0.04 XNT. The multiplier is 4x over the full supply.
 
 ### On-chain Implementation
 
@@ -136,7 +140,7 @@ const TABLE: [u64; 11] = [
 Steps:
 1. Map `total_minted` (0–10,000) to a bucket index (0–9)
 2. Linearly interpolate between `TABLE[bucket]` and `TABLE[bucket+1]`
-3. Multiply by `BASE_PRICE` (250,000,000 lamports) and divide by 10,000
+3. Multiply by `BASE_PRICE` (10,000,000 lamports on testnet) and divide by 10,000
 
 For batch mints, the contract sums each mint's individual price:
 ```rust
@@ -154,12 +158,13 @@ price matches the on-chain calculation to the lamport.
 
 | Sellout % | Revenue |
 |---|---|
-| 25% (2,500) | ~710 XNT |
-| 50% (5,000) | ~1,780 XNT |
-| 75% (7,500) | ~2,810 XNT |
-| 100% (10,000) | ~4,080 XNT |
-
-Flat 0.25 XNT comparison: 2,500 XNT at 100% sellout. The curve yields 1.6x more revenue.
+Testnet (0.01 base):
+| Sellout % | Revenue |
+|---|---|
+| 25% (2,500) | ~28 XNT |
+| 50% (5,000) | ~71 XNT |
+| 75% (7,500) | ~112 XNT |
+| 100% (10,000) | ~163 XNT |
 
 ---
 
@@ -189,10 +194,11 @@ testnet and mainnet. The heap issue is fully resolved.
 | `GumballData` v1 | 1,129 bytes | Original (inline SVG, MAX_SVG_LEN=1024) |
 | `GumballData` v2 | 873 bytes | Reduced SVG (MAX_SVG_LEN=768) |
 | `GumballData` v3 | 93 bytes | Legacy — SVG moved to separate PDA, no proof fields |
+| `GumballData` v4 | 157 bytes | Legacy — v3 + commitment_hash + user_seed |
 | `GumballSvg` | 788 bytes | Current — holds SVG, never loaded by burns |
-| `GumballData` v4 | 157 bytes | Current — v3 + commitment_hash + user_seed |
+| `GumballData` v5 | 189 bytes | Current — v4 + oracle_secret for trustless verification |
 
-All four GumballData versions (v1, v2, v3, v4) coexist on testnet. The frontend handles
+All five GumballData versions (v1, v2, v3, v4, v5) coexist on testnet. The frontend handles
 all versions via multiple `dataSize` filters in `getProgramAccounts`.
 
 ---
@@ -203,12 +209,13 @@ all versions via multiple `dataSize` filters in `getProgramAccounts`.
 const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1129 - original
 const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 873  - reduced SVG
 const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93   - legacy (SVG separate, no proof)
-const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157  - current (with proof fields)
+const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157  - legacy (with proof fields)
+const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 - current (with oracle_secret)
 ```
 
 SVG loading per version:
 - **v1/v2:** SVG inline in GumballData at offset `8+32+32+8+1+1+1+1+8+1`
-- **v3/v4:** SVG fetched lazily from `GumballSvg` PDA when user opens modal
+- **v3/v4/v5:** SVG fetched lazily from `GumballSvg` PDA when user opens modal
 
 ---
 
@@ -242,7 +249,7 @@ SVG loading per version:
 - [x] Final audit (round 5): CLEAN — no remaining issues
 
 ### Economic
-- [x] Mint pricing — exponential curve 0.25 → 1.00 XNT (deployed)
+- [x] Mint pricing — exponential curve 0.01 → 0.04 XNT testnet (deployed)
 - [ ] Decide max supply (currently 10,000)
 - [ ] Decide burn ratios (currently 5/3/2/2)
 - [x] Upgrade fee = current mint price (deployed)
@@ -262,7 +269,9 @@ SVG loading per version:
 ## Mainnet Deployment Checklist
 
 - [x] Add proof fields to GumballData (v4 upgrade — deployed)
-- [x] Dynamic exponential mint pricing (0.25 → 1.00 XNT — deployed)
+- [x] Add oracle_secret to GumballData (v5 upgrade — trustless verification)
+- [x] Dynamic exponential mint pricing (0.01 → 0.04 XNT testnet — deployed)
+- [x] Testnet faucet (0.1 XNT per wallet per 24h, separate faucet wallet)
 - [x] Security audit rounds 1-3 — all findings fixed, final audit clean
 - [x] Oracle monitoring via Telegram
 - [x] Oracle secret encryption

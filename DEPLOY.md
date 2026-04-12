@@ -8,6 +8,8 @@
 - [ ] All code pushed to GitHub (`git push origin main`)
 - [ ] Oracle wallet keypair file backed up securely (NOT in GitHub)
 - [ ] Know your oracle wallet public key: `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy`
+- [ ] Faucet wallet keypair file backed up securely (NOT in GitHub)
+- [ ] Know your faucet wallet public key: `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ`
 
 ---
 
@@ -50,6 +52,9 @@ scp setup.sh root@YOUR_SERVER_IP:~/
 
 # Copy oracle wallet (NEVER commit this to GitHub)
 scp ~/.config/solana/id.json root@YOUR_SERVER_IP:/tmp/oracle-wallet.json
+
+# Copy faucet wallet (NEVER commit this to GitHub)
+scp faucet-wallet.json root@YOUR_SERVER_IP:/tmp/faucet-wallet.json
 ```
 
 ---
@@ -71,11 +76,13 @@ This installs: Node.js, Nginx, PM2, Certbot (SSL), UFW firewall, clones repo.
 # On the server
 mkdir -p /home/gumball
 mv /tmp/oracle-wallet.json /home/gumball/oracle-wallet.json
-chmod 600 /home/gumball/oracle-wallet.json
-chown gumball:gumball /home/gumball/oracle-wallet.json
+mv /tmp/faucet-wallet.json /home/gumball/faucet-wallet.json
+chmod 600 /home/gumball/oracle-wallet.json /home/gumball/faucet-wallet.json
+chown gumball:gumball /home/gumball/oracle-wallet.json /home/gumball/faucet-wallet.json
 
-# Confirm it's readable
+# Confirm they're readable
 cat /home/gumball/oracle-wallet.json | head -c 20
+cat /home/gumball/faucet-wallet.json | head -c 20
 ```
 
 ---
@@ -88,6 +95,7 @@ Instead of hardcoding paths in `ecosystem.config.cjs`, create a `.env` file:
 cat > /var/www/gumball/.env << 'EOF'
 ORACLE_WALLET=/home/gumball/oracle-wallet.json
 SECRETS_FILE=/var/www/gumball/oracle-secrets.json
+FAUCET_WALLET=/home/gumball/faucet-wallet.json
 EOF
 
 chmod 600 /var/www/gumball/.env
@@ -162,7 +170,9 @@ dpkg-reconfigure -plow unattended-upgrades
 | `ecosystem.config.cjs` | ✅ | ✅ auto via git | PM2 config |
 | `README.md` | ✅ | ✅ auto via git | |
 | `NOTES.md` | ✅ | ✅ auto via git | |
+| `faucet.html` | ✅ | ✅ auto via git | Testnet faucet page |
 | `oracle-wallet.json` | ❌ NEVER | ✅ copy manually | Private key! |
+| `faucet-wallet.json` | ❌ NEVER | ✅ copy manually | Faucet private key! |
 | `oracle-secrets.json` | ❌ NEVER | ✅ generated at runtime | Auto-created |
 | `.env` | ❌ NEVER | ✅ create manually | Env vars |
 | `localhost.pem` | ❌ NEVER | ❌ not needed | Local dev only |
@@ -177,12 +187,14 @@ dpkg-reconfigure -plow unattended-upgrades
 ```
 oracle-secrets.json
 oracle-wallet.json
+faucet-wallet.json
 *.pem
 .env
 logs/
 node_modules/
 target/
 .anchor/
+.claude/
 ```
 
 ---

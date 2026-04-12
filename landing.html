@@ -272,7 +272,7 @@ body{
   <div class="hero-stats">
     <div class="hero-stat"><span class="hero-stat-val" id="heroMinted">--</span><span class="hero-stat-lbl">MINTED</span></div>
     <div class="hero-stat"><span class="hero-stat-val" id="heroRemaining">10,000</span><span class="hero-stat-lbl">REMAINING</span></div>
-    <div class="hero-stat"><span class="hero-stat-val" id="heroPrice">0.25</span><span class="hero-stat-lbl">CURRENT PRICE (XNT)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val" id="heroPrice">0.01</span><span class="hero-stat-lbl">CURRENT PRICE (XNT)</span></div>
     <div class="hero-stat"><span class="hero-stat-val">5</span><span class="hero-stat-lbl">RARITY TIERS</span></div>
     <div class="hero-stat"><span class="hero-stat-val">100%</span><span class="hero-stat-lbl">ON-CHAIN</span></div>
   </div>
@@ -309,7 +309,7 @@ body{
     <div class="feature-card">
       <div class="feature-icon">📈</div>
       <div class="feature-title">DYNAMIC PRICING</div>
-      <div class="feature-desc">Early minters pay less. Price increases exponentially as supply fills up — from 0.25 XNT to 1.00 XNT.</div>
+      <div class="feature-desc">Early minters pay less. Price increases exponentially as supply fills up — from 0.01 XNT to 0.04 XNT.</div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🏪</div>
@@ -431,33 +431,33 @@ body{
 <section class="section reveal" id="pricing">
   <div class="section-tag">// PRICING</div>
   <h2>DYNAMIC MINT PRICING</h2>
-  <p>Early minters are rewarded. Price follows an exponential curve from 0.25 to 1.00 XNT as supply fills up.</p>
+  <p>Early minters are rewarded. Price follows an exponential curve from 0.01 to 0.04 XNT as supply fills up.</p>
 
   <div class="pricing-curve">
     <div class="price-bar-wrap">
       <span class="price-label">Mint #1</span>
       <div class="price-bar"><div class="price-bar-fill" style="width:25%;"></div></div>
-      <span class="price-val">0.25 XNT</span>
+      <span class="price-val">0.01 XNT</span>
     </div>
     <div class="price-bar-wrap">
       <span class="price-label">#2,500</span>
       <div class="price-bar"><div class="price-bar-fill" style="width:35%;"></div></div>
-      <span class="price-val">0.35 XNT</span>
+      <span class="price-val">0.014 XNT</span>
     </div>
     <div class="price-bar-wrap">
       <span class="price-label">#5,000</span>
       <div class="price-bar"><div class="price-bar-fill" style="width:50%;"></div></div>
-      <span class="price-val">0.50 XNT</span>
+      <span class="price-val">0.02 XNT</span>
     </div>
     <div class="price-bar-wrap">
       <span class="price-label">#7,500</span>
       <div class="price-bar"><div class="price-bar-fill" style="width:71%;"></div></div>
-      <span class="price-val">0.71 XNT</span>
+      <span class="price-val">0.028 XNT</span>
     </div>
     <div class="price-bar-wrap">
       <span class="price-label">#10,000</span>
       <div class="price-bar"><div class="price-bar-fill" style="width:100%;background:var(--gold);"></div></div>
-      <span class="price-val">1.00 XNT</span>
+      <span class="price-val">0.04 XNT</span>
     </div>
   </div>
   <p style="margin-top:16px;text-align:center;font-size:0.45rem;color:var(--gold);">Batch mint up to 10 gumballs in a single transaction</p>
@@ -653,6 +653,7 @@ body{
     <a href="activity.html">ACTIVITY</a>
     <a href="leaderboard.html">LEADERBOARD</a>
     <a href="verify.html">VERIFY</a>
+    <a href="faucet.html">FAUCET</a>
     <a href="https://github.com/Lokoweb3/gumball_nft" target="_blank">GITHUB</a>
   </div>
   <div class="footer-copy">Gumball Machine NFT. 100% on-chain. Built on X1.</div>
@@ -668,10 +669,10 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 // Live mint counter
 const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
 function getMintPrice(t) {
-  if (t >= 10000) return 1.0;
+  if (t >= 10000) return 0.04;
   const s = t * 10, b = Math.floor(s/10000), r = s % 10000;
-  if (b >= 10) return 1.0;
-  return 0.25 * (PRICE_TABLE[b] + (PRICE_TABLE[b+1]-PRICE_TABLE[b]) * r / 10000) / 10000;
+  if (b >= 10) return 0.04;
+  return 0.01 * (PRICE_TABLE[b] + (PRICE_TABLE[b+1]-PRICE_TABLE[b]) * r / 10000) / 10000;
 }
 async function updateHeroStats() {
   try {
