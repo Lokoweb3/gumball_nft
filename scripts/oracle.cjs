@@ -431,12 +431,28 @@ async function main() {
         }
       }
 
-      // Step 2: Look for pending mint requests for our commitment
-      const pending = await findPendingRequests(connection, activeCommit.commitPda);
+      // Step 2: Look for pending mint requests across ALL known commitments
+      // Users may submit requests against any unused commitment, not just the latest one
+      const allPending = await findAllPendingRequests(connection);
+      const pending = allPending.filter(({ request }) => {
+        const commitKey = request.commitment.toBase58();
+        return knownSecrets[commitKey] !== undefined;
+      });
 
+      let mintedAny = false;
       for (const { pubkey, request } of pending) {
         const key = pubkey.toBase58();
         if (fulfilled.has(key)) continue;
+
+        const commitKey = request.commitment.toBase58();
+        const secret = knownSecrets[commitKey];
+        if (!secret) continue;
+
+        // Get commit slot from on-chain data
+        const commitInfo = await connection.getAccountInfo(request.commitment);
+        if (!commitInfo) { console.log(`  ⚠️  Commit PDA not found: ${commitKey.slice(0,8)}`); continue; }
+        const cdv = new DataView(commitInfo.data.buffer, commitInfo.data.byteOffset);
+        const commitSlot = Number(cdv.getBigUint64(8 + 32 + 32, true));
 
         try {
           let currentRequest = request;
@@ -448,9 +464,9 @@ async function main() {
               connection,
               pubkey,
               currentRequest,
-              activeCommit.commitPda,
-              activeCommit.slot,
-              activeCommit.secret,
+              request.commitment,
+              commitSlot,
+              secret,
             );
             mintCount++;
 
@@ -464,6 +480,7 @@ async function main() {
 
           console.log(`  ✅ All ${mintCount} NFT(s) minted for ${key.slice(0,8)}`);
           fulfilled.add(key);
+          mintedAny = true;
 
           // Generate new commitment for next user
           console.log("\nGenerating new commitment for next mint...");
@@ -480,7 +497,7 @@ async function main() {
         }
       }
 
-      if (pending.length === 0) {
+      if (!mintedAny) {
         process.stdout.write(".");
       }
 
