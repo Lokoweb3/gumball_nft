@@ -1258,18 +1258,22 @@ async function mintGumball() {
     tx.recentBlockhash = blockhash;
 
     // ── Snapshot BEFORE sending request ──────────────────────────
-    // Poll both v3 (93 bytes) and v4 (157 bytes) — contract may be either version
-    const GD_POLL_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93 bytes
-    const GD_POLL_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157 bytes
-    const [beforeV3, beforeV4] = await Promise.all([
+    // Poll v3 (93), v4 (157), and v5 (189) — contract may be any version
+    const GD_POLL_V3 = 8+32+32+8+1+1+1+1+8+1;           // 93 bytes
+    const GD_POLL_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;     // 157 bytes
+    const GD_POLL_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32;  // 189 bytes
+    const [beforeV3, beforeV4, beforeV5] = await Promise.all([
       connection.getProgramAccounts(PROGRAM_ID, {
         filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
       }),
       connection.getProgramAccounts(PROGRAM_ID, {
         filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
       }),
+      connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+      }),
     ]);
-    const beforeKeys = new Set([...beforeV3, ...beforeV4].map(a => a.pubkey.toBase58()));
+    const beforeKeys = new Set([...beforeV3, ...beforeV4, ...beforeV5].map(a => a.pubkey.toBase58()));
 
     await animCoin();
     const signed = await provider.signTransaction(tx);
@@ -1291,15 +1295,18 @@ async function mintGumball() {
     while (mintedCount < totalToMint && Date.now() - start < timeoutMs) {
       await new Promise(r => setTimeout(r, 2000));
 
-      const [afterV3, afterV4] = await Promise.all([
+      const [afterV3, afterV4, afterV5] = await Promise.all([
         connection.getProgramAccounts(PROGRAM_ID, {
           filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
         }),
         connection.getProgramAccounts(PROGRAM_ID, {
           filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
         }),
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+        }),
       ]);
-      const after = [...afterV3, ...afterV4];
+      const after = [...afterV3, ...afterV4, ...afterV5];
 
       const newAccounts = after.filter(a => !beforeKeys.has(a.pubkey.toBase58()));
 
