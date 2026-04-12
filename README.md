@@ -10,8 +10,8 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 
 | | Address |
 |---|---|
-| **Program ID** | `2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4` |
-| **Machine PDA** | `BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX` |
+| **Program ID** | `fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F` |
+| **Machine PDA** | `8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin` |
 | **Network** | X1 Testnet (`https://rpc.testnet.x1.xyz`) |
 | **Explorer** | `https://explorer.testnet.x1.xyz` |
 | **Mint Price** | 0.01 – 0.04 XNT testnet (exponential curve) |

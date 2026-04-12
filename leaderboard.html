@@ -356,8 +356,8 @@ header {
 <script>
 const { Connection, PublicKey } = solanaWeb3;
 const RPC         = "https://rpc.testnet.x1.xyz";
-const PROGRAM_ID  = new PublicKey("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
-const MACHINE_PDA = new PublicKey("BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX");
+const PROGRAM_ID  = new PublicKey("fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F");
+const MACHINE_PDA = new PublicKey("8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin");
 const connection  = new Connection(RPC, "confirmed");
 
 const RARITY      = ["Common","Uncommon","Rare","Epic","Legendary"];
@@ -720,8 +720,8 @@ async function viewMetadata(g) {
       { trait_type: "Special", value: special },
     ],
     on_chain: {
-      program:     "2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4",
-      machine:     "BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX",
+      program:     "fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F",
+      machine:     "8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin",
       gumball_pda: g.pubkey,
       owner:       g.owner,
       minted_at:   mintedAt,
@@ -732,7 +732,7 @@ async function viewMetadata(g) {
       explorer: {
         gumball_account: "https://explorer.testnet.x1.xyz/account/" + g.pubkey,
         owner_account:   "https://explorer.testnet.x1.xyz/account/" + g.owner,
-        program:         "https://explorer.testnet.x1.xyz/account/2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4",
+        program:         "https://explorer.testnet.x1.xyz/account/fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F",
       },
     },
     image_source: "on-chain SVG",

@@ -678,7 +678,7 @@ async function updateHeroStats() {
   try {
     const { Connection, PublicKey } = solanaWeb3;
     const conn = new Connection('https://rpc.testnet.x1.xyz', 'confirmed');
-    const pda = new PublicKey('BJkm8LoVYwB34e4QWrxhg6tMYRcQdhKK9swXeUYtc5KX');
+    const pda = new PublicKey('8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin');
     const info = await conn.getAccountInfo(pda);
     if (info) {
       const dv = new DataView(info.data.buffer, info.data.byteOffset);

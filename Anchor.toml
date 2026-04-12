@@ -5,7 +5,7 @@ anchor_version = "0.31.0"
 seeds = true
 
 [programs.testnet]
-gumball_nft = "2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4"
+gumball_nft = "fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F"
 
 [registry]
 url = "https://api.apr.dev"

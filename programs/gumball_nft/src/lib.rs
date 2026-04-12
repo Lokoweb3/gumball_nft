@@ -6,7 +6,7 @@ use anchor_spl::{
     token::{burn, mint_to, Burn, Mint, MintTo, Token, TokenAccount},
 };
 
-declare_id!("2V4iVvbNFXAa44frz12YUZJgJiQhcYTxbok9CNUUruC4");
+declare_id!("fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
