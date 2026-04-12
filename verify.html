@@ -323,44 +323,13 @@ async function verify() {
     if (/^\d+$/.test(input)) {
       // Serial number — scan all gumball account versions to find matching serial
       const serial = parseInt(input);
-      const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1121
-      const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
-      const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
-      const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
-      const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189
-      const [v1, v2, v3, v4, v5] = await Promise.all([
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            { dataSize: GD_V1 },
-            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
-          ]
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            { dataSize: GD_V2 },
-            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
-          ]
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            { dataSize: GD_V3 },
-            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
-          ]
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            { dataSize: GD_V4 },
-            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
-          ]
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [
-            { dataSize: GD_V5 },
-            { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
-          ]
-        }),
-      ]);
-      const all = [...v1, ...v2, ...v3, ...v4, ...v5];
+      const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 bytes
+      const all = await connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          { dataSize: GD_V5 },
+          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }
+        ]
+      });
       const match = all.find(({ account }) => {
         const dv = new DataView(account.data.buffer, account.data.byteOffset);
         return Number(dv.getBigUint64(8+32+32, true)) === serial;
@@ -376,7 +345,7 @@ async function verify() {
       accountData = info.data;
     }
 
-    // Parse GumballData (works for v1-v4, trait offsets are the same)
+    // Parse GumballData v5
     const dv = new DataView(accountData.buffer, accountData.byteOffset);
     const owner   = new PublicKey(accountData.slice(8, 40)).toBase58();
     const serial  = Number(dv.getBigUint64(8+32+32, true));
@@ -386,47 +355,29 @@ async function verify() {
     const special = accountData[8+32+32+8+3];
     const mintedAt = Number(dv.getBigUint64(8+32+32+8+4, true));
 
-    // v4+ proof fields (offset 93 = 8+32+32+8+1+1+1+1+8+1)
+    // Proof fields (offset 93 = 8+32+32+8+1+1+1+1+8+1)
     const PROOF_OFFSET = 8+32+32+8+1+1+1+1+8+1;
-    const isV4Plus = accountData.length >= 157; // 8 disc + 149 data (v4 or v5)
-    const isV5 = accountData.length >= 189; // 8 disc + 181 data (v5)
-    let commitmentHash = null;
-    let userSeed = null;
+    let commitmentHash = accountData.slice(PROOF_OFFSET, PROOF_OFFSET+32);
+    let userSeed = accountData.slice(PROOF_OFFSET+32, PROOF_OFFSET+64);
     let oracleSecret = null;
-    if (isV4Plus) {
-      commitmentHash = accountData.slice(PROOF_OFFSET, PROOF_OFFSET+32);
-      userSeed = accountData.slice(PROOF_OFFSET+32, PROOF_OFFSET+64);
-    }
-    if (isV5) {
-      oracleSecret = accountData.slice(PROOF_OFFSET+64, PROOF_OFFSET+96);
-    }
-    const hasProofFields = isV4Plus && commitmentHash && !commitmentHash.every(b => b === 0);
-    const hasOracleSecret = isV5 && oracleSecret && !oracleSecret.every(b => b === 0);
+    oracleSecret = accountData.slice(PROOF_OFFSET+64, PROOF_OFFSET+96);
+    const hasProofFields = commitmentHash && !commitmentHash.every(b => b === 0);
+    const hasOracleSecret = oracleSecret && !oracleSecret.every(b => b === 0);
 
-    // For v3/v4/v5: SVG is in separate PDA. For v1/v2: SVG is inline.
+    // SVG is in separate GumballSvg PDA
     let svgStr = null;
-    if (accountData.length > 189) {
-      // v1 or v2 — inline SVG after bump
-      const svgOff = PROOF_OFFSET;
-      try {
-        const svgLen = dv.getUint32(svgOff, true);
-        if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(accountData.slice(svgOff+4, svgOff+4+svgLen));
-      } catch(e) {}
-    } else {
-      // v3/v4/v5 — fetch SVG from separate PDA
-      try {
-        const nftMintKey = await findNftMintFromGumball(gumballPda, owner);
-        if (nftMintKey) {
-          const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), nftMintKey.toBuffer()], PROGRAM_ID);
-          const svgInfo = await connection.getAccountInfo(svgPda);
-          if (svgInfo) {
-            const svgDv = new DataView(svgInfo.data.buffer, svgInfo.data.byteOffset);
-            const svgLen = svgDv.getUint32(8, true);
-            if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
-          }
+    try {
+      const nftMintKey = await findNftMintFromGumball(gumballPda, owner);
+      if (nftMintKey) {
+        const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), nftMintKey.toBuffer()], PROGRAM_ID);
+        const svgInfo = await connection.getAccountInfo(svgPda);
+        if (svgInfo) {
+          const svgDv = new DataView(svgInfo.data.buffer, svgInfo.data.byteOffset);
+          const svgLen = svgDv.getUint32(8, true);
+          if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
         }
-      } catch(e) { console.error('SVG fetch error:', e); }
-    }
+      }
+    } catch(e) { console.error('SVG fetch error:', e); }
 
     const flavorName  = FLAVORS[flavor]  || "Mystery";
     const colorName   = COLORS[color]    || "Berry Blue";

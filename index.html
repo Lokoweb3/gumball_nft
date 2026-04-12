@@ -974,61 +974,15 @@ async function fetchWalletGumballs() {
       }
     } catch(e) { console.error("Token account lookup failed:", e); }
 
-    // Fetch all 4 GumballData formats:
-    // GD_V1: 1121 bytes (original, svg inline, MAX_SVG_LEN=1024)
-    // GD_V2: 865 bytes  (svg inline, MAX_SVG_LEN=768)
-    // GD_V3: 93 bytes   (svg in separate PDA, no proof fields)
-    // GD_V4: 157 bytes  (+commitment_hash +user_seed for verification)
-    // GD_V5: 189 bytes  (current, +oracle_secret for trustless auto-verification)
-    const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1121
-    const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865
-    const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93
-    const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157
-    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189
-    const [v1Accounts, v2Accounts, v3Accounts, v4Accounts, v5Accounts] = await Promise.all([
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          { dataSize: GD_V1 },
-          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        ],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          { dataSize: GD_V2 },
-          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        ],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          { dataSize: GD_V3 },
-          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        ],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          { dataSize: GD_V4 },
-          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        ],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          { dataSize: GD_V5 },
-          { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-          { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-        ],
-      }),
-    ]);
-    const accounts = [
-      ...v1Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 1 })),
-      ...v2Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 2 })),
-      ...v3Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 3 })),
-      ...v4Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 4 })),
-      ...v5Accounts.map(a => ({ pubkey: a.pubkey, account: a.account, version: 5 })),
-    ];
+    // Fetch GumballData accounts (v5 only — fresh deploy, no legacy accounts)
+    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 bytes
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { dataSize: GD_V5 },
+        { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+      ],
+    });
     collection = [];
     document.getElementById("collGrid").innerHTML = "";
     if (accounts.length === 0) {
@@ -1037,7 +991,7 @@ async function fetchWalletGumballs() {
       document.getElementById("collArea").style.display = "none";
       return;
     }
-    const processAccount = async ({ pubkey, account, version }) => {
+    const processAccount = async ({ pubkey, account }) => {
       const data = account.data;
       const dv = new DataView(data.buffer, data.byteOffset);
       const serial = Number(dv.getBigUint64(8+32+32, true));
@@ -1045,22 +999,6 @@ async function fetchWalletGumballs() {
       const color  = data[8+32+32+8+1];
       const rarity = data[8+32+32+8+2];
       const special= data[8+32+32+8+3];
-
-      // Parse SVG based on version
-      let svgStr = null;
-      if (version === 3) {
-        // V3: SVG in separate GumballSvg PDA — fetch lazily (will be loaded on card click)
-        svgStr = null; // loaded on demand
-      } else {
-        // V1/V2: SVG inline in GumballData
-        try {
-          const svgOff = 8+32+32+8+1+1+1+1+8+1;
-          if (data.length > svgOff + 4) {
-            const svgLen = dv.getUint32(svgOff, true);
-            if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(data.slice(svgOff+4, svgOff+4+svgLen));
-          }
-        } catch(e) {}
-      }
 
       const colorName = COLORS[color]  || "Berry Blue";
       const ballColor = BALL_COLORS[colorName] || "#2266ee";
@@ -1070,10 +1008,10 @@ async function fetchWalletGumballs() {
 
       addToCollection({
         serial, flavorName: FLAVORS[flavor]||"Mystery", colorName,
-        rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: pubkey, svgStr,
+        rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: pubkey,
+        svgStr: null, // SVG loaded on demand from separate GumballSvg PDA
         mintPubkey: mintInfo.mintPubkey || null,
         ataPubkey:  mintInfo.ataPubkey  || null,
-        version,
       });
     };
 
@@ -1258,22 +1196,11 @@ async function mintGumball() {
     tx.recentBlockhash = blockhash;
 
     // ── Snapshot BEFORE sending request ──────────────────────────
-    // Poll v3 (93), v4 (157), and v5 (189) — contract may be any version
-    const GD_POLL_V3 = 8+32+32+8+1+1+1+1+8+1;           // 93 bytes
-    const GD_POLL_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;     // 157 bytes
     const GD_POLL_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32;  // 189 bytes
-    const [beforeV3, beforeV4, beforeV5] = await Promise.all([
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-      }),
-    ]);
-    const beforeKeys = new Set([...beforeV3, ...beforeV4, ...beforeV5].map(a => a.pubkey.toBase58()));
+    const beforeAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+    });
+    const beforeKeys = new Set(beforeAccounts.map(a => a.pubkey.toBase58()));
 
     await animCoin();
     const signed = await provider.signTransaction(tx);
@@ -1295,18 +1222,9 @@ async function mintGumball() {
     while (mintedCount < totalToMint && Date.now() - start < timeoutMs) {
       await new Promise(r => setTimeout(r, 2000));
 
-      const [afterV3, afterV4, afterV5] = await Promise.all([
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [{ dataSize: GD_POLL_V3 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [{ dataSize: GD_POLL_V4 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-        }),
-        connection.getProgramAccounts(PROGRAM_ID, {
-          filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-        }),
-      ]);
-      const after = [...afterV3, ...afterV4, ...afterV5];
+      const after = await connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
+      });
 
       const newAccounts = after.filter(a => !beforeKeys.has(a.pubkey.toBase58()));
 
@@ -1624,8 +1542,8 @@ function openSvgModal(g) {
     svgDiv.innerHTML = g.svgStr;
     const svg = svgDiv.querySelector("svg");
     if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
-  } else if ((g.version === 3 || g.version === 4 || g.version === 5) && g.mintPubkey) {
-    // V3: fetch SVG from separate PDA
+  } else if (g.mintPubkey) {
+    // Fetch SVG from separate GumballSvg PDA
     svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">LOADING SVG...</span></div>`;
     fetchGumballSvg(g.mintPubkey).then(svgStr => {
       if (svgStr) {

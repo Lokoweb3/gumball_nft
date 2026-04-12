@@ -399,26 +399,11 @@ async function loadAll() {
     document.getElementById("sRemaining").textContent   = Math.max(0, maxSupply - totalMinted).toLocaleString();
     document.getElementById("sBurned").textContent      = totalBurned.toLocaleString();
 
-    // Load GumballData accounts across all versions
-    const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 865 bytes (v2, svg inline)
-    const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93 bytes  (v3, svg separate)
-    const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157 bytes (v4, +proof fields)
-    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 bytes (v5, +oracle_secret)
-    const [v2Accts, v3Accts, v4Accts, v5Accts] = await Promise.all([
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_V2 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_V3 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_V4 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
-      }),
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_V5 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
-      }),
-    ]);
-    const accounts = [...v2Accts, ...v3Accts, ...v4Accts, ...v5Accts];
+    // Load GumballData accounts (v5 only — fresh deploy, no legacy accounts)
+    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 bytes
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: GD_V5 }, { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+    });
 
     const gumballs = accounts
       .map(({ pubkey, account }) => {
