@@ -245,17 +245,33 @@ function toHex(bytes) {
 }
 
 // Find the NFT mint key from a gumball PDA by scanning transactions
-async function findNftMintFromGumball(gumballPda) {
-  // The gumball PDA seeds are [b"gumball", nft_mint.key()]
-  // We can reverse this by checking all mints — but it's cheaper to
-  // look at the creation transaction's account keys
+async function findNftMintFromGumball(gumballPda, ownerPubkey) {
+  // Method 1: scan owner's token accounts for the mint whose gumball PDA matches
+  try {
+    const owner = ownerPubkey || null;
+    if (owner) {
+      const tokenAccounts = await connection.getTokenAccountsByOwner(
+        new PublicKey(owner),
+        { programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }
+      );
+      for (const { account } of tokenAccounts.value) {
+        const mintKey = new PublicKey(account.data.slice(0, 32));
+        const [pda] = PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode("gumball"), mintKey.toBuffer()],
+          PROGRAM_ID
+        );
+        if (pda.equals(gumballPda)) return mintKey;
+      }
+    }
+  } catch(e) { console.error('findNftMint via owner error:', e); }
+
+  // Method 2: fallback to transaction parsing (unreliable on X1)
   try {
     const sigs = await connection.getSignaturesForAddress(gumballPda, { limit: 10 });
     if (sigs.length === 0) return null;
     const tx = await connection.getTransaction(sigs[sigs.length - 1].signature);
     if (!tx) return null;
     const keys = tx.transaction.message.accountKeys;
-    // The nft_mint is the account whose PDA matches gumballPda
     for (const key of keys) {
       const [pda] = PublicKey.findProgramAddressSync(
         [new TextEncoder().encode("gumball"), key.toBuffer()],
@@ -263,7 +279,7 @@ async function findNftMintFromGumball(gumballPda) {
       );
       if (pda.equals(gumballPda)) return key;
     }
-  } catch(e) { console.error('findNftMint error:', e); }
+  } catch(e) { console.error('findNftMint via tx error:', e); }
   return null;
 }
 
@@ -397,9 +413,9 @@ async function verify() {
         if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(accountData.slice(svgOff+4, svgOff+4+svgLen));
       } catch(e) {}
     } else {
-      // v3/v4 — fetch SVG from separate PDA
+      // v3/v4/v5 — fetch SVG from separate PDA
       try {
-        const nftMintKey = await findNftMintFromGumball(gumballPda);
+        const nftMintKey = await findNftMintFromGumball(gumballPda, owner);
         if (nftMintKey) {
           const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), nftMintKey.toBuffer()], PROGRAM_ID);
           const svgInfo = await connection.getAccountInfo(svgPda);
