@@ -976,7 +976,7 @@ pub mod gumball_nft {
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Exponential mint price: 0.25 * 4^(total_minted / 10000) XNT
+/// Exponential mint price: 0.01 * 4^(total_minted / 10000) XNT (testnet)
 /// Uses a 11-point lookup table of 4^(x/10) scaled by 10000, with linear
 /// interpolation between points. No floating point needed.
 /// Returns price in lamports.

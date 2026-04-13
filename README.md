@@ -90,6 +90,7 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | `set_mint_price` | Admin | Update base mint price |
 | `withdraw` | Admin | Withdraw treasury funds |
 | `migrate_machine` | Admin | Migrate machine account to new struct size |
+| `reset_counts` | Admin | Reset total_minted and total_burned to zero |
 | `submit_commitment` | Oracle | Submit randomness commitment pre-mint |
 | `request_mint` | User | Pay and lock 1-10 mints in one transaction |
 | `reveal_and_mint` | Oracle | Reveal secret and mint NFT (loops for multi-mint) |

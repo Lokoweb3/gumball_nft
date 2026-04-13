@@ -36,6 +36,7 @@ A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users
 | Program ID | `fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F` |
 | Machine PDA | `8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin` |
 | Oracle wallet | `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy` |
+| Faucet wallet | `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ` |
 
 ---
 
@@ -56,21 +57,17 @@ With SVG separate (93 bytes each), 5 accounts = 465 bytes — no problem.
 
 The SVG is still 100% on-chain. It's just in a sibling PDA that burn instructions never load.
 
-### 2. GumballData versions coexist
+### 2. GumballData is v5 only
 
-Five formats exist on testnet from different deploy iterations:
+Current deployment uses a single format:
 
 ```
-v1 = 1129 bytes  (original, inline SVG 1024 bytes)
-v2 = 873 bytes   (inline SVG 768 bytes)
-v3 = 93 bytes    (SVG in separate PDA, no proof fields)
-v4 = 157 bytes   (v3 + commitment_hash + user_seed proof fields)
-v5 = 189 bytes   (current, v4 + oracle_secret for trustless auto-verification)
+v5 = 189 bytes  (metadata + commitment_hash + user_seed + oracle_secret)
 ```
 
-The frontend fetches all five sizes in parallel via `getProgramAccounts` with `dataSize` filters
-and handles SVG parsing differently per version. Always add new versions to the filter list
-— never remove old ones.
+The frontend queries only `dataSize: 189`. Previous testnet iterations had v1–v4 formats
+but those were removed in the fresh deploy (new Program ID `fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F`).
+If a future struct change is needed, add a new dataSize filter alongside v5.
 
 ### 3. UncheckedAccount for burn PDAs
 
@@ -176,10 +173,11 @@ Offset  Size  Field
 1. Update struct in `lib.rs`
 2. Update `GumballData::LEN`
 3. Add migration instruction if existing accounts need updating
-4. Add new `dataSize` filter in frontend (`GD_V5 = ...`)
+4. Add new `dataSize` filter in frontend alongside existing v5 filter
 5. Update SVG offset parsing if fields added before SVG
 6. Update leaderboard `GD_SIZE` constant
 7. Run `node scripts/initialize.cjs --migrate` if Machine struct changed
+8. For clean slate: deploy new Program ID + `reset_counts` or fresh `initialize_machine`
 
 ### Deploying contract changes
 
@@ -230,7 +228,7 @@ No migration needed unless Machine struct changed.
 
 - **Never commit** `oracle-secrets.json`, `oracle-wallet.json`, `faucet-wallet.json`, `*.pem`, `.env`, `target/`
 - **Never add SVG back inline** to `GumballData` — it will cause heap OOM in burns
-- **Never remove old dataSize filters** from frontend — old format gumballs still exist
+- **Never change GumballData struct** without adding a new dataSize filter for the new size
 - **Never call `.close()`** manually on Anchor accounts that have `close = X` in struct
 - **Never use `Box<Account<'info, GumballData>>`** in burn instruction structs — use `UncheckedAccount` and validate manually
 - **Never deploy** without running `anchor build` first and checking for errors

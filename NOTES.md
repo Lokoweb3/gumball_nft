@@ -198,24 +198,18 @@ testnet and mainnet. The heap issue is fully resolved.
 | `GumballSvg` | 788 bytes | Current — holds SVG, never loaded by burns |
 | `GumballData` v5 | 189 bytes | Current — v4 + oracle_secret for trustless verification |
 
-All five GumballData versions (v1, v2, v3, v4, v5) coexist on testnet. The frontend handles
-all versions via multiple `dataSize` filters in `getProgramAccounts`.
+Only GumballData v5 (189 bytes) exists on the current deployment. Previous v1–v4 formats
+were from earlier testnet iterations and no longer exist after the fresh deploy.
 
 ---
 
 ## Frontend Version Handling
 
 ```javascript
-const GD_V1 = 8+32+32+8+1+1+1+1+8+1+4+1024; // 1129 - original
-const GD_V2 = 8+32+32+8+1+1+1+1+8+1+4+768;  // 873  - reduced SVG
-const GD_V3 = 8+32+32+8+1+1+1+1+8+1;         // 93   - legacy (SVG separate, no proof)
-const GD_V4 = 8+32+32+8+1+1+1+1+8+1+32+32;   // 157  - legacy (with proof fields)
 const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 - current (with oracle_secret)
 ```
 
-SVG loading per version:
-- **v1/v2:** SVG inline in GumballData at offset `8+32+32+8+1+1+1+1+8+1`
-- **v3/v4/v5:** SVG fetched lazily from `GumballSvg` PDA when user opens modal
+SVG is always fetched lazily from the separate `GumballSvg` PDA when the user opens a modal.
 
 ---
 
@@ -227,7 +221,7 @@ SVG loading per version:
 - [x] `burn_to_upgrade` — owner validated manually from raw data (UncheckedAccount)
 - [x] `burn_multi` — owner and rarity validated manually from raw data
 - [x] `refund_mint` — only after MINT_TIMEOUT, only unfulfilled requests
-- [x] `reclaim_burned` — owner field must be all zeros (zombie PDA check)
+- [x] `reset_counts` — admin only, zeros total_minted and total_burned
 - [x] `withdraw` — only admin/authority
 - [x] `set_oracle` — only admin/authority
 - [x] **Review:** `burn_multi` remaining_accounts validated via PDA seed check + owner + rarity
