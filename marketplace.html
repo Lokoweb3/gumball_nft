@@ -254,7 +254,7 @@ const RARITY   = ["Common","Uncommon","Rare","Epic","Legendary"];
 const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
 
 const LISTING_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
-const OFFER_SIZE   = 8 + 32 + 32 + 8 + 8 + 1; // 89
+const OFFER_SIZE   = 8 + 32 + 32 + 8 + 8 + 8 + 1; // 97 (added expires_at)
 const GD_V5       = 8 + 32 + 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1 + 32 + 32 + 32; // 189
 
 let walletPubkey = null;
@@ -814,7 +814,8 @@ async function confirmOffer() {
     const [offerPda] = PublicKey.findProgramAddressSync([strToU8("offer"), mintKey.toBytes(), walletPubkey.toBytes()], PROGRAM_ID);
 
     const discBytes = await disc("make_offer");
-    const data = concatU8(discBytes, u8FromNum(amountLamports, 8));
+    const expireSeconds = 7 * 86400; // 7 days
+    const data = concatU8(discBytes, u8FromNum(amountLamports, 8), u8FromNum(expireSeconds, 8));
 
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,

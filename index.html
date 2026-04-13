@@ -1745,10 +1745,17 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
       }
     }
 
+    // Generate random user_seed for upgrade randomness (C-2 audit fix)
+    const burnUserSeed = new Uint8Array(32);
+    crypto.getRandomValues(burnUserSeed);
+    const ixData = new Uint8Array(discBytes.length + 32);
+    ixData.set(discBytes, 0);
+    ixData.set(burnUserSeed, discBytes.length);
+
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [...keys, ...remainingAccounts],
-      data: discBytes,
+      data: ixData,
     });
 
     const tx = new Transaction().add(ix);

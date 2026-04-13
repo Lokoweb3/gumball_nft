@@ -155,15 +155,11 @@ pub mod gumball_nft {
 
     pub fn set_mint_price(ctx: Context<AdminOnly>, new_price: u64) -> Result<()> {
         require!(new_price > 0, GumballError::InvalidPrice);
+        require!(new_price <= 100_000_000_000, GumballError::InvalidPrice); // max 100 XNT
         ctx.accounts.machine.mint_price = new_price;
         Ok(())
     }
 
-    pub fn reset_counts(ctx: Context<AdminOnly>) -> Result<()> {
-        ctx.accounts.machine.total_minted = 0;
-        ctx.accounts.machine.total_burned = 0;
-        Ok(())
-    }
 
     // ── C-2 FIX: Step 1 — Oracle submits commitment BEFORE knowing slot ───────
     // Oracle generates: secret = random_bytes()
@@ -269,10 +265,12 @@ pub mod gumball_nft {
 
         // M-2 FIX: timeout — refund if oracle took too long
         if clock.unix_timestamp - requested_at > MINT_TIMEOUT {
-            let rent_lamports = ctx.accounts.mint_request.to_account_info().lamports();
-            **ctx.accounts.mint_request.to_account_info().try_borrow_mut_lamports()? = 0;
+            let req_info = ctx.accounts.mint_request.to_account_info();
+            let rent_lamports = req_info.lamports();
+            **req_info.try_borrow_mut_lamports()? = 0;
             **ctx.accounts.minter.try_borrow_mut_lamports()? += rent_lamports;
-            // Mark fulfilled to prevent double refund via refund_mint
+            // Close the PDA: zero data + mark fulfilled
+            req_info.try_borrow_mut_data()?.fill(0);
             ctx.accounts.mint_request.fulfilled = true;
             emit!(MintRefundedEvent {
                 minter: minter_key,
@@ -414,16 +412,18 @@ pub mod gumball_nft {
         // Must not already be fulfilled
         require!(!ctx.accounts.mint_request.fulfilled, GumballError::AlreadyFulfilled);
 
-        // MintRequest PDA holds paid_amount + rent — return all to minter
-        let total = ctx.accounts.mint_request.to_account_info().lamports();
-        **ctx.accounts.mint_request.to_account_info().try_borrow_mut_lamports()? = 0;
+        // MintRequest PDA holds paid_amount + rent — return all to minter and close PDA
+        let req_info = ctx.accounts.mint_request.to_account_info();
+        let total = req_info.lamports();
+        **req_info.try_borrow_mut_lamports()? = 0;
         **ctx.accounts.minter.try_borrow_mut_lamports()? += total;
+        req_info.try_borrow_mut_data()?.fill(0);
 
         emit!(MintRefundedEvent { minter: minter_key, amount: paid_amount });
         Ok(())
     }
 
-    pub fn burn_to_upgrade(ctx: Context<BurnToUpgrade>) -> Result<()> {
+    pub fn burn_to_upgrade(ctx: Context<BurnToUpgrade>, user_seed: [u8; 32]) -> Result<()> {
         let machine = &mut ctx.accounts.machine;
         let clock   = Clock::get()?;
 
@@ -477,19 +477,20 @@ pub mod gumball_nft {
             authority: ctx.accounts.burner.to_account_info(),
         }), 1)?;
 
-        // Zero owner field to mark as burned — use reclaim_burned to recover rent
+        // Zero owner field to mark as burned
         ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
         ctx.accounts.gumball_b.try_borrow_mut_data()?[8..40].fill(0);
 
         let new_rarity = burn_rarity + 1;
 
-        // Use slot hash + burn context as seed for upgrade traits
-        // MED-4 FIX: use 32-byte hash [16..48] instead of 8-byte slot number [8..16]
+        // Use slot hash + user seed + burn context for upgrade traits
+        // User seed prevents validator grinding for specific cosmetic combos
         let slot_hash_data = &ctx.accounts.slot_hashes.data.borrow();
         let hash_bytes: [u8; 32] = slot_hash_data[16..48].try_into()
             .map_err(|_| error!(GumballError::InvalidSlotHash))?;
         let seed_hash = hashv(&[
             &hash_bytes,
+            &user_seed,
             &clock.unix_timestamp.to_le_bytes(),
             &machine.total_minted.to_le_bytes(),
             &[burn_rarity],
@@ -554,7 +555,7 @@ pub mod gumball_nft {
     /// Handles Common→Uncommon (5 burns) and Uncommon→Rare (3 burns)
     /// remaining_accounts = [(mint_1, ata_1, gumball_pda_1), (mint_2, ata_2, gumball_pda_2), ...]
     /// gumball_a/mint_a/ata_a are the "base" accounts (first burn)
-    pub fn burn_multi<'info>(ctx: Context<'_, '_, 'info, 'info, BurnMulti<'info>>) -> Result<()> {
+    pub fn burn_multi<'info>(ctx: Context<'_, '_, 'info, 'info, BurnMulti<'info>>, user_seed: [u8; 32]) -> Result<()> {
         let machine    = &mut ctx.accounts.machine;
         let clock      = Clock::get()?;
         // Read rarity and owner from base gumball (UncheckedAccount — no auto-deserialize)
@@ -599,7 +600,7 @@ pub mod gumball_nft {
             authority: ctx.accounts.burner.to_account_info(),
         }), 1)?;
 
-        // Zero owner field to mark as burned — use reclaim_burned to recover rent
+        // Zero owner field to mark as burned
         ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
 
         // Burn remaining gumballs from remaining_accounts
@@ -639,20 +640,20 @@ pub mod gumball_nft {
             ), 1)?;
 
             // Zero owner field to mark as burned (can't move lamports from
-            // remaining_accounts — causes UnbalancedInstruction). Use reclaim_burned
-            // to recover rent later.
+            // remaining_accounts — causes UnbalancedInstruction).
             let mut gb_data = gumball_ai.try_borrow_mut_data()?;
             gb_data[8..40].fill(0); // zero owner field
         }
 
         let new_rarity = burn_rarity + 1;
 
-        // Derive seed for upgraded NFT traits
+        // Derive seed for upgraded NFT traits — user_seed prevents validator grinding
         let slot_hash_data = &ctx.accounts.slot_hashes.data.borrow();
         let hash_bytes: [u8; 32] = slot_hash_data[16..48].try_into()
             .map_err(|_| error!(GumballError::InvalidSlotHash))?;
         let seed_hash = anchor_lang::solana_program::hash::hashv(&[
             &hash_bytes,
+            &user_seed,
             &clock.unix_timestamp.to_le_bytes(),
             &machine.total_minted.to_le_bytes(),
             &[burn_rarity],
@@ -869,7 +870,7 @@ pub mod gumball_nft {
     }
 
     /// Place an offer on a gumball (listed or not). XNT escrowed in Offer PDA.
-    pub fn make_offer(ctx: Context<MakeOffer>, amount: u64) -> Result<()> {
+    pub fn make_offer(ctx: Context<MakeOffer>, amount: u64, expire_seconds: i64) -> Result<()> {
         require!(amount > 0, GumballError::InvalidPrice);
 
         // Escrow XNT in the Offer PDA
@@ -884,11 +885,15 @@ pub mod gumball_nft {
             amount,
         )?;
 
+        let now          = Clock::get()?.unix_timestamp;
         let offer        = &mut ctx.accounts.offer;
         offer.buyer      = ctx.accounts.buyer.key();
         offer.nft_mint   = ctx.accounts.nft_mint.key();
         offer.amount     = amount;
-        offer.created_at = Clock::get()?.unix_timestamp;
+        offer.created_at = now;
+        // Default to 7 days if 0 or negative; cap at 30 days
+        let exp = if expire_seconds <= 0 { 7 * 86400 } else { expire_seconds.min(30 * 86400) };
+        offer.expires_at = now + exp;
         offer.bump       = ctx.bumps.offer;
 
         emit!(OfferMadeEvent {
@@ -908,6 +913,11 @@ pub mod gumball_nft {
 
     /// Accept an offer — seller receives XNT (minus 1% royalty), buyer gets NFT.
     pub fn accept_offer(ctx: Context<AcceptOffer>) -> Result<()> {
+        // Check offer hasn't expired
+        let now = Clock::get()?.unix_timestamp;
+        if ctx.accounts.offer.expires_at > 0 {
+            require!(now <= ctx.accounts.offer.expires_at, GumballError::OfferExpired);
+        }
         let amount = ctx.accounts.offer.amount;
         let royalty = amount.checked_mul(ROYALTY_BPS).ok_or(GumballError::MathOverflow)? / 10_000;
         let seller_amount = amount.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
@@ -953,25 +963,6 @@ pub mod gumball_nft {
         Ok(())
     }
 
-    /// Reclaim rent from zombie GumballData PDAs left by burn_multi.
-    /// burn_multi zeros the owner field instead of closing extra PDAs
-    /// (direct lamport transfer from remaining_accounts causes UnbalancedInstruction).
-    /// Only works on PDAs with zeroed owner field. Rent goes to the caller.
-    pub fn reclaim_burned(ctx: Context<ReclaimBurned>) -> Result<()> {
-        let gumball_info = &ctx.accounts.gumball_pda;
-        let data = gumball_info.try_borrow_data()?;
-        require!(data.len() >= 40, GumballError::InvalidAccount);
-        require!(data[8..40].iter().all(|&b| b == 0), GumballError::Unauthorized);
-        drop(data);
-
-        let lamports = gumball_info.lamports();
-        require!(lamports > 0, GumballError::InsufficientFunds);
-
-        **gumball_info.try_borrow_mut_lamports()? = 0;
-        **ctx.accounts.claimer.try_borrow_mut_lamports()? += lamports;
-        gumball_info.try_borrow_mut_data()?.fill(0);
-        Ok(())
-    }
 
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1498,15 +1489,6 @@ pub struct AcceptOffer<'info> {
     pub rent:                     Sysvar<'info, Rent>,
 }
 
-#[derive(Accounts)]
-pub struct ReclaimBurned<'info> {
-    #[account(mut)]
-    pub claimer: Signer<'info>,
-    /// CHECK: manually verified — must be a zombie gumball PDA with zeroed owner field.
-    #[account(mut, owner = crate::ID)]
-    pub gumball_pda: AccountInfo<'info>,
-    pub system_program: Program<'info, System>,
-}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -1605,9 +1587,10 @@ pub struct Offer {
     pub nft_mint:   Pubkey,  // 32
     pub amount:     u64,     //  8
     pub created_at: i64,     //  8
+    pub expires_at: i64,     //  8 — 0 means no expiry (legacy compat)
     pub bump:       u8,      //  1
 }
-impl Offer { pub const LEN: usize = 32+32+8+8+1; }
+impl Offer { pub const LEN: usize = 32+32+8+8+8+1; }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
@@ -1646,4 +1629,5 @@ pub enum GumballError {
     #[msg("Invalid slot hash")]                      InvalidSlotHash,
     #[msg("Invalid account data")]                   InvalidAccount,
     #[msg("Mint request has expired")]               RequestExpired,
+    #[msg("Offer has expired")]                      OfferExpired,
 }
