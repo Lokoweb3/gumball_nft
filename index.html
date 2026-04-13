@@ -1201,6 +1201,7 @@ async function mintGumball() {
       filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
     });
     const beforeKeys = new Set(beforeAccounts.map(a => a.pubkey.toBase58()));
+    let lastMintedSerial = 0;
 
     await animCoin();
     const signed = await provider.signTransaction(tx);
@@ -1249,6 +1250,7 @@ async function mintGumball() {
         const specialName = SPECIALS[special] || "None";
 
         mintedCount++;
+        lastMintedSerial = serial;
         setStatus(`ORACLE MINTING... (${mintedCount}/${totalToMint})`);
 
         await animDispense(ballColor);
@@ -1270,7 +1272,8 @@ async function mintGumball() {
     } else {
       setStep(2, 'done');
       setStep(3, 'done');
-      setStatus(`🎉 ALL ${mintedCount} GUMBALLS MINTED!`);
+      const verifyLink = lastMintedSerial ? ` <a href="verify.html?serial=${lastMintedSerial}" style="color:var(--teal);text-decoration:none;font-size:0.4rem;">Verify fairness &rarr;</a>` : '';
+      setStatus(`🎉 ALL ${mintedCount} GUMBALLS MINTED!${verifyLink}`);
       toast(`✅ ${mintedCount}/${totalToMint} GUMBALLS MINTED!`, 'success', 6000);
     }
 

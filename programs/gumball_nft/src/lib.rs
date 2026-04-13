@@ -24,6 +24,11 @@ const MAX_PRICE:  u64 = 40_000_000; // 0.04 XNT in lamports
 
 const RARITY_LEGENDARY: u8 = 4;
 const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
+
+// GumballData raw byte offsets for UncheckedAccount parsing in burn instructions.
+// Must match GumballData struct layout: disc(8) + owner(32) + machine(32) + serial(8) + flavor(1) + color(1) + rarity(1)
+const GD_OWNER_OFFSET:  usize = 8;
+const GD_RARITY_OFFSET: usize = 8 + 32 + 32 + 8 + 1 + 1; // = 82
 // CRIT-2 FIX: burns required per rarity level [Common, Uncommon, Rare, Epic]
 const BURNS_REQUIRED: [u8; 4] = [5, 3, 2, 2];
 
@@ -427,22 +432,20 @@ pub mod gumball_nft {
         let machine = &mut ctx.accounts.machine;
         let clock   = Clock::get()?;
 
-        let rarity_offset = 8 + 32 + 32 + 8 + 1 + 1;
-        let owner_offset = 8usize;
         let mut burn_rarity: u8;
         {
             let data_a = ctx.accounts.gumball_a.try_borrow_data()?;
             let data_b = ctx.accounts.gumball_b.try_borrow_data()?;
-            require!(data_a.len() > rarity_offset, GumballError::InvalidAccount);
-            require!(data_b.len() > rarity_offset, GumballError::InvalidAccount);
-            let owner_a = Pubkey::try_from(&data_a[owner_offset..owner_offset+32])
+            require!(data_a.len() > GD_RARITY_OFFSET, GumballError::InvalidAccount);
+            require!(data_b.len() > GD_RARITY_OFFSET, GumballError::InvalidAccount);
+            let owner_a = Pubkey::try_from(&data_a[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32])
                 .map_err(|_| error!(GumballError::InvalidAccount))?;
-            let owner_b = Pubkey::try_from(&data_b[owner_offset..owner_offset+32])
+            let owner_b = Pubkey::try_from(&data_b[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32])
                 .map_err(|_| error!(GumballError::InvalidAccount))?;
             require!(owner_a == ctx.accounts.burner.key(), GumballError::Unauthorized);
             require!(owner_b == ctx.accounts.burner.key(), GumballError::Unauthorized);
-            burn_rarity = data_a[rarity_offset];
-            require!(data_b[rarity_offset] == burn_rarity, GumballError::RarityMismatch);
+            burn_rarity = data_a[GD_RARITY_OFFSET];
+            require!(data_b[GD_RARITY_OFFSET] == burn_rarity, GumballError::RarityMismatch);
         }
         require!(burn_rarity < RARITY_LEGENDARY, GumballError::AlreadyLegendary);
         // Enforce correct burn count for this rarity tier
@@ -478,8 +481,8 @@ pub mod gumball_nft {
         }), 1)?;
 
         // Zero owner field to mark as burned
-        ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
-        ctx.accounts.gumball_b.try_borrow_mut_data()?[8..40].fill(0);
+        ctx.accounts.gumball_a.try_borrow_mut_data()?[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32].fill(0);
+        ctx.accounts.gumball_b.try_borrow_mut_data()?[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32].fill(0);
 
         let new_rarity = burn_rarity + 1;
 
@@ -559,15 +562,14 @@ pub mod gumball_nft {
         let machine    = &mut ctx.accounts.machine;
         let clock      = Clock::get()?;
         // Read rarity and owner from base gumball (UncheckedAccount — no auto-deserialize)
-        let rarity_offset = 8 + 32 + 32 + 8 + 1 + 1;
         let burn_rarity: u8;
         {
             let data_a = ctx.accounts.gumball_a.try_borrow_data()?;
-            require!(data_a.len() > rarity_offset, GumballError::InvalidAccount);
-            let owner_a = Pubkey::try_from(&data_a[8..40])
+            require!(data_a.len() > GD_RARITY_OFFSET, GumballError::InvalidAccount);
+            let owner_a = Pubkey::try_from(&data_a[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32])
                 .map_err(|_| error!(GumballError::InvalidAccount))?;
             require!(owner_a == ctx.accounts.burner.key(), GumballError::Unauthorized);
-            burn_rarity = data_a[rarity_offset];
+            burn_rarity = data_a[GD_RARITY_OFFSET];
         }
         require!(burn_rarity < RARITY_LEGENDARY, GumballError::AlreadyLegendary);
         require!(machine.total_minted < machine.max_supply, GumballError::SoldOut);
@@ -601,7 +603,7 @@ pub mod gumball_nft {
         }), 1)?;
 
         // Zero owner field to mark as burned
-        ctx.accounts.gumball_a.try_borrow_mut_data()?[8..40].fill(0);
+        ctx.accounts.gumball_a.try_borrow_mut_data()?[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32].fill(0);
 
         // Burn remaining gumballs from remaining_accounts
         for i in 0..extra {
@@ -616,14 +618,12 @@ pub mod gumball_nft {
             );
             require!(expected_pda == *gumball_ai.key, GumballError::Unauthorized);
 
-            // Verify same rarity
+            // Verify same rarity and owner
             let gumball_data = gumball_ai.try_borrow_data()?;
-            let rarity_offset = 8 + 32 + 32 + 8 + 1 + 1; // disc+owner+machine+serial+flavor+color
-            require!(gumball_data[rarity_offset] == burn_rarity, GumballError::RarityMismatch);
+            require!(gumball_data.len() > GD_RARITY_OFFSET, GumballError::InvalidAccount);
+            require!(gumball_data[GD_RARITY_OFFSET] == burn_rarity, GumballError::RarityMismatch);
 
-            // Verify owner
-            require!(gumball_data.len() > rarity_offset, GumballError::InvalidAccount);
-            let owner_bytes: [u8; 32] = gumball_data[8..40].try_into()
+            let owner_bytes: [u8; 32] = gumball_data[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32].try_into()
                 .map_err(|_| error!(GumballError::InvalidAccount))?;
             let owner_pubkey = Pubkey::from(owner_bytes);
             require!(owner_pubkey == ctx.accounts.burner.key(), GumballError::Unauthorized);
@@ -642,7 +642,7 @@ pub mod gumball_nft {
             // Zero owner field to mark as burned (can't move lamports from
             // remaining_accounts — causes UnbalancedInstruction).
             let mut gb_data = gumball_ai.try_borrow_mut_data()?;
-            gb_data[8..40].fill(0); // zero owner field
+            gb_data[GD_OWNER_OFFSET..GD_OWNER_OFFSET+32].fill(0); // zero owner field
         }
 
         let new_rarity = burn_rarity + 1;
