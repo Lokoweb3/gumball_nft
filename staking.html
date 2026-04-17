@@ -102,6 +102,8 @@ header{
 .swap-input-row input{flex:1;background:transparent;border:none;color:var(--white);font-family:'Space Mono',monospace;font-size:0.7rem;outline:none;min-width:0;}
 .swap-input-row input::placeholder{color:#333355;}
 .swap-input-row input[readonly]{color:var(--gray);}
+.max-btn{font-family:'Press Start 2P',cursive;font-size:0.28rem;padding:5px 8px;border:1px solid var(--gold);background:rgba(255,204,0,0.08);color:var(--gold);cursor:pointer;letter-spacing:1px;}
+.max-btn:hover{background:rgba(255,204,0,0.2);}
 .swap-token-btn{font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 12px;border:1px solid var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);cursor:pointer;letter-spacing:1px;white-space:nowrap;}
 .swap-token-label{font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--gold);letter-spacing:1px;white-space:nowrap;}
 .swap-balance{font-size:0.35rem;color:var(--gray);margin-top:6px;}
@@ -198,6 +200,7 @@ header{
         <div class="swap-label">FROM</div>
         <div class="swap-input-row">
           <input type="number" id="swapInput" placeholder="0.00" min="0" step="0.01" oninput="updateSwapEstimate()" />
+          <button class="max-btn" onclick="setSwapMax()">MAX</button>
           <button class="swap-token-btn" id="swapFromToken" onclick="flipSwap()">GUM</button>
         </div>
         <div class="swap-balance" id="swapFromBalance">Balance: —</div>
@@ -235,6 +238,7 @@ header{
         <div class="swap-label">GUM AMOUNT</div>
         <div class="swap-input-row">
           <input type="number" id="liqGumInput" placeholder="0.00" min="0" step="1" oninput="updateLiqEstimate()" />
+          <button class="max-btn" onclick="setLiqGumMax()">MAX</button>
           <span class="swap-token-label">GUM</span>
         </div>
       </div>
@@ -252,6 +256,7 @@ header{
         <div class="swap-label">LP TOKENS TO REMOVE</div>
         <div class="swap-input-row">
           <input type="number" id="liqLpInput" placeholder="0.00" min="0" step="0.01" />
+          <button class="max-btn" onclick="setLpMax()">MAX</button>
           <span class="swap-token-label">LP</span>
         </div>
         <div class="swap-balance" id="lpBalance">LP Balance: —</div>
@@ -832,6 +837,26 @@ function updateSwapBalanceDisplay() {
     document.getElementById('swapFromBalance').textContent = `Balance: ${(userXntBalance/1e9).toFixed(4)} XNT`;
     document.getElementById('swapToBalance').textContent = `Balance: ${(userGumBalance/1e6).toFixed(2)} GUM`;
   }
+}
+
+function setSwapMax() {
+  if (swapDirection === 'gum_to_xnt') {
+    document.getElementById('swapInput').value = (userGumBalance / 1e6).toFixed(2);
+  } else {
+    // Leave some SOL for fees
+    const max = Math.max(0, userXntBalance - 10_000_000) / 1e9;
+    document.getElementById('swapInput').value = max.toFixed(4);
+  }
+  updateSwapEstimate();
+}
+
+function setLiqGumMax() {
+  document.getElementById('liqGumInput').value = (userGumBalance / 1e6).toFixed(2);
+  updateLiqEstimate();
+}
+
+function setLpMax() {
+  document.getElementById('liqLpInput').value = (userLpBalance / 1e9).toFixed(6);
 }
 
 function flipSwap() {
