@@ -93,6 +93,30 @@ header{
 .empty-msg{font-size:0.45rem;color:var(--gray);text-align:center;padding:40px 20px;}
 
 /* Toast */
+/* Swap */
+.swap-box{background:var(--panel);border:1px solid var(--border);padding:24px;margin-bottom:24px;max-width:480px;}
+.swap-row{margin-bottom:4px;}
+.swap-field{background:var(--black);border:1px solid var(--border);padding:14px;border-radius:4px;}
+.swap-label{font-size:0.35rem;color:var(--gray);letter-spacing:1px;margin-bottom:8px;}
+.swap-input-row{display:flex;gap:10px;align-items:center;}
+.swap-input-row input{flex:1;background:transparent;border:none;color:var(--white);font-family:'Space Mono',monospace;font-size:0.7rem;outline:none;min-width:0;}
+.swap-input-row input::placeholder{color:#333355;}
+.swap-input-row input[readonly]{color:var(--gray);}
+.swap-token-btn{font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 12px;border:1px solid var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);cursor:pointer;letter-spacing:1px;white-space:nowrap;}
+.swap-token-label{font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--gold);letter-spacing:1px;white-space:nowrap;}
+.swap-balance{font-size:0.35rem;color:var(--gray);margin-top:6px;}
+.swap-info{font-size:0.38rem;color:var(--gray);padding:10px 0;display:flex;justify-content:space-between;}
+.swap-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:14px;width:100%;margin-top:8px;
+  border:1px solid var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);
+  cursor:pointer;letter-spacing:1px;transition:all 0.2s;
+}
+.swap-btn:hover{background:rgba(0,255,204,0.15);}
+.swap-btn:disabled{border-color:var(--border);color:var(--gray);background:transparent;cursor:not-allowed;}
+.liq-tabs{display:flex;gap:8px;margin-bottom:16px;}
+.liq-tab{font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 16px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;letter-spacing:1px;}
+.liq-tab.active{border-color:var(--teal);color:var(--teal);background:rgba(0,255,204,0.08);}
+
 .toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
 .toast{padding:12px 16px;font-family:'Space Mono',monospace;font-size:0.45rem;border-radius:4px;animation:fadeIn 0.3s;}
 .toast.success{background:rgba(0,255,204,0.15);border:1px solid var(--teal);color:var(--teal);}
@@ -165,6 +189,81 @@ header{
   <div id="unstakedGrid" class="grid">
     <div class="empty-msg">CONNECT WALLET TO VIEW YOUR COLLECTION</div>
   </div>
+
+  <!-- Swap -->
+  <div class="section-title" style="margin-top:32px;">// SWAP GUM / XNT</div>
+  <div class="swap-box">
+    <div class="swap-row">
+      <div class="swap-field">
+        <div class="swap-label">FROM</div>
+        <div class="swap-input-row">
+          <input type="number" id="swapInput" placeholder="0.00" min="0" step="0.01" oninput="updateSwapEstimate()" />
+          <button class="swap-token-btn" id="swapFromToken" onclick="flipSwap()">GUM</button>
+        </div>
+        <div class="swap-balance" id="swapFromBalance">Balance: —</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:8px 0;">
+      <button onclick="flipSwap()" style="background:none;border:1px solid var(--border);color:var(--teal);padding:6px 12px;cursor:pointer;font-size:1rem;border-radius:50%;">&#8645;</button>
+    </div>
+    <div class="swap-row">
+      <div class="swap-field">
+        <div class="swap-label">TO</div>
+        <div class="swap-input-row">
+          <input type="text" id="swapOutput" placeholder="0.00" readonly />
+          <span class="swap-token-label" id="swapToToken">XNT</span>
+        </div>
+        <div class="swap-balance" id="swapToBalance">Balance: —</div>
+      </div>
+    </div>
+    <div class="swap-info" id="swapInfo" style="display:none;">
+      <div id="swapRate">Rate: —</div>
+      <div id="swapFee">Fee: 0.28%</div>
+    </div>
+    <button class="swap-btn" id="swapBtn" onclick="executeSwap()" disabled>CONNECT WALLET</button>
+  </div>
+
+  <!-- Liquidity -->
+  <div class="section-title" style="margin-top:32px;">// ADD / REMOVE LIQUIDITY</div>
+  <div class="swap-box">
+    <div class="liq-tabs">
+      <button class="liq-tab active" id="tabAdd" onclick="setLiqTab('add')">ADD</button>
+      <button class="liq-tab" id="tabRemove" onclick="setLiqTab('remove')">REMOVE</button>
+    </div>
+    <div id="liqAddPanel">
+      <div class="swap-field" style="margin-bottom:10px;">
+        <div class="swap-label">GUM AMOUNT</div>
+        <div class="swap-input-row">
+          <input type="number" id="liqGumInput" placeholder="0.00" min="0" step="1" oninput="updateLiqEstimate()" />
+          <span class="swap-token-label">GUM</span>
+        </div>
+      </div>
+      <div class="swap-field">
+        <div class="swap-label">XNT AMOUNT (auto-calculated)</div>
+        <div class="swap-input-row">
+          <input type="text" id="liqXntInput" placeholder="0.00" readonly />
+          <span class="swap-token-label">XNT</span>
+        </div>
+      </div>
+      <button class="swap-btn" id="addLiqBtn" onclick="addLiquidity()" disabled style="margin-top:12px;">ADD LIQUIDITY</button>
+    </div>
+    <div id="liqRemovePanel" style="display:none;">
+      <div class="swap-field">
+        <div class="swap-label">LP TOKENS TO REMOVE</div>
+        <div class="swap-input-row">
+          <input type="number" id="liqLpInput" placeholder="0.00" min="0" step="0.01" />
+          <span class="swap-token-label">LP</span>
+        </div>
+        <div class="swap-balance" id="lpBalance">LP Balance: —</div>
+      </div>
+      <button class="swap-btn" id="removeLiqBtn" onclick="removeLiquidity()" disabled style="margin-top:12px;">REMOVE LIQUIDITY</button>
+    </div>
+    <div class="swap-info" id="poolInfo" style="margin-top:12px;">
+      <div id="poolReserves">Pool: — GUM / — XNT</div>
+      <div id="poolLpSupply">LP Supply: —</div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
@@ -632,6 +731,391 @@ async function claimAll() {
   btn.disabled = false;
   btn.textContent = 'CLAIM ALL GUM';
 }
+
+// ── SWAP & LIQUIDITY ─────────────────────────────────────────────────────────
+
+const XDEX_PID = new PublicKey('7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf');
+const AMM_CONFIG = new PublicKey('3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY');
+const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+const [GUM_MINT_PDA] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+
+// Sort mints for XDEX (token0 must be smaller pubkey)
+const mint0 = WSOL_MINT.toBuffer().compare(GUM_MINT_PDA.toBuffer()) < 0 ? WSOL_MINT : GUM_MINT_PDA;
+const mint1 = WSOL_MINT.toBuffer().compare(GUM_MINT_PDA.toBuffer()) < 0 ? GUM_MINT_PDA : WSOL_MINT;
+const isGumToken0 = mint0.equals(GUM_MINT_PDA);
+
+// Pool PDAs
+const [POOL_STATE] = PublicKey.findProgramAddressSync([strToU8("pool"), AMM_CONFIG.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], XDEX_PID);
+const [POOL_AUTH] = PublicKey.findProgramAddressSync([strToU8("vault_and_lp_mint_auth_seed")], XDEX_PID);
+const [LP_MINT] = PublicKey.findProgramAddressSync([strToU8("pool_lp_mint"), POOL_STATE.toBuffer()], XDEX_PID);
+const [VAULT_0] = PublicKey.findProgramAddressSync([strToU8("pool_vault"), POOL_STATE.toBuffer(), mint0.toBuffer()], XDEX_PID);
+const [VAULT_1] = PublicKey.findProgramAddressSync([strToU8("pool_vault"), POOL_STATE.toBuffer(), mint1.toBuffer()], XDEX_PID);
+const [OBSERVATION] = PublicKey.findProgramAddressSync([strToU8("observation"), POOL_STATE.toBuffer()], XDEX_PID);
+
+let swapDirection = 'gum_to_xnt'; // or 'xnt_to_gum'
+let poolReserve0 = 0, poolReserve1 = 0, poolLpSupply = 0;
+let userGumBalance = 0, userXntBalance = 0, userLpBalance = 0;
+
+function xdexDisc(name) {
+  const hash = crypto.subtle.digest('SHA-256', strToU8(`global:${name}`));
+  return hash.then(buf => new Uint8Array(buf).slice(0, 8));
+}
+
+async function loadPoolState() {
+  try {
+    const info = await connection.getAccountInfo(POOL_STATE);
+    if (!info) {
+      document.getElementById('poolReserves').textContent = 'Pool: NOT CREATED YET';
+      return;
+    }
+    const d = info.data;
+    // Read vault balances directly
+    const v0Info = await connection.getAccountInfo(VAULT_0);
+    const v1Info = await connection.getAccountInfo(VAULT_1);
+    if (v0Info) {
+      const dv = new DataView(v0Info.data.buffer, v0Info.data.byteOffset);
+      poolReserve0 = Number(dv.getBigUint64(64, true));
+    }
+    if (v1Info) {
+      const dv = new DataView(v1Info.data.buffer, v1Info.data.byteOffset);
+      poolReserve1 = Number(dv.getBigUint64(64, true));
+    }
+
+    const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+    const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+    document.getElementById('poolReserves').textContent = `Pool: ${(gumReserve/1e6).toFixed(0)} GUM / ${(xntReserve/1e9).toFixed(4)} XNT`;
+
+    // LP supply from mint
+    const lpInfo = await connection.getAccountInfo(LP_MINT);
+    if (lpInfo) {
+      const dv = new DataView(lpInfo.data.buffer, lpInfo.data.byteOffset);
+      poolLpSupply = Number(dv.getBigUint64(36, true));
+      document.getElementById('poolLpSupply').textContent = `LP Supply: ${(poolLpSupply/1e9).toFixed(4)}`;
+    }
+  } catch(e) { console.error('loadPoolState:', e); }
+}
+
+async function loadSwapBalances() {
+  if (!walletPubkey) return;
+  try {
+    // GUM balance
+    const gumAta = getAta(GUM_MINT_PDA, walletPubkey);
+    const gumInfo = await connection.getAccountInfo(gumAta);
+    if (gumInfo) {
+      const dv = new DataView(gumInfo.data.buffer, gumInfo.data.byteOffset);
+      userGumBalance = Number(dv.getBigUint64(64, true));
+    }
+    // XNT balance (native SOL)
+    userXntBalance = await connection.getBalance(walletPubkey);
+    // LP balance
+    const lpAta = getAta(LP_MINT, walletPubkey);
+    const lpInfo = await connection.getAccountInfo(lpAta);
+    if (lpInfo) {
+      const dv = new DataView(lpInfo.data.buffer, lpInfo.data.byteOffset);
+      userLpBalance = Number(dv.getBigUint64(64, true));
+    }
+
+    updateSwapBalanceDisplay();
+    document.getElementById('lpBalance').textContent = `LP Balance: ${(userLpBalance/1e9).toFixed(6)}`;
+    document.getElementById('swapBtn').disabled = false;
+    document.getElementById('swapBtn').textContent = 'SWAP';
+    document.getElementById('addLiqBtn').disabled = false;
+    document.getElementById('removeLiqBtn').disabled = false;
+  } catch(e) { console.error('loadSwapBalances:', e); }
+}
+
+function updateSwapBalanceDisplay() {
+  if (swapDirection === 'gum_to_xnt') {
+    document.getElementById('swapFromBalance').textContent = `Balance: ${(userGumBalance/1e6).toFixed(2)} GUM`;
+    document.getElementById('swapToBalance').textContent = `Balance: ${(userXntBalance/1e9).toFixed(4)} XNT`;
+  } else {
+    document.getElementById('swapFromBalance').textContent = `Balance: ${(userXntBalance/1e9).toFixed(4)} XNT`;
+    document.getElementById('swapToBalance').textContent = `Balance: ${(userGumBalance/1e6).toFixed(2)} GUM`;
+  }
+}
+
+function flipSwap() {
+  swapDirection = swapDirection === 'gum_to_xnt' ? 'xnt_to_gum' : 'gum_to_xnt';
+  document.getElementById('swapFromToken').textContent = swapDirection === 'gum_to_xnt' ? 'GUM' : 'XNT';
+  document.getElementById('swapToToken').textContent = swapDirection === 'gum_to_xnt' ? 'XNT' : 'GUM';
+  document.getElementById('swapInput').value = '';
+  document.getElementById('swapOutput').value = '';
+  updateSwapBalanceDisplay();
+}
+
+function updateSwapEstimate() {
+  const input = parseFloat(document.getElementById('swapInput').value) || 0;
+  if (input === 0 || poolReserve0 === 0 || poolReserve1 === 0) {
+    document.getElementById('swapOutput').value = '';
+    document.getElementById('swapInfo').style.display = 'none';
+    return;
+  }
+
+  const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+  const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+
+  let amountIn, amountOut, rateStr;
+  if (swapDirection === 'gum_to_xnt') {
+    amountIn = input * 1e6;
+    const fee = amountIn * 0.0028;
+    const netIn = amountIn - fee;
+    amountOut = (xntReserve * netIn) / (gumReserve + netIn);
+    document.getElementById('swapOutput').value = (amountOut / 1e9).toFixed(6);
+    rateStr = `1 GUM = ${(amountOut / amountIn * 1e6 / 1e9 * 1e6).toFixed(6)} XNT`;
+  } else {
+    amountIn = input * 1e9;
+    const fee = amountIn * 0.0028;
+    const netIn = amountIn - fee;
+    amountOut = (gumReserve * netIn) / (xntReserve + netIn);
+    document.getElementById('swapOutput').value = (amountOut / 1e6).toFixed(2);
+    rateStr = `1 XNT = ${(amountOut / amountIn * 1e9 / 1e6 * 1e9).toFixed(0)} GUM`;
+  }
+
+  document.getElementById('swapRate').textContent = rateStr;
+  document.getElementById('swapInfo').style.display = 'flex';
+}
+
+async function executeSwap() {
+  if (!walletPubkey) return;
+  const input = parseFloat(document.getElementById('swapInput').value) || 0;
+  if (input === 0) { toast('ENTER AN AMOUNT', 'error'); return; }
+
+  const btn = document.getElementById('swapBtn');
+  btn.disabled = true;
+  btn.textContent = 'SWAPPING...';
+
+  try {
+    const provider = getProvider();
+    const discBytes = await xdexDisc("swap_base_input");
+
+    let amountIn, minOut;
+    let inputMint, outputMint;
+
+    if (swapDirection === 'gum_to_xnt') {
+      amountIn = BigInt(Math.floor(input * 1e6));
+      const estOut = parseFloat(document.getElementById('swapOutput').value) || 0;
+      minOut = BigInt(Math.floor(estOut * 1e9 * 0.95)); // 5% slippage
+      inputMint = GUM_MINT_PDA;
+      outputMint = WSOL_MINT;
+    } else {
+      amountIn = BigInt(Math.floor(input * 1e9));
+      const estOut = parseFloat(document.getElementById('swapOutput').value) || 0;
+      minOut = BigInt(Math.floor(estOut * 1e6 * 0.95));
+      inputMint = WSOL_MINT;
+      outputMint = GUM_MINT_PDA;
+    }
+
+    const userInputAta = getAta(inputMint, walletPubkey);
+    const userOutputAta = getAta(outputMint, walletPubkey);
+
+    const inputVault = inputMint.equals(mint0) ? VAULT_0 : VAULT_1;
+    const outputVault = outputMint.equals(mint0) ? VAULT_0 : VAULT_1;
+
+    const data = Buffer.alloc(8 + 8 + 8);
+    Buffer.from(discBytes).copy(data, 0);
+    data.writeBigUInt64LE(amountIn, 8);
+    data.writeBigUInt64LE(minOut, 16);
+
+    const ix = new TransactionInstruction({
+      programId: XDEX_PID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // payer
+        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false }, // authority
+        { pubkey: AMM_CONFIG,              isSigner: false, isWritable: false }, // ammConfig
+        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  }, // poolState
+        { pubkey: userInputAta,            isSigner: false, isWritable: true  }, // userInputToken
+        { pubkey: userOutputAta,           isSigner: false, isWritable: true  }, // userOutputToken
+        { pubkey: inputVault,              isSigner: false, isWritable: true  }, // inputVault
+        { pubkey: outputVault,             isSigner: false, isWritable: true  }, // outputVault
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // inputTokenProgram
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // outputTokenProgram
+        { pubkey: inputMint,               isSigner: false, isWritable: false }, // inputTokenMint
+        { pubkey: outputMint,              isSigner: false, isWritable: false }, // outputTokenMint
+        { pubkey: OBSERVATION,             isSigner: false, isWritable: true  }, // observationState
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('SWAP COMPLETE!', 'success');
+    await loadSwapBalances();
+    await loadPoolState();
+    document.getElementById('swapInput').value = '';
+    document.getElementById('swapOutput').value = '';
+  } catch(e) {
+    console.error("Swap error:", e);
+    toast('SWAP FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'SWAP';
+}
+
+function updateLiqEstimate() {
+  const gumInput = parseFloat(document.getElementById('liqGumInput').value) || 0;
+  if (gumInput === 0 || poolReserve0 === 0) {
+    document.getElementById('liqXntInput').value = '';
+    return;
+  }
+  const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+  const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+  const xntNeeded = (gumInput * 1e6 / gumReserve) * xntReserve;
+  document.getElementById('liqXntInput').value = (xntNeeded / 1e9).toFixed(6);
+}
+
+async function addLiquidity() {
+  if (!walletPubkey) return;
+  const gumAmount = parseFloat(document.getElementById('liqGumInput').value) || 0;
+  if (gumAmount === 0) { toast('ENTER GUM AMOUNT', 'error'); return; }
+
+  const btn = document.getElementById('addLiqBtn');
+  btn.disabled = true;
+  btn.textContent = 'ADDING...';
+
+  try {
+    const provider = getProvider();
+    const discBytes = await xdexDisc("deposit");
+
+    const gumLamports = BigInt(Math.floor(gumAmount * 1e6));
+    const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+    const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+    const ratio = Number(gumLamports) / gumReserve;
+    const lpAmount = BigInt(Math.floor(ratio * poolLpSupply));
+    const xntAmount = BigInt(Math.floor(ratio * xntReserve * 1.01)); // 1% buffer
+
+    const userToken0 = getAta(mint0, walletPubkey);
+    const userToken1 = getAta(mint1, walletPubkey);
+    const userLpAta = getAta(LP_MINT, walletPubkey);
+
+    const maxAmount0 = isGumToken0 ? gumLamports : xntAmount;
+    const maxAmount1 = isGumToken0 ? xntAmount : gumLamports;
+
+    const data = Buffer.alloc(8 + 8 + 8 + 8);
+    Buffer.from(discBytes).copy(data, 0);
+    data.writeBigUInt64LE(lpAmount, 8);
+    data.writeBigUInt64LE(maxAmount0, 16);
+    data.writeBigUInt64LE(maxAmount1, 24);
+
+    const ix = new TransactionInstruction({
+      programId: XDEX_PID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false },
+        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  },
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
+        { pubkey: userToken0,              isSigner: false, isWritable: true  },
+        { pubkey: userToken1,              isSigner: false, isWritable: true  },
+        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  },
+        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('LIQUIDITY ADDED!', 'success');
+    await loadSwapBalances();
+    await loadPoolState();
+  } catch(e) {
+    console.error("Add liquidity error:", e);
+    toast('ADD LIQUIDITY FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'ADD LIQUIDITY';
+}
+
+async function removeLiquidity() {
+  if (!walletPubkey) return;
+  const lpAmount = parseFloat(document.getElementById('liqLpInput').value) || 0;
+  if (lpAmount === 0) { toast('ENTER LP AMOUNT', 'error'); return; }
+
+  const btn = document.getElementById('removeLiqBtn');
+  btn.disabled = true;
+  btn.textContent = 'REMOVING...';
+
+  try {
+    const provider = getProvider();
+    const discBytes = await xdexDisc("withdraw");
+
+    const lpLamports = BigInt(Math.floor(lpAmount * 1e9));
+    const userToken0 = getAta(mint0, walletPubkey);
+    const userToken1 = getAta(mint1, walletPubkey);
+    const userLpAta = getAta(LP_MINT, walletPubkey);
+
+    const data = Buffer.alloc(8 + 8 + 8 + 8);
+    Buffer.from(discBytes).copy(data, 0);
+    data.writeBigUInt64LE(lpLamports, 8);
+    data.writeBigUInt64LE(BigInt(0), 16); // minimum token0 out
+    data.writeBigUInt64LE(BigInt(0), 24); // minimum token1 out
+
+    const ix = new TransactionInstruction({
+      programId: XDEX_PID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false },
+        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  },
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
+        { pubkey: userToken0,              isSigner: false, isWritable: true  },
+        { pubkey: userToken1,              isSigner: false, isWritable: true  },
+        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  },
+        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('LIQUIDITY REMOVED!', 'success');
+    await loadSwapBalances();
+    await loadPoolState();
+  } catch(e) {
+    console.error("Remove liquidity error:", e);
+    toast('REMOVE FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'REMOVE LIQUIDITY';
+}
+
+function setLiqTab(tab) {
+  document.getElementById('tabAdd').className = 'liq-tab' + (tab === 'add' ? ' active' : '');
+  document.getElementById('tabRemove').className = 'liq-tab' + (tab === 'remove' ? ' active' : '');
+  document.getElementById('liqAddPanel').style.display = tab === 'add' ? 'block' : 'none';
+  document.getElementById('liqRemovePanel').style.display = tab === 'remove' ? 'block' : 'none';
+}
+
+// Add pool loading to loadAll
+const _origLoadAll = loadAll;
+loadAll = async function() {
+  await _origLoadAll();
+  await loadPoolState();
+  await loadSwapBalances();
+};
 
 // Auto-connect on load
 window.addEventListener('load', async () => {
