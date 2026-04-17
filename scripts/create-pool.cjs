@@ -96,6 +96,122 @@ async function main() {
   console.log("Creator token1 ATA:", creatorToken1.toBase58());
   console.log("Creator LP ATA:", creatorLpToken.toBase58());
 
+  // Ensure WSOL ATA exists and is funded
+  const wsolMint = WSOL_MINT;
+  const wsolAta = isGumToken0 ? creatorToken1 : creatorToken0;
+  const wsolNeeded = isGumToken0 ? initAmount1 : initAmount0;
+
+  const wsolInfo = await connection.getAccountInfo(wsolAta);
+  if (!wsolInfo) {
+    console.log("\nCreating WSOL ATA and funding with", Number(wsolNeeded) / 1e9, "XNT...");
+    // Create ATA + transfer SOL + sync native in one transaction
+    const createAtaIx = require("@solana/web3.js").TransactionInstruction;
+    const { Token, TOKEN_PROGRAM_ID: TPK } = { Token: null, TOKEN_PROGRAM_ID: TOKEN_PID };
+
+    // Manual create ATA instruction
+    const createIx = new TransactionInstruction({
+      programId: ASSOC_PID,
+      keys: [
+        { pubkey: wallet.publicKey, isSigner: true,  isWritable: true  },
+        { pubkey: wsolAta,          isSigner: false, isWritable: true  },
+        { pubkey: wallet.publicKey, isSigner: false, isWritable: false },
+        { pubkey: wsolMint,         isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,        isSigner: false, isWritable: false },
+      ],
+      data: Buffer.alloc(0),
+    });
+
+    // Transfer SOL to the ATA
+    const transferIx = SystemProgram.transfer({
+      fromPubkey: wallet.publicKey,
+      toPubkey: wsolAta,
+      lamports: Number(wsolNeeded) + 10_000_000, // extra buffer
+    });
+
+    // Sync native
+    const syncIx = new TransactionInstruction({
+      programId: TOKEN_PID,
+      keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+      data: Buffer.from([17]), // SyncNative instruction index
+    });
+
+    const setupTx = new Transaction().add(createIx, transferIx, syncIx);
+    const setupSig = await sendAndConfirmTransaction(connection, setupTx, [wallet]);
+    console.log("✅ WSOL ATA created and funded:", setupSig.slice(0, 20) + "...");
+  } else if (wsolInfo.owner.equals(SystemProgram.programId) || wsolInfo.data.length < 72) {
+    // Account exists but is a system account (raw SOL), not a token account
+    // Close it and recreate as proper WSOL ATA
+    console.log("\nWSOL ATA exists as system account, recreating as token account...");
+    const createIx = new TransactionInstruction({
+      programId: ASSOC_PID,
+      keys: [
+        { pubkey: wallet.publicKey, isSigner: true,  isWritable: true  },
+        { pubkey: wsolAta,          isSigner: false, isWritable: true  },
+        { pubkey: wallet.publicKey, isSigner: false, isWritable: false },
+        { pubkey: wsolMint,         isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PID,        isSigner: false, isWritable: false },
+      ],
+      data: Buffer.alloc(0),
+    });
+    const syncIx = new TransactionInstruction({
+      programId: TOKEN_PID,
+      keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+      data: Buffer.from([17]),
+    });
+    try {
+      const setupTx = new Transaction().add(createIx, syncIx);
+      const setupSig = await sendAndConfirmTransaction(connection, setupTx, [wallet]);
+      console.log("✅ WSOL ATA recreated:", setupSig.slice(0, 20) + "...");
+    } catch(e) {
+      // ATA might already be a token account with lamports, just sync
+      console.log("Syncing existing account...");
+      const syncTx = new Transaction().add(syncIx);
+      const syncSig = await sendAndConfirmTransaction(connection, syncTx, [wallet]);
+      console.log("✅ WSOL synced:", syncSig.slice(0, 20) + "...");
+    }
+    // Check balance after sync
+    const updatedInfo = await connection.getAccountInfo(wsolAta);
+    if (updatedInfo && updatedInfo.data.length >= 72) {
+      const dv = new DataView(updatedInfo.data.buffer, updatedInfo.data.byteOffset);
+      const balance = Number(dv.getBigUint64(64, true));
+      if (balance < Number(wsolNeeded)) {
+        const transferIx = SystemProgram.transfer({
+          fromPubkey: wallet.publicKey, toPubkey: wsolAta,
+          lamports: Number(wsolNeeded) - balance + 10_000_000,
+        });
+        const syncIx2 = new TransactionInstruction({
+          programId: TOKEN_PID,
+          keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+          data: Buffer.from([17]),
+        });
+        const fundTx = new Transaction().add(transferIx, syncIx2);
+        await sendAndConfirmTransaction(connection, fundTx, [wallet]);
+        console.log("✅ WSOL topped up");
+      }
+    }
+  } else {
+    // Proper token account — check balance
+    const dv = new DataView(wsolInfo.data.buffer, wsolInfo.data.byteOffset);
+    const balance = Number(dv.getBigUint64(64, true));
+    if (balance < Number(wsolNeeded)) {
+      console.log("\nFunding WSOL ATA with more SOL...");
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: wallet.publicKey, toPubkey: wsolAta,
+        lamports: Number(wsolNeeded) - balance + 10_000_000,
+      });
+      const syncIx = new TransactionInstruction({
+        programId: TOKEN_PID,
+        keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+        data: Buffer.from([17]),
+      });
+      const fundTx = new Transaction().add(transferIx, syncIx);
+      const fundSig = await sendAndConfirmTransaction(connection, fundTx, [wallet]);
+      console.log("✅ WSOL funded:", fundSig.slice(0, 20) + "...");
+    }
+  }
+
   // Build initialize instruction
   const discBytes = disc("initialize");
   const data = Buffer.alloc(8 + 8 + 8 + 8);

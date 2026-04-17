@@ -788,6 +788,16 @@ let swapDirection = 'gum_to_xnt'; // or 'xnt_to_gum'
 let poolReserve0 = 0, poolReserve1 = 0, poolLpSupply = 0;
 let userGumBalance = 0, userXntBalance = 0, userLpBalance = 0;
 
+function buildIxData(discBytes, ...u64Args) {
+  const data = new Uint8Array(8 + u64Args.length * 8);
+  data.set(discBytes, 0);
+  const dv = new DataView(data.buffer);
+  for (let i = 0; i < u64Args.length; i++) {
+    dv.setBigUint64(8 + i * 8, BigInt(u64Args[i]), true);
+  }
+  return data;
+}
+
 function xdexDisc(name) {
   const hash = crypto.subtle.digest('SHA-256', strToU8(`global:${name}`));
   return hash.then(buf => new Uint8Array(buf).slice(0, 8));
@@ -963,10 +973,7 @@ async function executeSwap() {
     const inputVault = inputMint.equals(mint0) ? VAULT_0 : VAULT_1;
     const outputVault = outputMint.equals(mint0) ? VAULT_0 : VAULT_1;
 
-    const data = Buffer.alloc(8 + 8 + 8);
-    Buffer.from(discBytes).copy(data, 0);
-    data.writeBigUInt64LE(amountIn, 8);
-    data.writeBigUInt64LE(minOut, 16);
+    const data = buildIxData(discBytes, amountIn, minOut);
 
     const ix = new TransactionInstruction({
       programId: XDEX_PID,
@@ -1048,11 +1055,7 @@ async function addLiquidity() {
     const maxAmount0 = isGumToken0 ? gumLamports : xntAmount;
     const maxAmount1 = isGumToken0 ? xntAmount : gumLamports;
 
-    const data = Buffer.alloc(8 + 8 + 8 + 8);
-    Buffer.from(discBytes).copy(data, 0);
-    data.writeBigUInt64LE(lpAmount, 8);
-    data.writeBigUInt64LE(maxAmount0, 16);
-    data.writeBigUInt64LE(maxAmount1, 24);
+    const data = buildIxData(discBytes, lpAmount, maxAmount0, maxAmount1);
 
     const ix = new TransactionInstruction({
       programId: XDEX_PID,
@@ -1110,11 +1113,7 @@ async function removeLiquidity() {
     const userToken1 = getAta(mint1, walletPubkey);
     const userLpAta = getAta(LP_MINT, walletPubkey);
 
-    const data = Buffer.alloc(8 + 8 + 8 + 8);
-    Buffer.from(discBytes).copy(data, 0);
-    data.writeBigUInt64LE(lpLamports, 8);
-    data.writeBigUInt64LE(BigInt(0), 16); // minimum token0 out
-    data.writeBigUInt64LE(BigInt(0), 24); // minimum token1 out
+    const data = buildIxData(discBytes, lpLamports, 0n, 0n);
 
     const ix = new TransactionInstruction({
       programId: XDEX_PID,
@@ -1225,9 +1224,7 @@ async function stakeLpTokens() {
     const userLpAta = getAta(LP_MINT, walletPubkey);
     const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
 
-    const data = Buffer.alloc(8 + 8);
-    Buffer.from(realDisc).copy(data, 0);
-    data.writeBigUInt64LE(lpLamports, 8);
+    const data = buildIxData(realDisc, lpLamports);
 
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
