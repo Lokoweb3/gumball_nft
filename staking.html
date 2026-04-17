@@ -152,7 +152,10 @@ header{
   </div>
 
   <!-- Staked NFTs -->
-  <div class="section-title">// YOUR STAKED GUMBALLS</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+    <div style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;">// YOUR STAKED GUMBALLS</div>
+    <button class="card-btn claim" id="claimAllBtn" onclick="claimAll()" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
+  </div>
   <div id="stakedGrid" class="grid">
     <div class="empty-msg">CONNECT WALLET TO VIEW STAKED GUMBALLS</div>
   </div>
@@ -371,10 +374,13 @@ async function loadUnstakedNfts() {
 
 function renderStaked() {
   const el = document.getElementById('stakedGrid');
+  const claimAllBtn = document.getElementById('claimAllBtn');
   if (stakedGumballs.length === 0) {
     el.innerHTML = '<div class="empty-msg">NO STAKED GUMBALLS</div>';
+    if (claimAllBtn) claimAllBtn.style.display = 'none';
     return;
   }
+  if (claimAllBtn) claimAllBtn.style.display = 'inline-block';
   el.innerHTML = stakedGumballs.map(g => {
     const rate = EMISSION_RATES[g.rarity] || 10;
     const pending = getPending(g);
@@ -576,6 +582,55 @@ async function unstakeNft(mintStr) {
     console.error("Unstake error:", e);
     toast('UNSTAKE FAILED: ' + (e.message || '').slice(0, 60), 'error');
   }
+}
+
+async function claimAll() {
+  if (!walletPubkey || stakedGumballs.length === 0) return;
+  const btn = document.getElementById('claimAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'CLAIMING...';
+  try {
+    const provider = getProvider();
+    const discBytes = await disc("claim");
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    const tx = new Transaction();
+    for (const g of stakedGumballs) {
+      const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), g.nftMint.toBytes()], PROGRAM_ID);
+      tx.add(new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [
+          { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+          { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+          { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+          { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+          { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+          { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+          { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+        ],
+        data: discBytes,
+      }));
+    }
+
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast(`CLAIMED GUM FROM ${stakedGumballs.length} GUMBALLS!`, 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Claim all error:", e);
+    toast('CLAIM ALL FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'CLAIM ALL GUM';
 }
 
 // Auto-connect on load
