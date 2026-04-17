@@ -33,8 +33,8 @@ A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users
 
 | | Address |
 |---|---|
-| Program ID | `fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F` |
-| Machine PDA | `8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin` |
+| Program ID | `AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy` |
+| Machine PDA | `Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY` |
 | Oracle wallet | `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy` |
 | Faucet wallet | `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ` |
 
@@ -66,7 +66,7 @@ v5 = 189 bytes  (metadata + commitment_hash + user_seed + oracle_secret)
 ```
 
 The frontend queries only `dataSize: 189`. Previous testnet iterations had v1–v4 formats
-but those were removed in the fresh deploy (new Program ID `fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F`).
+but those were removed in the fresh deploy (new Program ID `AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy`).
 If a future struct change is needed, add a new dataSize filter alongside v5.
 
 ### 3. UncheckedAccount for burn PDAs

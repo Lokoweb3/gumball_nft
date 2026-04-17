@@ -5,7 +5,7 @@ const {
 const crypto = require("crypto");
 const fs     = require("fs");
 
-const PROGRAM_ID  = new PublicKey("fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F");
+const PROGRAM_ID  = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const RPC         = "https://rpc.testnet.x1.xyz";
 const TOKEN_PID   = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const RENT_SYSVAR = new PublicKey("SysvarRent111111111111111111111111111111111");

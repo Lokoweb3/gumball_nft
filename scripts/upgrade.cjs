@@ -20,8 +20,8 @@ const fs  = require("fs");
 const crypto = require("crypto");
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const PROGRAM_ID  = new PublicKey("fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F");
-const MACHINE_PDA = new PublicKey("8FXiKFt1jvNjVbXcxgHFvUxANN6gx3fn6uJkro3QmUin");
+const PROGRAM_ID  = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
+const MACHINE_PDA = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY");
 const RPC         = "https://rpc.testnet.x1.xyz";
 
 const TOKEN_PROGRAM_ID            = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");

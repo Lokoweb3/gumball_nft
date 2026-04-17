@@ -6,7 +6,7 @@ use anchor_spl::{
     token::{burn, mint_to, Burn, Mint, MintTo, Token, TokenAccount},
 };
 
-declare_id!("fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F");
+declare_id!("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1029,20 +1029,21 @@ pub mod gumball_nft {
     /// Claim pending GUM rewards without unstaking.
     pub fn claim(ctx: Context<ClaimRewards>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let stake = &mut ctx.accounts.stake_account;
-        let elapsed = (now - stake.last_claimed) as u64;
-        let rate = EMISSION_PER_SECOND[stake.rarity as usize % 5];
+        let elapsed = (now - ctx.accounts.stake_account.last_claimed) as u64;
+        let rarity = ctx.accounts.stake_account.rarity;
+        let rate = EMISSION_PER_SECOND[rarity as usize % 5];
         let reward = elapsed.checked_mul(rate).ok_or(GumballError::MathOverflow)?;
 
         if reward == 0 { return Ok(()); }
 
         // Check GUM supply cap
-        let config = &mut ctx.accounts.stake_config;
-        let new_total = config.total_claimed.checked_add(reward).ok_or(GumballError::MathOverflow)?;
+        let new_total = ctx.accounts.stake_config.total_claimed
+            .checked_add(reward).ok_or(GumballError::MathOverflow)?;
         require!(new_total <= GUM_MAX_SUPPLY, GumballError::GumSupplyExhausted);
 
         // Mint GUM to staker
-        let seeds = &[b"stake_config".as_ref(), &[config.bump]];
+        let bump = ctx.accounts.stake_config.bump;
+        let seeds = &[b"stake_config".as_ref(), &[bump]];
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -1056,30 +1057,33 @@ pub mod gumball_nft {
             reward,
         )?;
 
-        stake.last_claimed = now;
-        config.total_claimed = new_total;
+        ctx.accounts.stake_account.last_claimed = now;
+        ctx.accounts.stake_config.total_claimed = new_total;
 
-        emit!(RewardsClaimedEvent {
-            staker: stake.owner, nft_mint: stake.nft_mint, amount: reward,
-        });
+        let staker = ctx.accounts.stake_account.owner;
+        let nft_mint = ctx.accounts.stake_account.nft_mint;
+        emit!(RewardsClaimedEvent { staker, nft_mint, amount: reward });
         Ok(())
     }
 
     /// Unstake — claim pending rewards and return NFT to owner.
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let stake = &ctx.accounts.stake_account;
-        let elapsed = (now - stake.last_claimed) as u64;
-        let rate = EMISSION_PER_SECOND[stake.rarity as usize % 5];
+        let elapsed = (now - ctx.accounts.stake_account.last_claimed) as u64;
+        let rarity = ctx.accounts.stake_account.rarity;
+        let rate = EMISSION_PER_SECOND[rarity as usize % 5];
         let reward = elapsed.checked_mul(rate).ok_or(GumballError::MathOverflow)?;
+        let staker_key = ctx.accounts.stake_account.owner;
+        let nft_mint_key = ctx.accounts.stake_account.nft_mint;
 
-        let config = &mut ctx.accounts.stake_config;
+        let bump = ctx.accounts.stake_config.bump;
+        let seeds = &[b"stake_config".as_ref(), &[bump]];
 
         // Mint final GUM rewards if any
         if reward > 0 {
-            let new_total = config.total_claimed.checked_add(reward).ok_or(GumballError::MathOverflow)?;
+            let new_total = ctx.accounts.stake_config.total_claimed
+                .checked_add(reward).ok_or(GumballError::MathOverflow)?;
             if new_total <= GUM_MAX_SUPPLY {
-                let seeds = &[b"stake_config".as_ref(), &[config.bump]];
                 mint_to(
                     CpiContext::new_with_signer(
                         ctx.accounts.token_program.to_account_info(),
@@ -1092,12 +1096,11 @@ pub mod gumball_nft {
                     ),
                     reward,
                 )?;
-                config.total_claimed = new_total;
+                ctx.accounts.stake_config.total_claimed = new_total;
             }
         }
 
         // Return NFT from vault to staker
-        let seeds = &[b"stake_config".as_ref(), &[config.bump]];
         anchor_spl::token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -1111,11 +1114,9 @@ pub mod gumball_nft {
             1,
         )?;
 
-        config.total_staked = config.total_staked.saturating_sub(1);
+        ctx.accounts.stake_config.total_staked = ctx.accounts.stake_config.total_staked.saturating_sub(1);
 
-        emit!(NftUnstakedEvent {
-            staker: stake.owner, nft_mint: stake.nft_mint, reward,
-        });
+        emit!(NftUnstakedEvent { staker: staker_key, nft_mint: nft_mint_key, reward });
         // StakeAccount closed via `close = staker` in accounts struct
         Ok(())
     }

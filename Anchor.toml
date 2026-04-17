@@ -2,10 +2,11 @@
 anchor_version = "0.31.0"
 
 [features]
-seeds = true
+resolution = true
+skip-lint = false
 
 [programs.testnet]
-gumball_nft = "fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F"
+gumball_nft = "AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy"
 
 [registry]
 url = "https://api.apr.dev"
