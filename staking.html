@@ -788,6 +788,22 @@ let swapDirection = 'gum_to_xnt'; // or 'xnt_to_gum'
 let poolReserve0 = 0, poolReserve1 = 0, poolLpSupply = 0;
 let userGumBalance = 0, userXntBalance = 0, userLpBalance = 0;
 
+// Manual SystemProgram.transfer — avoids Buffer dependency in browser CDN build
+function solTransferIx(from, to, lamports) {
+  const data = new Uint8Array(4 + 8);
+  const dv = new DataView(data.buffer);
+  dv.setUint32(0, 2, true); // Transfer instruction index
+  dv.setBigUint64(4, BigInt(lamports), true);
+  return new TransactionInstruction({
+    programId: SystemProgram.programId,
+    keys: [
+      { pubkey: from, isSigner: true,  isWritable: true },
+      { pubkey: to,   isSigner: false, isWritable: true },
+    ],
+    data,
+  });
+}
+
 function buildIxData(discBytes, ...u64Args) {
   const data = new Uint8Array(8 + u64Args.length * 8);
   data.set(discBytes, 0);
@@ -1032,11 +1048,7 @@ async function executeSwap() {
         }));
       }
       // Transfer SOL to WSOL ATA + sync
-      tx.add(SystemProgram.transfer({
-        fromPubkey: walletPubkey,
-        toPubkey: userInputAta,
-        lamports: Number(amountIn) + 10000,
-      }));
+      tx.add(solTransferIx(walletPubkey, userInputAta, Number(amountIn) + 10000));
       tx.add(new TransactionInstruction({
         programId: TOKEN_PID,
         keys: [{ pubkey: userInputAta, isSigner: false, isWritable: true }],
@@ -1151,11 +1163,7 @@ async function addLiquidity() {
 
     // Wrap SOL into WSOL for the XNT side
     const wsolNeeded = isGumToken0 ? maxAmount1 : maxAmount0;
-    tx.add(SystemProgram.transfer({
-      fromPubkey: walletPubkey,
-      toPubkey: wsolAta,
-      lamports: Number(wsolNeeded) + 10000,
-    }));
+    tx.add(solTransferIx(walletPubkey, wsolAta, Number(wsolNeeded) + 10000));
     tx.add(new TransactionInstruction({
       programId: TOKEN_PID,
       keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
