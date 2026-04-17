@@ -995,7 +995,56 @@ async function executeSwap() {
       data,
     });
 
-    const tx = new Transaction().add(ix);
+    const tx = new Transaction();
+
+    // Create output ATA if it doesn't exist
+    const outputAtaInfo = await connection.getAccountInfo(userOutputAta);
+    if (!outputAtaInfo) {
+      tx.add(new TransactionInstruction({
+        programId: ASSOC_PID,
+        keys: [
+          { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+          { pubkey: userOutputAta,           isSigner: false, isWritable: true  },
+          { pubkey: walletPubkey,            isSigner: false, isWritable: false },
+          { pubkey: outputMint,              isSigner: false, isWritable: false },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        ],
+        data: new Uint8Array(0),
+      }));
+    }
+
+    // If swapping XNT to GUM, wrap SOL into WSOL ATA first
+    if (swapDirection === 'xnt_to_gum') {
+      const inputAtaInfo = await connection.getAccountInfo(userInputAta);
+      if (!inputAtaInfo) {
+        tx.add(new TransactionInstruction({
+          programId: ASSOC_PID,
+          keys: [
+            { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+            { pubkey: userInputAta,            isSigner: false, isWritable: true  },
+            { pubkey: walletPubkey,            isSigner: false, isWritable: false },
+            { pubkey: WSOL_MINT,               isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+          ],
+          data: new Uint8Array(0),
+        }));
+      }
+      // Transfer SOL to WSOL ATA + sync
+      tx.add(SystemProgram.transfer({
+        fromPubkey: walletPubkey,
+        toPubkey: userInputAta,
+        lamports: Number(amountIn) + 10000,
+      }));
+      tx.add(new TransactionInstruction({
+        programId: TOKEN_PID,
+        keys: [{ pubkey: userInputAta, isSigner: false, isWritable: true }],
+        data: new Uint8Array([17]), // SyncNative
+      }));
+    }
+
+    tx.add(ix);
     tx.feePayer = walletPubkey;
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
