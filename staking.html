@@ -246,10 +246,15 @@ async function connectWallet() {
 // ── Load Data ────────────────────────────────────────────────────────────────
 
 async function loadAll() {
-  await Promise.all([loadStakeConfig(), loadStakedNfts(), loadUnstakedNfts()]);
-  renderStaked();
-  renderUnstaked();
-  startPendingTimer();
+  try {
+    await Promise.all([loadStakeConfig(), loadStakedNfts(), loadUnstakedNfts()]);
+    renderStaked();
+    renderUnstaked();
+    startPendingTimer();
+  } catch(e) {
+    console.error("loadAll error:", e);
+    toast("LOAD ERROR: " + (e.message || '').slice(0, 60), 'error');
+  }
 }
 
 async function loadStakeConfig() {
@@ -314,42 +319,51 @@ async function loadUnstakedNfts() {
   unstakedGumballs = [];
   if (!walletPubkey) return;
 
-  // Get user's token accounts
-  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+  // Query all gumballs owned by this wallet directly from the program
+  // Much faster than scanning 600+ token accounts individually
+  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      { dataSize: GD_V5 },
+      { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }, // owner field
+    ],
+  });
 
+  // Build a mint map from token accounts to get mint keys
+  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+  const gumballMintMap = {};
   for (const { account } of tokenAccounts.value) {
     const mintKey = new PublicKey(account.data.slice(0, 32));
     const amount = Number(new DataView(account.data.buffer, account.data.byteOffset).getBigUint64(64, true));
     if (amount !== 1) continue;
-
-    // Check if it's a gumball
     const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
-    try {
-      const gbInfo = await connection.getAccountInfo(gumballPda);
-      if (!gbInfo || gbInfo.data.length !== GD_V5) continue;
+    gumballMintMap[gumballPda.toBase58()] = mintKey;
+  }
 
-      // Check not already staked
-      const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake"), mintKey.toBytes()], PROGRAM_ID);
-      const stakeInfo = await connection.getAccountInfo(stakePda);
-      if (stakeInfo) continue; // already staked
+  for (const { pubkey, account } of accounts) {
+    const mintKey = gumballMintMap[pubkey.toBase58()];
+    if (!mintKey) continue;
 
-      const gd = gbInfo.data;
-      const dv = new DataView(gd.buffer, gd.byteOffset);
-      const serial = Number(dv.getBigUint64(8+32+32, true));
-      const flavor = gd[8+32+32+8];
-      const color = gd[8+32+32+8+1];
-      const rarity = gd[8+32+32+8+2];
-      const special = gd[8+32+32+8+3];
-      const colorName = COLORS[color] || "Berry Blue";
-      const ballColor = BALL_COLORS[colorName] || "#2266ee";
+    // Check not already staked
+    const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake"), mintKey.toBytes()], PROGRAM_ID);
+    const stakeInfo = await connection.getAccountInfo(stakePda);
+    if (stakeInfo) continue;
 
-      unstakedGumballs.push({
-        nftMint: mintKey, gumballPda, rarity, serial, flavor, color, special,
-        colorName, ballColor,
-        flavorName: FLAVORS[flavor] || "Mystery",
-        rarName: RARITY[rarity] || "Common",
-      });
-    } catch(e) {}
+    const gd = account.data;
+    const dv = new DataView(gd.buffer, gd.byteOffset);
+    const serial = Number(dv.getBigUint64(8+32+32, true));
+    const flavor = gd[8+32+32+8];
+    const color = gd[8+32+32+8+1];
+    const rarity = gd[8+32+32+8+2];
+    const special = gd[8+32+32+8+3];
+    const colorName = COLORS[color] || "Berry Blue";
+    const ballColor = BALL_COLORS[colorName] || "#2266ee";
+
+    unstakedGumballs.push({
+      nftMint: mintKey, gumballPda: pubkey, rarity, serial, flavor, color, special,
+      colorName, ballColor,
+      flavorName: FLAVORS[flavor] || "Mystery",
+      rarName: RARITY[rarity] || "Common",
+    });
   }
 }
 
