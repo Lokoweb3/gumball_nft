@@ -231,12 +231,15 @@ async function connectWallet() {
     const provider = getProvider();
     if (!provider) { toast('NO WALLET FOUND — INSTALL X1 WALLET OR BACKPACK', 'error'); return; }
     const resp = await provider.connect();
-    walletPubkey = resp.publicKey;
-    document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
-    toast('WALLET CONNECTED', 'success');
+    walletPubkey = resp.publicKey || provider.publicKey;
+    if (!walletPubkey) { toast('WALLET CONNECTED BUT NO PUBLIC KEY', 'error'); return; }
+    const short = walletPubkey.toBase58().slice(0,4)+"..."+walletPubkey.toBase58().slice(-4);
+    document.getElementById('walletBtn').textContent = `[ ${short} ]`;
+    toast('WALLET CONNECTED: ' + short, 'success');
     await loadAll();
   } catch(e) {
-    toast('WALLET CONNECTION FAILED', 'error');
+    console.error("Wallet error:", e);
+    toast('WALLET CONNECTION FAILED: ' + (e.message || '').slice(0, 60), 'error');
   }
 }
 
@@ -563,16 +566,21 @@ async function unstakeNft(mintStr) {
 
 // Auto-connect on load
 window.addEventListener('load', async () => {
-  try {
-    const provider = getProvider();
-    if (provider.isConnected || provider.publicKey) {
-      walletPubkey = provider.publicKey;
-      document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
-      await loadAll();
-    }
-  } catch(e) {}
-  // Load global stats even without wallet
+  // Load global stats immediately
   loadStakeConfig();
+  // Try auto-connect after a short delay (X1 wallet injects async)
+  setTimeout(async () => {
+    try {
+      const provider = getProvider();
+      if (provider && (provider.isConnected || provider.publicKey)) {
+        walletPubkey = provider.publicKey;
+        if (walletPubkey) {
+          document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+          await loadAll();
+        }
+      }
+    } catch(e) {}
+  }, 500);
 });
 </script>
 </body>
