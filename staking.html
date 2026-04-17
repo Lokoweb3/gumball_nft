@@ -1125,7 +1125,44 @@ async function addLiquidity() {
       data,
     });
 
-    const tx = new Transaction().add(ix);
+    const tx = new Transaction();
+
+    // Create ATAs if they don't exist
+    const wsolAta = isGumToken0 ? userToken1 : userToken0;
+    const gumAta = isGumToken0 ? userToken0 : userToken1;
+
+    for (const [ata, aMint] of [[userLpAta, LP_MINT], [wsolAta, WSOL_MINT], [gumAta, GUM_MINT_PDA]]) {
+      const info = await connection.getAccountInfo(ata);
+      if (!info) {
+        tx.add(new TransactionInstruction({
+          programId: ASSOC_PID,
+          keys: [
+            { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+            { pubkey: ata,                     isSigner: false, isWritable: true  },
+            { pubkey: walletPubkey,            isSigner: false, isWritable: false },
+            { pubkey: aMint,                   isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+          ],
+          data: new Uint8Array(0),
+        }));
+      }
+    }
+
+    // Wrap SOL into WSOL for the XNT side
+    const wsolNeeded = isGumToken0 ? maxAmount1 : maxAmount0;
+    tx.add(SystemProgram.transfer({
+      fromPubkey: walletPubkey,
+      toPubkey: wsolAta,
+      lamports: Number(wsolNeeded) + 10000,
+    }));
+    tx.add(new TransactionInstruction({
+      programId: TOKEN_PID,
+      keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+      data: new Uint8Array([17]), // SyncNative
+    }));
+
+    tx.add(ix);
     tx.feePayer = walletPubkey;
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
