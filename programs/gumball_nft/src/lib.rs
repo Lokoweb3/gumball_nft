@@ -38,6 +38,10 @@ const EMISSION_PER_SECOND: [u64; 5] = [
     5_787_037, // Legendary:500 * 1e6 / 86400 = 5,787,037
 ];
 
+// LP staking: 100 GUM/day per LP token staked (scaled by LP amount)
+// Rate is per 1 LP token (9 decimals) per second
+const LP_EMISSION_PER_SECOND: u64 = 1_157_407; // 100 * 1e6 / 86400
+
 // GumballData raw byte offsets for UncheckedAccount parsing in burn instructions.
 // Must match GumballData struct layout: disc(8) + owner(32) + machine(32) + serial(8) + flavor(1) + color(1) + rarity(1)
 const GD_OWNER_OFFSET:  usize = 8;
@@ -1121,6 +1125,137 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    // ── LP STAKING ───────────────────────────────────────────────────────────
+
+    /// Stake LP tokens to earn GUM rewards.
+    pub fn stake_lp(ctx: Context<StakeLp>, amount: u64) -> Result<()> {
+        require!(amount > 0, GumballError::InvalidPrice);
+
+        // Transfer LP tokens to vault
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.user_lp_ata.to_account_info(),
+                    to:        ctx.accounts.vault_lp_ata.to_account_info(),
+                    authority: ctx.accounts.staker.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        let now = Clock::get()?.unix_timestamp;
+        let lp_stake = &mut ctx.accounts.lp_stake_account;
+        lp_stake.owner = ctx.accounts.staker.key();
+        lp_stake.lp_mint = ctx.accounts.lp_mint.key();
+        lp_stake.amount = lp_stake.amount.checked_add(amount).ok_or(GumballError::MathOverflow)?;
+        lp_stake.last_claimed = now;
+        lp_stake.bump = ctx.bumps.lp_stake_account;
+
+        emit!(LpStakedEvent { staker: lp_stake.owner, amount });
+        Ok(())
+    }
+
+    /// Claim GUM rewards from LP staking.
+    pub fn claim_lp(ctx: Context<ClaimLpRewards>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
+        let staked_amount = ctx.accounts.lp_stake_account.amount;
+
+        // reward = elapsed * LP_EMISSION_PER_SECOND * (staked_amount / 1e9)
+        // To avoid overflow: (elapsed * LP_EMISSION_PER_SECOND * staked_amount) / 1e9
+        let reward = (elapsed as u128)
+            .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
+            .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
+            / 1_000_000_000u128;
+        let reward = reward as u64;
+
+        if reward == 0 { return Ok(()); }
+
+        let new_total = ctx.accounts.stake_config.total_claimed
+            .checked_add(reward).ok_or(GumballError::MathOverflow)?;
+        require!(new_total <= GUM_MAX_SUPPLY, GumballError::GumSupplyExhausted);
+
+        let bump = ctx.accounts.stake_config.bump;
+        let seeds = &[b"stake_config".as_ref(), &[bump]];
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint:      ctx.accounts.gum_mint.to_account_info(),
+                    to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[seeds],
+            ),
+            reward,
+        )?;
+
+        ctx.accounts.lp_stake_account.last_claimed = now;
+        ctx.accounts.stake_config.total_claimed = new_total;
+
+        emit!(LpRewardsClaimedEvent {
+            staker: ctx.accounts.lp_stake_account.owner, amount: reward,
+        });
+        Ok(())
+    }
+
+    /// Unstake LP tokens — claim final rewards and return LP tokens.
+    pub fn unstake_lp(ctx: Context<UnstakeLp>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
+        let staked_amount = ctx.accounts.lp_stake_account.amount;
+        let staker_key = ctx.accounts.lp_stake_account.owner;
+
+        let reward = (elapsed as u128)
+            .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
+            .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
+            / 1_000_000_000u128;
+        let reward = reward as u64;
+
+        let bump = ctx.accounts.stake_config.bump;
+        let seeds = &[b"stake_config".as_ref(), &[bump]];
+
+        // Mint final GUM rewards
+        if reward > 0 {
+            let new_total = ctx.accounts.stake_config.total_claimed
+                .checked_add(reward).ok_or(GumballError::MathOverflow)?;
+            if new_total <= GUM_MAX_SUPPLY {
+                mint_to(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        MintTo {
+                            mint:      ctx.accounts.gum_mint.to_account_info(),
+                            to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                            authority: ctx.accounts.stake_config.to_account_info(),
+                        },
+                        &[seeds],
+                    ),
+                    reward,
+                )?;
+                ctx.accounts.stake_config.total_claimed = new_total;
+            }
+        }
+
+        // Return LP tokens from vault to staker
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.vault_lp_ata.to_account_info(),
+                    to:        ctx.accounts.user_lp_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[seeds],
+            ),
+            staked_amount,
+        )?;
+
+        emit!(LpUnstakedEvent { staker: staker_key, amount: staked_amount, reward });
+        // LpStakeAccount closed via `close = staker` in accounts struct
+        Ok(())
+    }
+
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1872,6 +2007,99 @@ pub struct Unstake<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+// ─── LP Staking Accounts ─────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct StakeLp<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        init_if_needed, payer = staker, space = 8 + LpStakeAccount::LEN,
+        seeds = [b"lp_stake", staker.key().as_ref()], bump,
+    )]
+    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    pub lp_mint: Account<'info, Mint>,
+    #[account(mut, constraint = user_lp_ata.mint == lp_mint.key() && user_lp_ata.owner == staker.key())]
+    pub user_lp_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = lp_mint,
+        associated_token::authority = stake_config,
+    )]
+    pub vault_lp_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimLpRewards<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        mut,
+        seeds = [b"lp_stake", staker.key().as_ref()], bump = lp_stake_account.bump,
+        constraint = lp_stake_account.owner == staker.key() @ GumballError::Unauthorized,
+    )]
+    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    #[account(mut, seeds = [b"gum_mint"], bump)]
+    pub gum_mint: Account<'info, Mint>,
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = gum_mint,
+        associated_token::authority = staker,
+    )]
+    pub staker_gum_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct UnstakeLp<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        mut, close = staker,
+        seeds = [b"lp_stake", staker.key().as_ref()], bump = lp_stake_account.bump,
+        constraint = lp_stake_account.owner == staker.key() @ GumballError::Unauthorized,
+    )]
+    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    pub lp_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = lp_mint,
+        associated_token::authority = stake_config,
+    )]
+    pub vault_lp_ata: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = lp_mint,
+        associated_token::authority = staker,
+    )]
+    pub user_lp_ata: Account<'info, TokenAccount>,
+    #[account(mut, seeds = [b"gum_mint"], bump)]
+    pub gum_mint: Account<'info, Mint>,
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = gum_mint,
+        associated_token::authority = staker,
+    )]
+    pub staker_gum_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
 // ─── Staking State ───────────────────────────────────────────────────────────
 
 #[account]
@@ -1895,6 +2123,16 @@ pub struct StakeAccount {
 }
 impl StakeAccount { pub const LEN: usize = 32+32+1+8+8+1; }
 
+#[account]
+pub struct LpStakeAccount {
+    pub owner:        Pubkey,  // 32
+    pub lp_mint:      Pubkey,  // 32
+    pub amount:       u64,     //  8
+    pub last_claimed: i64,     //  8
+    pub bump:         u8,      //  1
+}
+impl LpStakeAccount { pub const LEN: usize = 32+32+8+8+1; }
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 #[event] pub struct MachineInitializedEvent { pub authority: Pubkey, pub treasury: Pubkey, pub mint_price: u64, pub max_supply: u64 }
@@ -1912,6 +2150,9 @@ impl StakeAccount { pub const LEN: usize = 32+32+1+8+8+1; }
 #[event] pub struct NftStakedEvent        { pub staker: Pubkey, pub nft_mint: Pubkey, pub rarity: u8 }
 #[event] pub struct NftUnstakedEvent      { pub staker: Pubkey, pub nft_mint: Pubkey, pub reward: u64 }
 #[event] pub struct RewardsClaimedEvent   { pub staker: Pubkey, pub nft_mint: Pubkey, pub amount: u64 }
+#[event] pub struct LpStakedEvent        { pub staker: Pubkey, pub amount: u64 }
+#[event] pub struct LpUnstakedEvent      { pub staker: Pubkey, pub amount: u64, pub reward: u64 }
+#[event] pub struct LpRewardsClaimedEvent { pub staker: Pubkey, pub amount: u64 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 

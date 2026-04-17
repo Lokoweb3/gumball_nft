@@ -269,6 +269,33 @@ header{
     </div>
   </div>
 
+  <!-- LP Staking -->
+  <div class="section-title" style="margin-top:32px;">// STAKE LP TOKENS FOR GUM</div>
+  <div class="swap-box">
+    <div class="swap-info" style="margin-bottom:12px;display:flex;">
+      <div>Reward: 100 GUM/day per LP token</div>
+    </div>
+    <div class="swap-field" style="margin-bottom:12px;">
+      <div class="swap-label">YOUR STAKED LP</div>
+      <div style="font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--gold);margin:8px 0;" id="stakedLpAmount">0.00</div>
+      <div class="swap-balance" id="stakedLpReward">Pending: 0.00 GUM</div>
+    </div>
+    <div class="swap-field" style="margin-bottom:12px;">
+      <div class="swap-label">STAKE LP TOKENS</div>
+      <div class="swap-input-row">
+        <input type="number" id="lpStakeInput" placeholder="0.00" min="0" step="0.01" />
+        <button class="max-btn" onclick="setLpStakeMax()">MAX</button>
+        <span class="swap-token-label">LP</span>
+      </div>
+      <div class="swap-balance" id="availableLpBalance">Available: —</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="flex:1;">STAKE LP</button>
+      <button class="swap-btn" id="claimLpBtn" onclick="claimLpRewards()" disabled style="flex:1;border-color:var(--gold);color:var(--gold);">CLAIM GUM</button>
+      <button class="swap-btn" id="unstakeLpBtn" onclick="unstakeLpTokens()" disabled style="flex:1;border-color:var(--red);color:var(--red);">UNSTAKE LP</button>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
@@ -1134,12 +1161,216 @@ function setLiqTab(tab) {
   document.getElementById('liqRemovePanel').style.display = tab === 'remove' ? 'block' : 'none';
 }
 
-// Add pool loading to loadAll
+// ── LP STAKING ───────────────────────────────────────────────────────────────
+
+const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
+const LP_RATE_PER_SEC = 1157407; // 100 GUM/day per LP token
+let userStakedLp = 0, userStakedLpLastClaimed = 0;
+
+function setLpStakeMax() {
+  document.getElementById('lpStakeInput').value = (userLpBalance / 1e9).toFixed(6);
+}
+
+async function loadLpStakeState() {
+  if (!walletPubkey) return;
+  try {
+    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake"), walletPubkey.toBytes()], PROGRAM_ID);
+    const info = await connection.getAccountInfo(lpStakePda);
+    if (info) {
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      userStakedLp = Number(dv.getBigUint64(8+32+32, true));
+      userStakedLpLastClaimed = Number(dv.getBigInt64(8+32+32+8, true));
+      document.getElementById('stakedLpAmount').textContent = (userStakedLp / 1e9).toFixed(6);
+      document.getElementById('stakeLpBtn').disabled = false;
+      document.getElementById('claimLpBtn').disabled = userStakedLp === 0;
+      document.getElementById('unstakeLpBtn').disabled = userStakedLp === 0;
+    } else {
+      userStakedLp = 0;
+      userStakedLpLastClaimed = 0;
+      document.getElementById('stakedLpAmount').textContent = '0.00';
+      document.getElementById('stakeLpBtn').disabled = false;
+      document.getElementById('claimLpBtn').disabled = true;
+      document.getElementById('unstakeLpBtn').disabled = true;
+    }
+    document.getElementById('availableLpBalance').textContent = `Available: ${(userLpBalance / 1e9).toFixed(6)} LP`;
+  } catch(e) { console.error('loadLpStakeState:', e); }
+}
+
+function updateLpPending() {
+  if (userStakedLp === 0) {
+    document.getElementById('stakedLpReward').textContent = 'Pending: 0.00 GUM';
+    return;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const elapsed = now - userStakedLpLastClaimed;
+  const reward = (elapsed * LP_RATE_PER_SEC * (userStakedLp / 1e9)) / 1e6;
+  document.getElementById('stakedLpReward').textContent = `Pending: ${reward.toFixed(2)} GUM`;
+}
+
+async function stakeLpTokens() {
+  if (!walletPubkey) return;
+  const amount = parseFloat(document.getElementById('lpStakeInput').value) || 0;
+  if (amount === 0) { toast('ENTER LP AMOUNT', 'error'); return; }
+
+  const btn = document.getElementById('stakeLpBtn');
+  btn.disabled = true; btn.textContent = 'STAKING...';
+  try {
+    const provider = getProvider();
+    const discBytes = await xdexDisc("stake_lp"); // Actually our program's disc
+    const realDisc = await disc("stake_lp");
+    const lpLamports = BigInt(Math.floor(amount * 1e9));
+
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake"), walletPubkey.toBytes()], PROGRAM_ID);
+    const userLpAta = getAta(LP_MINT, walletPubkey);
+    const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
+
+    const data = Buffer.alloc(8 + 8);
+    Buffer.from(realDisc).copy(data, 0);
+    data.writeBigUInt64LE(lpLamports, 8);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: lpStakePda,              isSigner: false, isWritable: true  },
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: false },
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
+        { pubkey: vaultLpAta,              isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('LP TOKENS STAKED!', 'success');
+    document.getElementById('lpStakeInput').value = '';
+    await loadSwapBalances();
+    await loadLpStakeState();
+  } catch(e) {
+    console.error("Stake LP error:", e);
+    toast('STAKE LP FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false; btn.textContent = 'STAKE LP';
+}
+
+async function claimLpRewards() {
+  if (!walletPubkey) return;
+  const btn = document.getElementById('claimLpBtn');
+  btn.disabled = true; btn.textContent = 'CLAIMING...';
+  try {
+    const provider = getProvider();
+    const realDisc = await disc("claim_lp");
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake"), walletPubkey.toBytes()], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: lpStakePda,              isSigner: false, isWritable: true  },
+        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data: realDisc,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('LP GUM REWARDS CLAIMED!', 'success');
+    await loadSwapBalances();
+    await loadLpStakeState();
+  } catch(e) {
+    console.error("Claim LP error:", e);
+    toast('CLAIM FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false; btn.textContent = 'CLAIM GUM';
+}
+
+async function unstakeLpTokens() {
+  if (!walletPubkey) return;
+  const btn = document.getElementById('unstakeLpBtn');
+  btn.disabled = true; btn.textContent = 'UNSTAKING...';
+  try {
+    const provider = getProvider();
+    const realDisc = await disc("unstake_lp");
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake"), walletPubkey.toBytes()], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const userLpAta = getAta(LP_MINT, walletPubkey);
+    const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: lpStakePda,              isSigner: false, isWritable: true  },
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: false },
+        { pubkey: vaultLpAta,              isSigner: false, isWritable: true  },
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
+        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data: realDisc,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('LP UNSTAKED + GUM CLAIMED!', 'success');
+    await loadSwapBalances();
+    await loadLpStakeState();
+  } catch(e) {
+    console.error("Unstake LP error:", e);
+    toast('UNSTAKE FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false; btn.textContent = 'UNSTAKE LP';
+}
+
+// Add pool + LP stake loading to loadAll
 const _origLoadAll = loadAll;
 loadAll = async function() {
   await _origLoadAll();
   await loadPoolState();
   await loadSwapBalances();
+  await loadLpStakeState();
+  // Update LP pending every second
+  setInterval(updateLpPending, 1000);
 };
 
 // Auto-connect on load
