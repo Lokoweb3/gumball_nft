@@ -221,10 +221,7 @@ function getAta(mint, owner) {
 }
 
 function getProvider() {
-  if (window.xnt) return window.xnt;
-  if (window.backpack) return window.backpack;
-  if (window.phantom?.solana) return window.phantom.solana;
-  throw new Error("No wallet found");
+  return window.xnft?.solana || window.x1wallet || window.phantom?.solana || window.solana || null;
 }
 
 // ── Wallet ───────────────────────────────────────────────────────────────────
@@ -232,6 +229,7 @@ function getProvider() {
 async function connectWallet() {
   try {
     const provider = getProvider();
+    if (!provider) { toast('NO WALLET FOUND — INSTALL X1 WALLET OR BACKPACK', 'error'); return; }
     const resp = await provider.connect();
     walletPubkey = resp.publicKey;
     document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
