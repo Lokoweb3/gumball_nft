@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUMBALL.XNT — STAKING</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --black:#0a0a0f; --panel:#0f0f1a; --panel2:#141424; --border:#2a2a4a;
+  --teal:#00ffcc; --purple:#cc44ff; --gold:#ffcc00; --white:#e8e8f8;
+  --gray:#6666aa; --red:#ff2244; --green:#44ff88; --blue:#44aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
+body{
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,255,204,0.012) 3px,rgba(0,255,204,0.012) 4px),
+    var(--black);
+  font-family:'Space Mono',monospace;
+  display:flex;flex-direction:column;align-items:center;padding:0 16px 64px;
+}
+header{
+  width:100%;max-width:960px;padding:20px 0 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);margin-bottom:32px;flex-wrap:wrap;gap:12px;
+}
+.logo{font-family:'Press Start 2P',cursive;font-size:0.8rem;color:var(--gold);letter-spacing:2px;line-height:1.6;}
+.logo span{color:var(--red);}
+.nav-link{
+  font-family:'Press Start 2P',cursive;font-size:0.38rem;letter-spacing:1px;
+  padding:7px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--gray);cursor:pointer;text-decoration:none;transition:all 0.2s;
+}
+.nav-link:hover,.nav-link.active{border-color:var(--teal);color:var(--teal);}
+.wallet-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 12px;
+  border:1px solid var(--gold);background:transparent;color:var(--gold);
+  cursor:pointer;letter-spacing:1px;transition:all 0.2s;
+}
+.wallet-btn:hover{background:rgba(255,204,0,0.1);}
+.hamburger{display:none;background:none;border:1px solid var(--border);color:var(--teal);font-size:1.2rem;padding:6px 10px;cursor:pointer;border-radius:4px;}
+.mobile-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;background:rgba(10,10,15,0.95);backdrop-filter:blur(12px);flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.mobile-menu.open{display:flex;}
+.mobile-menu a{font-family:'Press Start 2P',cursive;font-size:0.5rem;padding:12px 24px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;text-decoration:none;border-radius:6px;min-width:200px;text-align:center;}
+.mobile-menu a:hover,.mobile-menu a.active{border-color:var(--teal);color:var(--teal);}
+.mobile-close{position:absolute;top:20px;right:20px;background:none;border:1px solid var(--border);color:var(--gray);font-size:1.2rem;padding:8px 12px;cursor:pointer;border-radius:4px;}
+@media(max-width:700px){.hamburger{display:block;}.nav-link{display:none;}}
+
+.wrap{width:100%;max-width:960px;}
+
+/* Stats */
+.stats-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;}
+.stat-box{flex:1;min-width:120px;background:var(--panel);border:1px solid var(--border);padding:16px;text-align:center;}
+.stat-val{font-family:'Press Start 2P',cursive;font-size:0.65rem;color:var(--gold);display:block;margin-bottom:6px;}
+.stat-lbl{font-size:0.38rem;color:var(--gray);letter-spacing:1px;}
+
+/* Emission table */
+.emission-table{background:var(--panel);border:1px solid var(--border);padding:20px;margin-bottom:24px;}
+.emission-title{font-family:'Press Start 2P',cursive;font-size:0.45rem;color:var(--teal);letter-spacing:2px;margin-bottom:14px;}
+.emission-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+@media(max-width:600px){.emission-grid{grid-template-columns:repeat(3,1fr);}}
+.emission-item{background:var(--black);padding:10px 8px;border:1px solid var(--border);text-align:center;}
+.emission-rarity{font-family:'Press Start 2P',cursive;font-size:0.32rem;display:block;margin-bottom:6px;}
+.emission-rate{font-size:0.5rem;color:var(--gold);font-weight:bold;}
+
+/* Cards */
+.section-title{font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+.card{background:var(--panel);border:1px solid var(--border);padding:14px;text-align:center;transition:border-color 0.2s;cursor:pointer;}
+.card:hover{border-color:var(--teal);}
+.card-ball{width:60px;height:60px;border-radius:50%;margin:0 auto 10px;position:relative;}
+.card-ball::after{content:'';position:absolute;top:18%;left:20%;width:36%;height:36%;border-radius:50%;background:rgba(255,255,255,0.45);}
+.card-serial{font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--purple);margin-bottom:4px;}
+.card-name{font-size:0.42rem;color:var(--gray);margin-bottom:6px;}
+.card-rarity{font-family:'Press Start 2P',cursive;font-size:0.3rem;padding:3px 8px;border-radius:3px;display:inline-block;margin-bottom:8px;}
+.card-btn{
+  font-family:'Press Start 2P',cursive;font-size:0.32rem;padding:8px 12px;
+  border:1px solid var(--teal);background:transparent;color:var(--teal);
+  cursor:pointer;width:100%;transition:all 0.2s;letter-spacing:1px;
+}
+.card-btn:hover{background:rgba(0,255,204,0.1);}
+.card-btn.unstake{border-color:var(--red);color:var(--red);}
+.card-btn.unstake:hover{background:rgba(255,34,68,0.1);}
+.card-btn.claim{border-color:var(--gold);color:var(--gold);}
+.card-btn.claim:hover{background:rgba(255,204,0,0.1);}
+.card-reward{font-size:0.38rem;color:var(--gold);margin:6px 0;}
+.card-rate{font-size:0.32rem;color:var(--gray);}
+
+.empty-msg{font-size:0.45rem;color:var(--gray);text-align:center;padding:40px 20px;}
+
+/* Toast */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast{padding:12px 16px;font-family:'Space Mono',monospace;font-size:0.45rem;border-radius:4px;animation:fadeIn 0.3s;}
+.toast.success{background:rgba(0,255,204,0.15);border:1px solid var(--teal);color:var(--teal);}
+.toast.error{background:rgba(255,34,68,0.15);border:1px solid var(--red);color:var(--red);}
+.toast.info{background:rgba(255,204,0,0.1);border:1px solid var(--gold);color:var(--gold);}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUMBALL<br><span>MACHINE</span>.XNT</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <a href="index.html" class="nav-link">[ MINT ]</a>
+    <a href="marketplace.html" class="nav-link">[ MARKET ]</a>
+    <a href="staking.html" class="nav-link active">[ STAKE ]</a>
+    <a href="activity.html" class="nav-link">[ ACTIVITY ]</a>
+    <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
+    <a href="verify.html" class="nav-link">[ VERIFY ]</a>
+    <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
+    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <a href="index.html">MINT</a>
+  <a href="marketplace.html">MARKET</a>
+  <a href="staking.html" class="active">STAKE</a>
+  <a href="activity.html">ACTIVITY</a>
+  <a href="leaderboard.html">LEADERBOARD</a>
+  <a href="verify.html">VERIFY</a>
+  <a href="faucet.html">FAUCET</a>
+  <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+</div>
+
+<div class="wrap">
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-box"><span class="stat-val" id="sStaked">0</span><span class="stat-lbl">TOTAL STAKED</span></div>
+    <div class="stat-box"><span class="stat-val" id="sYourStaked">0</span><span class="stat-lbl">YOU STAKED</span></div>
+    <div class="stat-box"><span class="stat-val" id="sPending">0.00</span><span class="stat-lbl">PENDING GUM</span></div>
+    <div class="stat-box"><span class="stat-val" id="sTotalClaimed">0</span><span class="stat-lbl">GUM MINTED</span></div>
+  </div>
+
+  <!-- Emission rates -->
+  <div class="emission-table">
+    <div class="emission-title">// GUM EMISSION RATES</div>
+    <div class="emission-grid">
+      <div class="emission-item"><span class="emission-rarity" style="color:#aaaacc;">COMMON</span><span class="emission-rate">10/day</span></div>
+      <div class="emission-item"><span class="emission-rarity" style="color:#44ff88;">UNCOMMON</span><span class="emission-rate">25/day</span></div>
+      <div class="emission-item"><span class="emission-rarity" style="color:#44aaff;">RARE</span><span class="emission-rate">60/day</span></div>
+      <div class="emission-item"><span class="emission-rarity" style="color:#cc88ff;">EPIC</span><span class="emission-rate">150/day</span></div>
+      <div class="emission-item"><span class="emission-rarity" style="color:#ffcc00;">LEGENDARY</span><span class="emission-rate">500/day</span></div>
+    </div>
+  </div>
+
+  <!-- Staked NFTs -->
+  <div class="section-title">// YOUR STAKED GUMBALLS</div>
+  <div id="stakedGrid" class="grid">
+    <div class="empty-msg">CONNECT WALLET TO VIEW STAKED GUMBALLS</div>
+  </div>
+
+  <!-- Available to stake -->
+  <div class="section-title">// AVAILABLE TO STAKE</div>
+  <div id="unstaked Grid" class="grid">
+    <div class="empty-msg">CONNECT WALLET TO VIEW YOUR COLLECTION</div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } = solanaWeb3;
+
+const PROGRAM_ID_STR = 'fyPh36k684kpZBhu32UcYLW1cxov2XdKZ2R6pXWRm9F';
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR);
+const RPC = 'https://rpc.testnet.x1.xyz';
+const EXPLORER = 'https://explorer.testnet.x1.xyz';
+const TOKEN_PID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const ASSOC_PID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+const RENT_SYSVAR_PID = new PublicKey('SysvarRent111111111111111111111111111111111');
+
+const connection = new Connection(RPC, 'confirmed');
+
+const FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Green Apple","Mango","Mystery","Tropical"];
+const COLORS = ["Cherry Red","Grape Purple","Ocean Blue","Sunset Orange","Lime Green","Hot Pink","Lemon Yellow","Sky Blue","Rose Gold","Midnight Black","Shimmer Silver","Forest Green"];
+const RARITY = ["Common","Uncommon","Rare","Epic","Legendary"];
+const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
+const BALL_COLORS = {"Cherry Red":"#cc2244","Grape Purple":"#8833cc","Ocean Blue":"#2266ee","Sunset Orange":"#ee7722","Lime Green":"#44cc22","Hot Pink":"#ee3388","Lemon Yellow":"#ddcc11","Sky Blue":"#44aaee","Rose Gold":"#cc8899","Midnight Black":"#222233","Shimmer Silver":"#aaaabb","Forest Green":"#228844"};
+const EMISSION_RATES = [10, 25, 60, 150, 500]; // GUM per day
+
+const GD_V5 = 189;
+const STAKE_ACCOUNT_SIZE = 8 + 32 + 32 + 1 + 8 + 8 + 1; // 90
+
+let walletPubkey = null;
+let stakedGumballs = [];
+let unstakedGumballs = [];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function strToU8(s) { return new TextEncoder().encode(s); }
+function toast(msg, type='info', dur=3000) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), dur);
+}
+
+function lighten(h){if(!h.startsWith("#"))return"#fff";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgb(${Math.min(255,r+75)},${Math.min(255,g+75)},${Math.min(255,b+75)})`;}
+function darken(h){if(!h.startsWith("#"))return"#000";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgb(${Math.max(0,r-50)},${Math.max(0,g-50)},${Math.max(0,b-50)})`;}
+function ballGrad(c){return`radial-gradient(circle at 34% 28%,${lighten(c)},${c} 58%,${darken(c)})`;}
+
+async function disc(name) {
+  const data = strToU8(`global:${name}`);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return new Uint8Array(hash).slice(0, 8);
+}
+
+function getAta(mint, owner) {
+  const [ata] = PublicKey.findProgramAddressSync([owner.toBytes(), TOKEN_PID.toBytes(), mint.toBytes()], ASSOC_PID);
+  return ata;
+}
+
+function getProvider() {
+  if (window.xnt) return window.xnt;
+  if (window.backpack) return window.backpack;
+  if (window.phantom?.solana) return window.phantom.solana;
+  throw new Error("No wallet found");
+}
+
+// ── Wallet ───────────────────────────────────────────────────────────────────
+
+async function connectWallet() {
+  try {
+    const provider = getProvider();
+    const resp = await provider.connect();
+    walletPubkey = resp.publicKey;
+    document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+    toast('WALLET CONNECTED', 'success');
+    await loadAll();
+  } catch(e) {
+    toast('WALLET CONNECTION FAILED', 'error');
+  }
+}
+
+// ── Load Data ────────────────────────────────────────────────────────────────
+
+async function loadAll() {
+  await Promise.all([loadStakeConfig(), loadStakedNfts(), loadUnstakedNfts()]);
+  renderStaked();
+  renderUnstaked();
+  startPendingTimer();
+}
+
+async function loadStakeConfig() {
+  try {
+    const [configPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const info = await connection.getAccountInfo(configPda);
+    if (!info) return;
+    const dv = new DataView(info.data.buffer, info.data.byteOffset);
+    const totalStaked = Number(dv.getBigUint64(8+32+32, true));
+    const totalClaimed = Number(dv.getBigUint64(8+32+32+8, true));
+    document.getElementById('sStaked').textContent = totalStaked.toLocaleString();
+    document.getElementById('sTotalClaimed').textContent = (totalClaimed / 1e6).toFixed(0);
+  } catch(e) {}
+}
+
+async function loadStakedNfts() {
+  stakedGumballs = [];
+  if (!walletPubkey) return;
+
+  // Find all StakeAccounts owned by user
+  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      { dataSize: STAKE_ACCOUNT_SIZE },
+      { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
+    ],
+  });
+
+  for (const { pubkey, account } of accounts) {
+    const data = account.data;
+    const dv = new DataView(data.buffer, data.byteOffset);
+    const nftMint = new PublicKey(data.slice(8+32, 8+32+32));
+    const rarity = data[8+32+32];
+    const stakedAt = Number(dv.getBigInt64(8+32+32+1, true));
+    const lastClaimed = Number(dv.getBigInt64(8+32+32+1+8, true));
+
+    // Read gumball data for traits
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
+    try {
+      const gbInfo = await connection.getAccountInfo(gumballPda);
+      if (!gbInfo) continue;
+      const gd = gbInfo.data;
+      const serial = Number(new DataView(gd.buffer, gd.byteOffset).getBigUint64(8+32+32, true));
+      const flavor = gd[8+32+32+8];
+      const color = gd[8+32+32+8+1];
+      const special = gd[8+32+32+8+3];
+      const colorName = COLORS[color] || "Berry Blue";
+      const ballColor = BALL_COLORS[colorName] || "#2266ee";
+
+      stakedGumballs.push({
+        stakePda: pubkey, nftMint, rarity, stakedAt, lastClaimed,
+        serial, flavor, color, special, colorName, ballColor,
+        flavorName: FLAVORS[flavor] || "Mystery",
+        rarName: RARITY[rarity] || "Common",
+      });
+    } catch(e) {}
+  }
+
+  document.getElementById('sYourStaked').textContent = stakedGumballs.length;
+}
+
+async function loadUnstakedNfts() {
+  unstakedGumballs = [];
+  if (!walletPubkey) return;
+
+  // Get user's token accounts
+  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+
+  for (const { account } of tokenAccounts.value) {
+    const mintKey = new PublicKey(account.data.slice(0, 32));
+    const amount = Number(new DataView(account.data.buffer, account.data.byteOffset).getBigUint64(64, true));
+    if (amount !== 1) continue;
+
+    // Check if it's a gumball
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+    try {
+      const gbInfo = await connection.getAccountInfo(gumballPda);
+      if (!gbInfo || gbInfo.data.length !== GD_V5) continue;
+
+      // Check not already staked
+      const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake"), mintKey.toBytes()], PROGRAM_ID);
+      const stakeInfo = await connection.getAccountInfo(stakePda);
+      if (stakeInfo) continue; // already staked
+
+      const gd = gbInfo.data;
+      const dv = new DataView(gd.buffer, gd.byteOffset);
+      const serial = Number(dv.getBigUint64(8+32+32, true));
+      const flavor = gd[8+32+32+8];
+      const color = gd[8+32+32+8+1];
+      const rarity = gd[8+32+32+8+2];
+      const special = gd[8+32+32+8+3];
+      const colorName = COLORS[color] || "Berry Blue";
+      const ballColor = BALL_COLORS[colorName] || "#2266ee";
+
+      unstakedGumballs.push({
+        nftMint: mintKey, gumballPda, rarity, serial, flavor, color, special,
+        colorName, ballColor,
+        flavorName: FLAVORS[flavor] || "Mystery",
+        rarName: RARITY[rarity] || "Common",
+      });
+    } catch(e) {}
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderStaked() {
+  const el = document.getElementById('stakedGrid');
+  if (stakedGumballs.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO STAKED GUMBALLS</div>';
+    return;
+  }
+  el.innerHTML = stakedGumballs.map(g => {
+    const rate = EMISSION_RATES[g.rarity] || 10;
+    const pending = getPending(g);
+    return `
+      <div class="card">
+        <div class="card-ball" style="background:${ballGrad(g.ballColor)};"></div>
+        <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
+        <div class="card-name">${g.flavorName}</div>
+        <span class="card-rarity" style="color:${RARITY_COLORS[g.rarity]};border:1px solid ${RARITY_COLORS[g.rarity]};background:${RARITY_COLORS[g.rarity]}22;">${g.rarName}</span>
+        <div class="card-reward" data-mint="${g.nftMint.toBase58()}">${pending.toFixed(2)} GUM</div>
+        <div class="card-rate">${rate} GUM/day</div>
+        <button class="card-btn claim" onclick="claimRewards('${g.nftMint.toBase58()}')" style="margin-bottom:6px;">CLAIM GUM</button>
+        <button class="card-btn unstake" onclick="unstakeNft('${g.nftMint.toBase58()}')">UNSTAKE</button>
+      </div>`;
+  }).join('');
+}
+
+function renderUnstaked() {
+  const el = document.getElementById('unstakedGrid');
+  if (!walletPubkey) {
+    el.innerHTML = '<div class="empty-msg">CONNECT WALLET TO VIEW YOUR COLLECTION</div>';
+    return;
+  }
+  if (unstakedGumballs.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO UNSTAKED GUMBALLS — MINT OR UNSTAKE FIRST</div>';
+    return;
+  }
+  el.innerHTML = unstakedGumballs.map(g => {
+    const rate = EMISSION_RATES[g.rarity] || 10;
+    return `
+      <div class="card">
+        <div class="card-ball" style="background:${ballGrad(g.ballColor)};"></div>
+        <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
+        <div class="card-name">${g.flavorName}</div>
+        <span class="card-rarity" style="color:${RARITY_COLORS[g.rarity]};border:1px solid ${RARITY_COLORS[g.rarity]};background:${RARITY_COLORS[g.rarity]}22;">${g.rarName}</span>
+        <div class="card-rate">${rate} GUM/day</div>
+        <button class="card-btn" onclick="stakeNft('${g.nftMint.toBase58()}')">STAKE</button>
+      </div>`;
+  }).join('');
+}
+
+function getPending(g) {
+  const now = Math.floor(Date.now() / 1000);
+  const elapsed = now - g.lastClaimed;
+  const ratePerSec = [115740, 289351, 694444, 1736111, 5787037][g.rarity] || 115740;
+  return (elapsed * ratePerSec) / 1e6;
+}
+
+// Live update pending rewards
+let pendingTimer = null;
+function startPendingTimer() {
+  if (pendingTimer) clearInterval(pendingTimer);
+  pendingTimer = setInterval(() => {
+    let totalPending = 0;
+    for (const g of stakedGumballs) {
+      const pending = getPending(g);
+      totalPending += pending;
+      const el = document.querySelector(`[data-mint="${g.nftMint.toBase58()}"]`);
+      if (el) el.textContent = `${pending.toFixed(2)} GUM`;
+    }
+    document.getElementById('sPending').textContent = totalPending.toFixed(2);
+  }, 1000);
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+
+async function stakeNft(mintStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const nftMint = new PublicKey(mintStr);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
+    const userAta = getAta(nftMint, walletPubkey);
+    const vaultAta = getAta(nftMint, stakeConfigPda);
+
+    const discBytes = await disc("stake");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+        { pubkey: gumballPda,              isSigner: false, isWritable: false },
+        { pubkey: nftMint,                 isSigner: false, isWritable: false },
+        { pubkey: userAta,                 isSigner: false, isWritable: true  },
+        { pubkey: vaultAta,                isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('NFT STAKED! Earning GUM...', 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Stake error:", e);
+    toast('STAKE FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+}
+
+async function claimRewards(mintStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const nftMint = new PublicKey(mintStr);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    const discBytes = await disc("claim");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('GUM CLAIMED!', 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Claim error:", e);
+    toast('CLAIM FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+}
+
+async function unstakeNft(mintStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const nftMint = new PublicKey(mintStr);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const vaultAta = getAta(nftMint, stakeConfigPda);
+    const userAta = getAta(nftMint, walletPubkey);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    const discBytes = await disc("unstake");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+        { pubkey: nftMint,                 isSigner: false, isWritable: false },
+        { pubkey: vaultAta,                isSigner: false, isWritable: true  },
+        { pubkey: userAta,                 isSigner: false, isWritable: true  },
+        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+
+    toast('NFT UNSTAKED + GUM CLAIMED!', 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Unstake error:", e);
+    toast('UNSTAKE FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+}
+
+// Auto-connect on load
+window.addEventListener('load', async () => {
+  try {
+    const provider = getProvider();
+    if (provider.isConnected || provider.publicKey) {
+      walletPubkey = provider.publicKey;
+      document.getElementById('walletBtn').textContent = `[ ${walletPubkey.toBase58().slice(0,4)}...${walletPubkey.toBase58().slice(-4)} ]`;
+      await loadAll();
+    }
+  } catch(e) {}
+  // Load global stats even without wallet
+  loadStakeConfig();
+});
+</script>
+</body>
+</html>

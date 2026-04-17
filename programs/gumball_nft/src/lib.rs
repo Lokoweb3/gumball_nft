@@ -25,6 +25,19 @@ const MAX_PRICE:  u64 = 40_000_000; // 0.04 XNT in lamports
 const RARITY_LEGENDARY: u8 = 4;
 const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
 
+// ─── Staking Constants ───────────────────────────────────────────────────────
+// GUM emission rates per second (6 decimal GUM token)
+// Common=10/day, Uncommon=25/day, Rare=60/day, Epic=150/day, Legendary=500/day
+const GUM_DECIMALS: u8 = 6;
+const GUM_MAX_SUPPLY: u64 = 1_000_000_000 * 1_000_000; // 1B GUM (6 decimals)
+const EMISSION_PER_SECOND: [u64; 5] = [
+    115_740,   // Common:    10 * 1e6 / 86400 = 115,740
+    289_351,   // Uncommon:  25 * 1e6 / 86400 = 289,351
+    694_444,   // Rare:      60 * 1e6 / 86400 = 694,444
+    1_736_111, // Epic:     150 * 1e6 / 86400 = 1,736,111
+    5_787_037, // Legendary:500 * 1e6 / 86400 = 5,787,037
+];
+
 // GumballData raw byte offsets for UncheckedAccount parsing in burn instructions.
 // Must match GumballData struct layout: disc(8) + owner(32) + machine(32) + serial(8) + flavor(1) + color(1) + rarity(1)
 const GD_OWNER_OFFSET:  usize = 8;
@@ -963,6 +976,149 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    // ── STAKING ──────────────────────────────────────────────────────────────
+
+    /// Initialize the staking system — creates StakeConfig and GUM token mint.
+    /// Called once by admin after deployment.
+    pub fn initialize_staking(ctx: Context<InitializeStaking>) -> Result<()> {
+        let config = &mut ctx.accounts.stake_config;
+        config.authority = ctx.accounts.authority.key();
+        config.gum_mint = ctx.accounts.gum_mint.key();
+        config.total_staked = 0;
+        config.total_claimed = 0;
+        config.bump = ctx.bumps.stake_config;
+        Ok(())
+    }
+
+    /// Stake a gumball NFT — transfer to vault, start earning GUM.
+    pub fn stake(ctx: Context<StakeNft>) -> Result<()> {
+        let rarity = ctx.accounts.gumball_data.rarity;
+        require!(rarity <= RARITY_LEGENDARY, GumballError::InvalidAccount);
+
+        // Transfer NFT to vault
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.user_ata.to_account_info(),
+                    to:        ctx.accounts.vault_ata.to_account_info(),
+                    authority: ctx.accounts.staker.to_account_info(),
+                },
+            ),
+            1,
+        )?;
+
+        let now = Clock::get()?.unix_timestamp;
+        let stake = &mut ctx.accounts.stake_account;
+        stake.owner = ctx.accounts.staker.key();
+        stake.nft_mint = ctx.accounts.nft_mint.key();
+        stake.rarity = rarity;
+        stake.staked_at = now;
+        stake.last_claimed = now;
+        stake.bump = ctx.bumps.stake_account;
+
+        ctx.accounts.stake_config.total_staked = ctx.accounts.stake_config.total_staked
+            .checked_add(1).ok_or(GumballError::MathOverflow)?;
+
+        emit!(NftStakedEvent {
+            staker: stake.owner, nft_mint: stake.nft_mint, rarity,
+        });
+        Ok(())
+    }
+
+    /// Claim pending GUM rewards without unstaking.
+    pub fn claim(ctx: Context<ClaimRewards>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let stake = &mut ctx.accounts.stake_account;
+        let elapsed = (now - stake.last_claimed) as u64;
+        let rate = EMISSION_PER_SECOND[stake.rarity as usize % 5];
+        let reward = elapsed.checked_mul(rate).ok_or(GumballError::MathOverflow)?;
+
+        if reward == 0 { return Ok(()); }
+
+        // Check GUM supply cap
+        let config = &mut ctx.accounts.stake_config;
+        let new_total = config.total_claimed.checked_add(reward).ok_or(GumballError::MathOverflow)?;
+        require!(new_total <= GUM_MAX_SUPPLY, GumballError::GumSupplyExhausted);
+
+        // Mint GUM to staker
+        let seeds = &[b"stake_config".as_ref(), &[config.bump]];
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint:      ctx.accounts.gum_mint.to_account_info(),
+                    to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[seeds],
+            ),
+            reward,
+        )?;
+
+        stake.last_claimed = now;
+        config.total_claimed = new_total;
+
+        emit!(RewardsClaimedEvent {
+            staker: stake.owner, nft_mint: stake.nft_mint, amount: reward,
+        });
+        Ok(())
+    }
+
+    /// Unstake — claim pending rewards and return NFT to owner.
+    pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let stake = &ctx.accounts.stake_account;
+        let elapsed = (now - stake.last_claimed) as u64;
+        let rate = EMISSION_PER_SECOND[stake.rarity as usize % 5];
+        let reward = elapsed.checked_mul(rate).ok_or(GumballError::MathOverflow)?;
+
+        let config = &mut ctx.accounts.stake_config;
+
+        // Mint final GUM rewards if any
+        if reward > 0 {
+            let new_total = config.total_claimed.checked_add(reward).ok_or(GumballError::MathOverflow)?;
+            if new_total <= GUM_MAX_SUPPLY {
+                let seeds = &[b"stake_config".as_ref(), &[config.bump]];
+                mint_to(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        MintTo {
+                            mint:      ctx.accounts.gum_mint.to_account_info(),
+                            to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                            authority: ctx.accounts.stake_config.to_account_info(),
+                        },
+                        &[seeds],
+                    ),
+                    reward,
+                )?;
+                config.total_claimed = new_total;
+            }
+        }
+
+        // Return NFT from vault to staker
+        let seeds = &[b"stake_config".as_ref(), &[config.bump]];
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.vault_ata.to_account_info(),
+                    to:        ctx.accounts.user_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[seeds],
+            ),
+            1,
+        )?;
+
+        config.total_staked = config.total_staked.saturating_sub(1);
+
+        emit!(NftUnstakedEvent {
+            staker: stake.owner, nft_mint: stake.nft_mint, reward,
+        });
+        // StakeAccount closed via `close = staker` in accounts struct
+        Ok(())
+    }
 
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1592,6 +1748,152 @@ pub struct Offer {
 }
 impl Offer { pub const LEN: usize = 32+32+8+8+8+1; }
 
+// ─── Staking Accounts ────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct InitializeStaking<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        init, payer = authority, space = 8 + StakeConfig::LEN,
+        seeds = [b"stake_config"], bump,
+    )]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        init, payer = authority,
+        mint::decimals = GUM_DECIMALS,
+        mint::authority = stake_config,
+        seeds = [b"gum_mint"], bump,
+    )]
+    pub gum_mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct StakeNft<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        init, payer = staker, space = 8 + StakeAccount::LEN,
+        seeds = [b"stake", nft_mint.key().as_ref()], bump,
+    )]
+    pub stake_account: Account<'info, StakeAccount>,
+    /// The gumball data PDA — used to read rarity
+    #[account(seeds = [b"gumball", nft_mint.key().as_ref()], bump = gumball_data.bump)]
+    pub gumball_data: Account<'info, GumballData>,
+    pub nft_mint: Account<'info, Mint>,
+    /// User's NFT token account (source)
+    #[account(mut, constraint = user_ata.mint == nft_mint.key() && user_ata.owner == staker.key())]
+    pub user_ata: Account<'info, TokenAccount>,
+    /// Vault token account (destination) — owned by stake_config PDA
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = nft_mint,
+        associated_token::authority = stake_config,
+    )]
+    pub vault_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimRewards<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        mut,
+        seeds = [b"stake", stake_account.nft_mint.as_ref()], bump = stake_account.bump,
+        constraint = stake_account.owner == staker.key() @ GumballError::Unauthorized,
+    )]
+    pub stake_account: Account<'info, StakeAccount>,
+    #[account(mut, seeds = [b"gum_mint"], bump)]
+    pub gum_mint: Account<'info, Mint>,
+    /// Staker's GUM token account
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = gum_mint,
+        associated_token::authority = staker,
+    )]
+    pub staker_gum_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct Unstake<'info> {
+    #[account(mut)]
+    pub staker: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(
+        mut, close = staker,
+        seeds = [b"stake", stake_account.nft_mint.as_ref()], bump = stake_account.bump,
+        constraint = stake_account.owner == staker.key() @ GumballError::Unauthorized,
+    )]
+    pub stake_account: Account<'info, StakeAccount>,
+    pub nft_mint: Account<'info, Mint>,
+    /// Vault token account holding the staked NFT
+    #[account(
+        mut,
+        associated_token::mint = nft_mint,
+        associated_token::authority = stake_config,
+    )]
+    pub vault_ata: Account<'info, TokenAccount>,
+    /// User's NFT token account (destination)
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = nft_mint,
+        associated_token::authority = staker,
+    )]
+    pub user_ata: Account<'info, TokenAccount>,
+    #[account(mut, seeds = [b"gum_mint"], bump)]
+    pub gum_mint: Account<'info, Mint>,
+    /// Staker's GUM token account for final rewards
+    #[account(
+        init_if_needed, payer = staker,
+        associated_token::mint = gum_mint,
+        associated_token::authority = staker,
+    )]
+    pub staker_gum_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+// ─── Staking State ───────────────────────────────────────────────────────────
+
+#[account]
+pub struct StakeConfig {
+    pub authority:     Pubkey,  // 32
+    pub gum_mint:      Pubkey,  // 32
+    pub total_staked:  u64,     //  8
+    pub total_claimed: u64,     //  8
+    pub bump:          u8,      //  1
+}
+impl StakeConfig { pub const LEN: usize = 32+32+8+8+1; }
+
+#[account]
+pub struct StakeAccount {
+    pub owner:        Pubkey,  // 32
+    pub nft_mint:     Pubkey,  // 32
+    pub rarity:       u8,      //  1
+    pub staked_at:    i64,     //  8
+    pub last_claimed: i64,     //  8
+    pub bump:         u8,      //  1
+}
+impl StakeAccount { pub const LEN: usize = 32+32+1+8+8+1; }
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 #[event] pub struct MachineInitializedEvent { pub authority: Pubkey, pub treasury: Pubkey, pub mint_price: u64, pub max_supply: u64 }
@@ -1606,6 +1908,9 @@ impl Offer { pub const LEN: usize = 32+32+8+8+8+1; }
 #[event] pub struct GumballSoldEvent       { pub seller: Pubkey, pub buyer: Pubkey, pub nft_mint: Pubkey, pub price: u64, pub royalty: u64 }
 #[event] pub struct OfferMadeEvent         { pub buyer: Pubkey, pub nft_mint: Pubkey, pub amount: u64 }
 #[event] pub struct OfferCancelledEvent    { pub buyer: Pubkey, pub nft_mint: Pubkey }
+#[event] pub struct NftStakedEvent        { pub staker: Pubkey, pub nft_mint: Pubkey, pub rarity: u8 }
+#[event] pub struct NftUnstakedEvent      { pub staker: Pubkey, pub nft_mint: Pubkey, pub reward: u64 }
+#[event] pub struct RewardsClaimedEvent   { pub staker: Pubkey, pub nft_mint: Pubkey, pub amount: u64 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
@@ -1630,4 +1935,5 @@ pub enum GumballError {
     #[msg("Invalid account data")]                   InvalidAccount,
     #[msg("Mint request has expired")]               RequestExpired,
     #[msg("Offer has expired")]                      OfferExpired,
+    #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
 }
