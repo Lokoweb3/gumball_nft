@@ -1127,7 +1127,8 @@ pub mod gumball_nft {
 
     // ── LP STAKING ───────────────────────────────────────────────────────────
 
-    /// Stake LP tokens to earn GUM rewards.
+    /// Stake LP tokens — mints a position NFT representing the staked amount.
+    /// The NFT is tradeable — whoever holds it controls the position.
     pub fn stake_lp(ctx: Context<StakeLp>, amount: u64) -> Result<()> {
         require!(amount > 0, GumballError::InvalidPrice);
 
@@ -1144,26 +1145,43 @@ pub mod gumball_nft {
             amount,
         )?;
 
+        // Mint position NFT to staker
+        let sc_seeds = &[b"stake_config".as_ref(), &[ctx.accounts.stake_config.bump]];
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint:      ctx.accounts.position_mint.to_account_info(),
+                    to:        ctx.accounts.position_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[sc_seeds],
+            ),
+            1,
+        )?;
+
         let now = Clock::get()?.unix_timestamp;
         let lp_stake = &mut ctx.accounts.lp_stake_account;
-        lp_stake.owner = ctx.accounts.staker.key();
+        lp_stake.position_mint = ctx.accounts.position_mint.key();
         lp_stake.lp_mint = ctx.accounts.lp_mint.key();
-        lp_stake.amount = lp_stake.amount.checked_add(amount).ok_or(GumballError::MathOverflow)?;
+        lp_stake.amount = amount;
+        lp_stake.staked_at = now;
         lp_stake.last_claimed = now;
         lp_stake.bump = ctx.bumps.lp_stake_account;
 
-        emit!(LpStakedEvent { staker: lp_stake.owner, amount });
+        emit!(LpStakedEvent { staker: ctx.accounts.staker.key(), amount });
         Ok(())
     }
 
-    /// Claim GUM rewards from LP staking.
+    /// Claim GUM rewards from LP staking — must hold the position NFT.
     pub fn claim_lp(ctx: Context<ClaimLpRewards>) -> Result<()> {
+        // Verify caller holds the position NFT
+        require!(ctx.accounts.position_ata.amount == 1, GumballError::Unauthorized);
+
         let now = Clock::get()?.unix_timestamp;
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
 
-        // reward = elapsed * LP_EMISSION_PER_SECOND * (staked_amount / 1e9)
-        // To avoid overflow: (elapsed * LP_EMISSION_PER_SECOND * staked_amount) / 1e9
         let reward = (elapsed as u128)
             .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
             .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
@@ -1183,7 +1201,7 @@ pub mod gumball_nft {
                 ctx.accounts.token_program.to_account_info(),
                 MintTo {
                     mint:      ctx.accounts.gum_mint.to_account_info(),
-                    to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                    to:        ctx.accounts.claimer_gum_ata.to_account_info(),
                     authority: ctx.accounts.stake_config.to_account_info(),
                 },
                 &[seeds],
@@ -1195,18 +1213,21 @@ pub mod gumball_nft {
         ctx.accounts.stake_config.total_claimed = new_total;
 
         emit!(LpRewardsClaimedEvent {
-            staker: ctx.accounts.lp_stake_account.owner, amount: reward,
+            staker: ctx.accounts.claimer.key(), amount: reward,
         });
         Ok(())
     }
 
-    /// Unstake LP tokens — claim pending rewards and return specified amount.
-    /// If amount == full balance, closes the stake account and returns rent.
+    /// Unstake LP tokens — must hold position NFT.
+    /// Partial: reduces position, keeps NFT.
+    /// Full: burns NFT, closes account, returns LP + rent.
     pub fn unstake_lp(ctx: Context<UnstakeLp>, amount: u64) -> Result<()> {
+        // Verify caller holds the position NFT
+        require!(ctx.accounts.position_ata.amount == 1, GumballError::Unauthorized);
+
         let now = Clock::get()?.unix_timestamp;
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
-        let staker_key = ctx.accounts.lp_stake_account.owner;
 
         require!(amount > 0 && amount <= staked_amount, GumballError::InvalidPrice);
 
@@ -1229,7 +1250,7 @@ pub mod gumball_nft {
                         ctx.accounts.token_program.to_account_info(),
                         MintTo {
                             mint:      ctx.accounts.gum_mint.to_account_info(),
-                            to:        ctx.accounts.staker_gum_ata.to_account_info(),
+                            to:        ctx.accounts.claimer_gum_ata.to_account_info(),
                             authority: ctx.accounts.stake_config.to_account_info(),
                         },
                         &[seeds],
@@ -1240,7 +1261,7 @@ pub mod gumball_nft {
             }
         }
 
-        // Return requested LP tokens from vault to staker
+        // Return LP tokens
         anchor_spl::token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -1257,19 +1278,24 @@ pub mod gumball_nft {
         ctx.accounts.lp_stake_account.last_claimed = now;
 
         if amount == staked_amount {
-            // Full withdrawal — close the account and return rent
+            // Full withdrawal — burn position NFT + close account
+            burn(CpiContext::new(ctx.accounts.token_program.to_account_info(), Burn {
+                mint:      ctx.accounts.position_mint.to_account_info(),
+                from:      ctx.accounts.position_ata.to_account_info(),
+                authority: ctx.accounts.claimer.to_account_info(),
+            }), 1)?;
+
             let lp_info = ctx.accounts.lp_stake_account.to_account_info();
-            let staker_info = ctx.accounts.staker.to_account_info();
-            **staker_info.try_borrow_mut_lamports()? += lp_info.lamports();
+            let claimer_info = ctx.accounts.claimer.to_account_info();
+            **claimer_info.try_borrow_mut_lamports()? += lp_info.lamports();
             **lp_info.try_borrow_mut_lamports()? = 0;
             lp_info.try_borrow_mut_data()?.fill(0);
         } else {
-            // Partial withdrawal — reduce amount, keep account open
             ctx.accounts.lp_stake_account.amount = staked_amount
                 .checked_sub(amount).ok_or(GumballError::MathOverflow)?;
         }
 
-        emit!(LpUnstakedEvent { staker: staker_key, amount, reward });
+        emit!(LpUnstakedEvent { staker: ctx.accounts.claimer.key(), amount, reward });
         Ok(())
     }
 
@@ -2024,7 +2050,7 @@ pub struct Unstake<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-// ─── LP Staking Accounts ─────────────────────────────────────────────────────
+// ─── LP Staking Accounts (NFT Position) ─────────────────────────────────────
 
 #[derive(Accounts)]
 pub struct StakeLp<'info> {
@@ -2033,18 +2059,20 @@ pub struct StakeLp<'info> {
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
     pub stake_config: Account<'info, StakeConfig>,
     #[account(
-        init_if_needed, payer = staker, space = 8 + LpStakeAccount::LEN,
-        seeds = [b"lp_stake", staker.key().as_ref()], bump,
+        init, payer = staker, space = 8 + LpStakeAccount::LEN,
+        seeds = [b"lp_stake", position_mint.key().as_ref()], bump,
     )]
     pub lp_stake_account: Account<'info, LpStakeAccount>,
+    /// Position NFT mint — created fresh for each new position
+    #[account(init, payer = staker, mint::decimals = 0, mint::authority = stake_config, mint::freeze_authority = stake_config)]
+    pub position_mint: Account<'info, Mint>,
+    /// Position NFT ATA for the staker
+    #[account(init_if_needed, payer = staker, associated_token::mint = position_mint, associated_token::authority = staker)]
+    pub position_ata: Account<'info, TokenAccount>,
     pub lp_mint: Account<'info, Mint>,
     #[account(mut, constraint = user_lp_ata.mint == lp_mint.key() && user_lp_ata.owner == staker.key())]
     pub user_lp_ata: Account<'info, TokenAccount>,
-    #[account(
-        init_if_needed, payer = staker,
-        associated_token::mint = lp_mint,
-        associated_token::authority = stake_config,
-    )]
+    #[account(init_if_needed, payer = staker, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
     pub vault_lp_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -2055,23 +2083,21 @@ pub struct StakeLp<'info> {
 #[derive(Accounts)]
 pub struct ClaimLpRewards<'info> {
     #[account(mut)]
-    pub staker: Signer<'info>,
+    pub claimer: Signer<'info>,
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
     pub stake_config: Account<'info, StakeConfig>,
     #[account(
         mut,
-        seeds = [b"lp_stake", staker.key().as_ref()], bump = lp_stake_account.bump,
-        constraint = lp_stake_account.owner == staker.key() @ GumballError::Unauthorized,
+        seeds = [b"lp_stake", lp_stake_account.position_mint.as_ref()], bump = lp_stake_account.bump,
     )]
     pub lp_stake_account: Account<'info, LpStakeAccount>,
+    /// Caller must hold the position NFT — verified in instruction body
+    #[account(constraint = position_ata.mint == lp_stake_account.position_mint && position_ata.owner == claimer.key())]
+    pub position_ata: Account<'info, TokenAccount>,
     #[account(mut, seeds = [b"gum_mint"], bump)]
     pub gum_mint: Account<'info, Mint>,
-    #[account(
-        init_if_needed, payer = staker,
-        associated_token::mint = gum_mint,
-        associated_token::authority = staker,
-    )]
-    pub staker_gum_ata: Account<'info, TokenAccount>,
+    #[account(init_if_needed, payer = claimer, associated_token::mint = gum_mint, associated_token::authority = claimer)]
+    pub claimer_gum_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -2081,36 +2107,29 @@ pub struct ClaimLpRewards<'info> {
 #[derive(Accounts)]
 pub struct UnstakeLp<'info> {
     #[account(mut)]
-    pub staker: Signer<'info>,
+    pub claimer: Signer<'info>,
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
     pub stake_config: Account<'info, StakeConfig>,
     #[account(
         mut,
-        seeds = [b"lp_stake", staker.key().as_ref()], bump = lp_stake_account.bump,
-        constraint = lp_stake_account.owner == staker.key() @ GumballError::Unauthorized,
+        seeds = [b"lp_stake", lp_stake_account.position_mint.as_ref()], bump = lp_stake_account.bump,
     )]
     pub lp_stake_account: Account<'info, LpStakeAccount>,
+    /// Position NFT mint — burned on full withdrawal
+    #[account(mut, constraint = position_mint.key() == lp_stake_account.position_mint)]
+    pub position_mint: Account<'info, Mint>,
+    /// Caller must hold the position NFT
+    #[account(mut, constraint = position_ata.mint == lp_stake_account.position_mint && position_ata.owner == claimer.key())]
+    pub position_ata: Account<'info, TokenAccount>,
     pub lp_mint: Account<'info, Mint>,
-    #[account(
-        mut,
-        associated_token::mint = lp_mint,
-        associated_token::authority = stake_config,
-    )]
+    #[account(mut, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
     pub vault_lp_ata: Account<'info, TokenAccount>,
-    #[account(
-        init_if_needed, payer = staker,
-        associated_token::mint = lp_mint,
-        associated_token::authority = staker,
-    )]
+    #[account(init_if_needed, payer = claimer, associated_token::mint = lp_mint, associated_token::authority = claimer)]
     pub user_lp_ata: Account<'info, TokenAccount>,
     #[account(mut, seeds = [b"gum_mint"], bump)]
     pub gum_mint: Account<'info, Mint>,
-    #[account(
-        init_if_needed, payer = staker,
-        associated_token::mint = gum_mint,
-        associated_token::authority = staker,
-    )]
-    pub staker_gum_ata: Account<'info, TokenAccount>,
+    #[account(init_if_needed, payer = claimer, associated_token::mint = gum_mint, associated_token::authority = claimer)]
+    pub claimer_gum_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -2142,13 +2161,14 @@ impl StakeAccount { pub const LEN: usize = 32+32+1+8+8+1; }
 
 #[account]
 pub struct LpStakeAccount {
-    pub owner:        Pubkey,  // 32
-    pub lp_mint:      Pubkey,  // 32
-    pub amount:       u64,     //  8
-    pub last_claimed: i64,     //  8
-    pub bump:         u8,      //  1
+    pub position_mint: Pubkey,  // 32 — NFT mint representing this position
+    pub lp_mint:       Pubkey,  // 32
+    pub amount:        u64,     //  8
+    pub staked_at:     i64,     //  8
+    pub last_claimed:  i64,     //  8
+    pub bump:          u8,      //  1
 }
-impl LpStakeAccount { pub const LEN: usize = 32+32+8+8+1; }
+impl LpStakeAccount { pub const LEN: usize = 32+32+8+8+8+1; }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 

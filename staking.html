@@ -269,19 +269,16 @@ header{
     </div>
   </div>
 
-  <!-- LP Staking -->
-  <div class="section-title" style="margin-top:32px;">// STAKE LP TOKENS FOR GUM</div>
-  <div class="swap-box">
+  <!-- LP Staking (NFT Positions) -->
+  <div class="section-title" style="margin-top:32px;">// LP STAKING — NFT POSITIONS</div>
+  <div class="swap-box" style="max-width:100%;">
     <div class="swap-info" style="margin-bottom:12px;display:flex;">
-      <div>Reward: 100 GUM/day per LP token</div>
+      <div>Reward: 100 GUM/day per LP token | Each position is a tradeable NFT</div>
     </div>
+
+    <!-- New position -->
     <div class="swap-field" style="margin-bottom:12px;">
-      <div class="swap-label">YOUR STAKED LP</div>
-      <div style="font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--gold);margin:8px 0;" id="stakedLpAmount">0.00</div>
-      <div class="swap-balance" id="stakedLpReward">Pending: 0.00 GUM</div>
-    </div>
-    <div class="swap-field" style="margin-bottom:12px;">
-      <div class="swap-label">STAKE LP TOKENS</div>
+      <div class="swap-label">CREATE NEW POSITION</div>
       <div class="swap-input-row">
         <input type="number" id="lpStakeInput" placeholder="0.00" min="0" step="0.01" />
         <button class="max-btn" onclick="setLpStakeMax()">MAX</button>
@@ -289,25 +286,11 @@ header{
       </div>
       <div class="swap-balance" id="availableLpBalance">Available: —</div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="flex:1;">STAKE LP</button>
-      <button class="swap-btn" id="claimLpBtn" onclick="claimLpRewards()" disabled style="flex:1;border-color:var(--gold);color:var(--gold);">CLAIM GUM</button>
-    </div>
-    <div class="swap-field" id="unstakePanel" style="display:none;margin-bottom:12px;">
-      <div class="swap-label">UNSTAKE AMOUNT</div>
-      <div style="display:flex;gap:8px;align-items:center;margin:8px 0;">
-        <input type="range" id="unstakeSlider" min="1" max="100" value="100" oninput="updateUnstakePreview()" style="flex:1;accent-color:var(--red);" />
-        <span id="unstakePct" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--red);min-width:40px;text-align:right;">100%</span>
-      </div>
-      <div id="unstakePreview" style="font-size:0.38rem;color:var(--gray);margin-bottom:8px;">0.00 LP</div>
-      <div style="display:flex;gap:8px;">
-        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=25;updateUnstakePreview()">25%</button>
-        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=50;updateUnstakePreview()">50%</button>
-        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=75;updateUnstakePreview()">75%</button>
-        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=100;updateUnstakePreview()">100%</button>
-      </div>
-    </div>
-    <button class="swap-btn" id="unstakeLpBtn" onclick="unstakeLpTokens()" disabled style="border-color:var(--red);color:var(--red);">UNSTAKE LP</button>
+    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT</button>
+
+    <!-- Active positions -->
+    <div class="swap-label" style="margin-bottom:8px;">YOUR POSITIONS</div>
+    <div id="lpPositionsGrid"></div>
   </div>
 
 </div>
