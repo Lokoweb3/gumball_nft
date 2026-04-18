@@ -1176,10 +1176,11 @@ pub mod gumball_nft {
         lp_stake.bump = ctx.bumps.lp_stake_account;
 
         // Create Metaplex metadata for position NFT
-        let metadata_seeds = &[
-            b"metadata".as_ref(),
+        let mint_key = ctx.accounts.position_mint.key();
+        let metadata_seeds: &[&[u8]] = &[
+            b"metadata",
             METAPLEX_PROGRAM_ID.as_ref(),
-            ctx.accounts.position_mint.key().as_ref(),
+            mint_key.as_ref(),
         ];
         let (metadata_pda, _) = Pubkey::find_program_address(metadata_seeds, &METAPLEX_PROGRAM_ID);
 
