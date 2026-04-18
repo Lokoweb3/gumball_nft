@@ -1313,7 +1313,7 @@ function renderLpPositions() {
       <div class="swap-field" style="margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div>
-            <div style="font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--purple);margin-bottom:4px;">NFT: ${ms.slice(0,6)}...${ms.slice(-4)}</div>
+            <a href="${EXPLORER}/account/${ms}" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--purple);margin-bottom:4px;text-decoration:none;display:block;">NFT: ${ms.slice(0,6)}...${ms.slice(-4)} &#8599;</a>
             <div style="font-size:0.42rem;color:var(--white);">${(p.amount / 1e9).toFixed(6)} LP</div>
             <div style="font-size:0.35rem;color:var(--gray);">Since ${stakedDate}</div>
           </div>
