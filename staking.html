@@ -93,6 +93,16 @@ header{
 .empty-msg{font-size:0.45rem;color:var(--gray);text-align:center;padding:40px 20px;}
 
 /* Toast */
+/* Analytics */
+.analytics-panel{background:var(--panel);border:1px solid var(--border);padding:20px;margin-bottom:24px;}
+.analytics-title{font-family:'Press Start 2P',cursive;font-size:0.45rem;color:var(--teal);letter-spacing:2px;margin-bottom:14px;}
+.analytics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+@media(max-width:700px){.analytics-grid{grid-template-columns:repeat(2,1fr);}}
+.analytics-card{background:var(--black);border:1px solid var(--border);padding:14px;text-align:center;}
+.analytics-label{font-size:0.32rem;color:var(--gray);letter-spacing:1px;margin-bottom:8px;}
+.analytics-val{font-family:'Press Start 2P',cursive;font-size:0.55rem;color:var(--gold);margin-bottom:4px;}
+.analytics-sub{font-size:0.32rem;color:var(--gray);}
+
 /* Swap */
 .swap-box{background:var(--panel);border:1px solid var(--border);padding:24px;margin-bottom:24px;max-width:480px;}
 .swap-row{margin-bottom:4px;}
@@ -163,6 +173,55 @@ header{
     <div class="stat-box"><span class="stat-val" id="sYourStaked">0</span><span class="stat-lbl">YOU STAKED</span></div>
     <div class="stat-box"><span class="stat-val" id="sPending">0.00</span><span class="stat-lbl">PENDING GUM</span></div>
     <div class="stat-box"><span class="stat-val" id="sTotalClaimed">0</span><span class="stat-lbl">GUM MINTED</span></div>
+  </div>
+
+  <!-- Analytics Dashboard -->
+  <div class="analytics-panel">
+    <div class="analytics-title">// YOUR EARNINGS DASHBOARD</div>
+    <div class="analytics-grid">
+      <div class="analytics-card">
+        <div class="analytics-label">YOUR DAILY GUM EARNINGS</div>
+        <div class="analytics-val" id="aDailyGum">0.00</div>
+        <div class="analytics-sub" id="aDailyBreakdown">NFT: 0 + LP: 0</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">YOUR MONTHLY GUM EARNINGS</div>
+        <div class="analytics-val" id="aMonthlyGum">0.00</div>
+        <div class="analytics-sub" id="aMonthlyXnt">≈ 0.0000 XNT</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">NFT STAKING APR</div>
+        <div class="analytics-val" style="color:var(--green);" id="aNftApr">—</div>
+        <div class="analytics-sub" id="aNftAprDetail">Based on GUM/XNT pool price</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">LP STAKING APR</div>
+        <div class="analytics-val" style="color:var(--green);" id="aLpApr">—</div>
+        <div class="analytics-sub" id="aLpAprDetail">100 GUM/day per LP token</div>
+      </div>
+    </div>
+    <div class="analytics-grid" style="margin-top:10px;">
+      <div class="analytics-card">
+        <div class="analytics-label">TOTAL GUM SUPPLY</div>
+        <div class="analytics-val" id="aGumSupply">0</div>
+        <div class="analytics-sub">of 1,000,000,000 max</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">GUM EMISSION RATE</div>
+        <div class="analytics-val" id="aGlobalEmission">0</div>
+        <div class="analytics-sub">GUM/day (all stakers)</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">GUM PRICE</div>
+        <div class="analytics-val" id="aGumPrice">—</div>
+        <div class="analytics-sub">via XDEX pool</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-label">TOTAL VALUE LOCKED</div>
+        <div class="analytics-val" id="aTvl">—</div>
+        <div class="analytics-sub">NFTs + LP staked</div>
+      </div>
+    </div>
   </div>
 
   <!-- Emission rates -->
@@ -1503,16 +1562,99 @@ loadAll = async function() {
   await loadPoolState();
   await loadSwapBalances();
   await loadLpStakeState();
-  // Update LP pending every second
+  updateAnalytics();
+  // Update LP pending + analytics every second
   if (!window._lpTimer) {
     window._lpTimer = setInterval(() => {
       lpPositions.forEach((p, i) => {
         const el = document.querySelector(`[data-lp-pos="${i}"]`);
         if (el) el.textContent = getLpPending(p).toFixed(2) + ' GUM';
       });
+      updateAnalytics();
     }, 1000);
   }
 };
+
+function updateAnalytics() {
+  // Calculate daily GUM from NFT staking
+  const nftDailyRates = [10, 25, 60, 150, 500];
+  let nftDaily = 0;
+  stakedGumballs.forEach(g => { nftDaily += nftDailyRates[g.rarity] || 10; });
+
+  // Calculate daily GUM from LP staking
+  let lpDaily = 0;
+  lpPositions.forEach(p => { lpDaily += (p.amount / 1e9) * 100; });
+
+  const totalDaily = nftDaily + lpDaily;
+  const totalMonthly = totalDaily * 30;
+
+  document.getElementById('aDailyGum').textContent = totalDaily.toFixed(2);
+  document.getElementById('aDailyBreakdown').textContent = `NFT: ${nftDaily.toFixed(0)} + LP: ${lpDaily.toFixed(0)}`;
+  document.getElementById('aMonthlyGum').textContent = totalMonthly.toFixed(0);
+
+  // GUM price from pool
+  const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+  const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+  let gumPrice = 0;
+  if (gumReserve > 0 && xntReserve > 0) {
+    gumPrice = (xntReserve / 1e9) / (gumReserve / 1e6);
+    document.getElementById('aGumPrice').textContent = gumPrice.toFixed(6) + ' XNT';
+    document.getElementById('aMonthlyXnt').textContent = `≈ ${(totalMonthly * gumPrice).toFixed(4)} XNT`;
+  } else {
+    document.getElementById('aGumPrice').textContent = '—';
+    document.getElementById('aMonthlyXnt').textContent = '≈ — XNT';
+  }
+
+  // APR calculation
+  // NFT APR: (daily GUM * price * 365) / (estimated NFT value) * 100
+  // Since NFTs don't have a fixed price, show yield in GUM terms
+  if (gumPrice > 0 && nftDaily > 0) {
+    const nftYearlyXnt = nftDaily * 365 * gumPrice;
+    // Estimate NFT value as mint price (0.01 XNT)
+    const nftValue = stakedGumballs.length * 0.01;
+    const nftApr = nftValue > 0 ? (nftYearlyXnt / nftValue * 100) : 0;
+    document.getElementById('aNftApr').textContent = nftApr > 1000 ? nftApr.toFixed(0) + '%' : nftApr.toFixed(1) + '%';
+    document.getElementById('aNftAprDetail').textContent = `${nftDaily} GUM/day → ${(nftDaily * 365 * gumPrice).toFixed(2)} XNT/yr`;
+  } else {
+    document.getElementById('aNftApr').textContent = '—';
+  }
+
+  // LP APR: (daily GUM * price * 365) / (LP value in XNT) * 100
+  if (gumPrice > 0 && lpDaily > 0) {
+    let totalLpStaked = 0;
+    lpPositions.forEach(p => { totalLpStaked += p.amount; });
+    const lpValueXnt = poolLpSupply > 0 ? (totalLpStaked / poolLpSupply) * (xntReserve / 1e9) * 2 : 0;
+    const lpYearlyXnt = lpDaily * 365 * gumPrice;
+    const lpApr = lpValueXnt > 0 ? (lpYearlyXnt / lpValueXnt * 100) : 0;
+    document.getElementById('aLpApr').textContent = lpApr > 1000 ? lpApr.toFixed(0) + '%' : lpApr.toFixed(1) + '%';
+    document.getElementById('aLpAprDetail').textContent = `${lpDaily.toFixed(0)} GUM/day → ${(lpDaily * 365 * gumPrice).toFixed(2)} XNT/yr`;
+  } else {
+    document.getElementById('aLpApr').textContent = '—';
+  }
+
+  // Global stats
+  const totalClaimedEl = document.getElementById('sTotalClaimed');
+  const totalClaimed = parseFloat(totalClaimedEl?.textContent || '0');
+  document.getElementById('aGumSupply').textContent = totalClaimed.toLocaleString();
+
+  // Global emission rate (all stakers)
+  // Would need to scan all stake accounts — approximate from total staked count
+  const totalStakedCount = parseInt(document.getElementById('sStaked')?.textContent || '0');
+  const avgDailyPerNft = 50; // rough average across rarities
+  document.getElementById('aGlobalEmission').textContent = (totalStakedCount * avgDailyPerNft).toLocaleString();
+
+  // TVL
+  if (gumPrice > 0) {
+    const nftTvl = totalStakedCount * 0.01; // NFTs at mint price
+    let lpTvlXnt = 0;
+    lpPositions.forEach(p => {
+      if (poolLpSupply > 0) lpTvlXnt += (p.amount / poolLpSupply) * (xntReserve / 1e9) * 2;
+    });
+    document.getElementById('aTvl').textContent = (nftTvl + lpTvlXnt).toFixed(4) + ' XNT';
+  } else {
+    document.getElementById('aTvl').textContent = '—';
+  }
+}
 
 // Auto-connect on load
 window.addEventListener('load', async () => {
