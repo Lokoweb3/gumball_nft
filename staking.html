@@ -289,11 +289,25 @@ header{
       </div>
       <div class="swap-balance" id="availableLpBalance">Available: —</div>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
       <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="flex:1;">STAKE LP</button>
       <button class="swap-btn" id="claimLpBtn" onclick="claimLpRewards()" disabled style="flex:1;border-color:var(--gold);color:var(--gold);">CLAIM GUM</button>
-      <button class="swap-btn" id="unstakeLpBtn" onclick="unstakeLpTokens()" disabled style="flex:1;border-color:var(--red);color:var(--red);">UNSTAKE LP</button>
     </div>
+    <div class="swap-field" id="unstakePanel" style="display:none;margin-bottom:12px;">
+      <div class="swap-label">UNSTAKE AMOUNT</div>
+      <div style="display:flex;gap:8px;align-items:center;margin:8px 0;">
+        <input type="range" id="unstakeSlider" min="1" max="100" value="100" oninput="updateUnstakePreview()" style="flex:1;accent-color:var(--red);" />
+        <span id="unstakePct" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--red);min-width:40px;text-align:right;">100%</span>
+      </div>
+      <div id="unstakePreview" style="font-size:0.38rem;color:var(--gray);margin-bottom:8px;">0.00 LP</div>
+      <div style="display:flex;gap:8px;">
+        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=25;updateUnstakePreview()">25%</button>
+        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=50;updateUnstakePreview()">50%</button>
+        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=75;updateUnstakePreview()">75%</button>
+        <button class="max-btn" onclick="document.getElementById('unstakeSlider').value=100;updateUnstakePreview()">100%</button>
+      </div>
+    </div>
+    <button class="swap-btn" id="unstakeLpBtn" onclick="unstakeLpTokens()" disabled style="border-color:var(--red);color:var(--red);">UNSTAKE LP</button>
   </div>
 
 </div>
@@ -1283,6 +1297,8 @@ async function loadLpStakeState() {
       document.getElementById('stakeLpBtn').disabled = false;
       document.getElementById('claimLpBtn').disabled = userStakedLp === 0;
       document.getElementById('unstakeLpBtn').disabled = userStakedLp === 0;
+      document.getElementById('unstakePanel').style.display = userStakedLp > 0 ? 'block' : 'none';
+      updateUnstakePreview();
     } else {
       userStakedLp = 0;
       userStakedLpLastClaimed = 0;
@@ -1408,10 +1424,21 @@ async function claimLpRewards() {
   btn.disabled = false; btn.textContent = 'CLAIM GUM';
 }
 
+function updateUnstakePreview() {
+  const pct = parseInt(document.getElementById('unstakeSlider').value) || 100;
+  document.getElementById('unstakePct').textContent = pct + '%';
+  const amount = (userStakedLp * pct / 100) / 1e9;
+  document.getElementById('unstakePreview').textContent = amount.toFixed(6) + ' LP';
+}
+
 async function unstakeLpTokens() {
-  if (!walletPubkey) return;
+  if (!walletPubkey || userStakedLp === 0) return;
+  const pct = parseInt(document.getElementById('unstakeSlider').value) || 100;
+  const unstakeAmount = BigInt(Math.floor(userStakedLp * pct / 100));
+  if (unstakeAmount === 0n) { toast('AMOUNT TOO SMALL', 'error'); return; }
+
   const btn = document.getElementById('unstakeLpBtn');
-  btn.disabled = true; btn.textContent = 'UNSTAKING...';
+  btn.disabled = true; btn.textContent = `UNSTAKING ${pct}%...`;
   try {
     const provider = getProvider();
     const realDisc = await disc("unstake_lp");
@@ -1422,6 +1449,7 @@ async function unstakeLpTokens() {
     const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
+    const data = buildIxData(realDisc, unstakeAmount);
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
@@ -1438,7 +1466,7 @@ async function unstakeLpTokens() {
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
       ],
-      data: realDisc,
+      data,
     });
 
     const tx = new Transaction().add(ix);
@@ -1449,7 +1477,7 @@ async function unstakeLpTokens() {
     const sig = await connection.sendRawTransaction(signed.serialize());
     await connection.confirmTransaction(sig, "confirmed");
 
-    toast('LP UNSTAKED + GUM CLAIMED!', 'success');
+    toast(`${pct}% LP UNSTAKED + GUM CLAIMED!`, 'success');
     await loadSwapBalances();
     await loadLpStakeState();
   } catch(e) {

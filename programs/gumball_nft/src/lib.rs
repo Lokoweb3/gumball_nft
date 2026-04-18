@@ -1200,12 +1200,15 @@ pub mod gumball_nft {
         Ok(())
     }
 
-    /// Unstake LP tokens — claim final rewards and return LP tokens.
-    pub fn unstake_lp(ctx: Context<UnstakeLp>) -> Result<()> {
+    /// Unstake LP tokens — claim pending rewards and return specified amount.
+    /// If amount == full balance, closes the stake account and returns rent.
+    pub fn unstake_lp(ctx: Context<UnstakeLp>, amount: u64) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
         let staker_key = ctx.accounts.lp_stake_account.owner;
+
+        require!(amount > 0 && amount <= staked_amount, GumballError::InvalidPrice);
 
         let reward = (elapsed as u128)
             .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
@@ -1216,7 +1219,7 @@ pub mod gumball_nft {
         let bump = ctx.accounts.stake_config.bump;
         let seeds = &[b"stake_config".as_ref(), &[bump]];
 
-        // Mint final GUM rewards
+        // Mint pending GUM rewards
         if reward > 0 {
             let new_total = ctx.accounts.stake_config.total_claimed
                 .checked_add(reward).ok_or(GumballError::MathOverflow)?;
@@ -1237,7 +1240,7 @@ pub mod gumball_nft {
             }
         }
 
-        // Return LP tokens from vault to staker
+        // Return requested LP tokens from vault to staker
         anchor_spl::token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -1248,11 +1251,25 @@ pub mod gumball_nft {
                 },
                 &[seeds],
             ),
-            staked_amount,
+            amount,
         )?;
 
-        emit!(LpUnstakedEvent { staker: staker_key, amount: staked_amount, reward });
-        // LpStakeAccount closed via `close = staker` in accounts struct
+        ctx.accounts.lp_stake_account.last_claimed = now;
+
+        if amount == staked_amount {
+            // Full withdrawal — close the account and return rent
+            let lp_info = ctx.accounts.lp_stake_account.to_account_info();
+            let staker_info = ctx.accounts.staker.to_account_info();
+            **staker_info.try_borrow_mut_lamports()? += lp_info.lamports();
+            **lp_info.try_borrow_mut_lamports()? = 0;
+            lp_info.try_borrow_mut_data()?.fill(0);
+        } else {
+            // Partial withdrawal — reduce amount, keep account open
+            ctx.accounts.lp_stake_account.amount = staked_amount
+                .checked_sub(amount).ok_or(GumballError::MathOverflow)?;
+        }
+
+        emit!(LpUnstakedEvent { staker: staker_key, amount, reward });
         Ok(())
     }
 
@@ -2068,7 +2085,7 @@ pub struct UnstakeLp<'info> {
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
     pub stake_config: Account<'info, StakeConfig>,
     #[account(
-        mut, close = staker,
+        mut,
         seeds = [b"lp_stake", staker.key().as_ref()], bump = lp_stake_account.bump,
         constraint = lp_stake_account.owner == staker.key() @ GumballError::Unauthorized,
     )]
