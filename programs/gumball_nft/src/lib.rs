@@ -1235,8 +1235,10 @@ pub mod gumball_nft {
                 ctx.accounts.position_mint.to_account_info(),
                 ctx.accounts.stake_config.to_account_info(),
                 ctx.accounts.staker.to_account_info(),
+                ctx.accounts.stake_config.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
                 ctx.accounts.rent.to_account_info(),
+                ctx.accounts.metadata_program.to_account_info(),
             ],
             &[sc_seeds],
         )?;
@@ -2148,10 +2150,9 @@ pub struct StakeLp<'info> {
     pub vault_lp_ata: Account<'info, TokenAccount>,
     /// CHECK: Metaplex metadata PDA — created by Metaplex program via CPI
     #[account(mut)]
-    pub metadata_account: UncheckedAccount<'info>,
+    pub metadata_account: AccountInfo<'info>,
     /// CHECK: Metaplex Token Metadata program
-    #[account(address = METAPLEX_PROGRAM_ID)]
-    pub metadata_program: UncheckedAccount<'info>,
+    pub metadata_program: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
