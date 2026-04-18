@@ -1,10 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::System;
-use anchor_lang::solana_program::{clock::Clock, sysvar, hash::hashv};
+use anchor_lang::solana_program::{clock::Clock, sysvar, hash::hashv, program::invoke};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{burn, mint_to, Burn, Mint, MintTo, Token, TokenAccount},
 };
+
+/// Metaplex Token Metadata Program ID
+const METAPLEX_PROGRAM_ID: Pubkey = Pubkey::new_from_array([
+    11, 112, 101, 177, 227, 209, 124, 69, 56, 157, 82, 127, 107, 4, 195, 205,
+    88, 184, 108, 115, 26, 160, 253, 181, 73, 182, 209, 188, 3, 248, 41, 70,
+]); // metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
 
 declare_id!("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 
@@ -1169,6 +1175,72 @@ pub mod gumball_nft {
         lp_stake.last_claimed = now;
         lp_stake.bump = ctx.bumps.lp_stake_account;
 
+        // Create Metaplex metadata for position NFT
+        let metadata_seeds = &[
+            b"metadata".as_ref(),
+            METAPLEX_PROGRAM_ID.as_ref(),
+            ctx.accounts.position_mint.key().as_ref(),
+        ];
+        let (metadata_pda, _) = Pubkey::find_program_address(metadata_seeds, &METAPLEX_PROGRAM_ID);
+
+        // Build CreateMetadataAccountV3 instruction manually
+        let lp_display = amount / 1_000_000_000; // LP tokens (9 decimals)
+        let name = format!("GUM LP #{}", lp_display);
+        let name = if name.len() > 32 { name[..32].to_string() } else { name };
+        let symbol = "GUMLP".to_string();
+        let uri = "".to_string(); // No off-chain metadata needed
+
+        // Serialize CreateMetadataAccountV3 data
+        let mut meta_data = vec![33u8]; // CreateMetadataAccountV3 discriminator
+        // DataV2: name
+        meta_data.extend_from_slice(&(name.len() as u32).to_le_bytes());
+        meta_data.extend_from_slice(name.as_bytes());
+        // symbol
+        meta_data.extend_from_slice(&(symbol.len() as u32).to_le_bytes());
+        meta_data.extend_from_slice(symbol.as_bytes());
+        // uri
+        meta_data.extend_from_slice(&(uri.len() as u32).to_le_bytes());
+        meta_data.extend_from_slice(uri.as_bytes());
+        // seller_fee_basis_points
+        meta_data.extend_from_slice(&0u16.to_le_bytes());
+        // creators: None
+        meta_data.push(0);
+        // collection: None
+        meta_data.push(0);
+        // uses: None
+        meta_data.push(0);
+        // is_mutable
+        meta_data.push(0); // false — metadata is immutable
+        // collection_details: None
+        meta_data.push(0);
+
+        let meta_accounts = vec![
+            AccountMeta::new(metadata_pda, false),
+            AccountMeta::new_readonly(ctx.accounts.position_mint.key(), false),
+            AccountMeta::new(ctx.accounts.stake_config.key(), false), // mint authority
+            AccountMeta::new(ctx.accounts.staker.key(), true), // payer
+            AccountMeta::new_readonly(ctx.accounts.stake_config.key(), true), // update authority
+            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+        ];
+
+        anchor_lang::solana_program::program::invoke_signed(
+            &anchor_lang::solana_program::instruction::Instruction {
+                program_id: METAPLEX_PROGRAM_ID,
+                accounts: meta_accounts,
+                data: meta_data,
+            },
+            &[
+                ctx.accounts.metadata_account.to_account_info(),
+                ctx.accounts.position_mint.to_account_info(),
+                ctx.accounts.stake_config.to_account_info(),
+                ctx.accounts.staker.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+                ctx.accounts.rent.to_account_info(),
+            ],
+            &[sc_seeds],
+        )?;
+
         emit!(LpStakedEvent { staker: ctx.accounts.staker.key(), amount });
         Ok(())
     }
@@ -2074,6 +2146,12 @@ pub struct StakeLp<'info> {
     pub user_lp_ata: Account<'info, TokenAccount>,
     #[account(init_if_needed, payer = staker, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
     pub vault_lp_ata: Account<'info, TokenAccount>,
+    /// CHECK: Metaplex metadata PDA — created by Metaplex program via CPI
+    #[account(mut)]
+    pub metadata_account: UncheckedAccount<'info>,
+    /// CHECK: Metaplex Token Metadata program
+    #[account(address = METAPLEX_PROGRAM_ID)]
+    pub metadata_program: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
