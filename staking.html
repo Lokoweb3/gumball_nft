@@ -1118,21 +1118,23 @@ async function addLiquidity() {
 
     const data = buildIxData(discBytes, lpAmount, maxAmount0, maxAmount1);
 
+    const TOKEN_2022 = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
     const ix = new TransactionInstruction({
       programId: XDEX_PID,
       keys: [
-        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false },
-        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  },
-        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
-        { pubkey: userToken0,              isSigner: false, isWritable: true  },
-        { pubkey: userToken1,              isSigner: false, isWritable: true  },
-        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  },
-        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // owner
+        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false }, // authority
+        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  }, // poolState
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  }, // ownerLpToken
+        { pubkey: userToken0,              isSigner: false, isWritable: true  }, // token0Account
+        { pubkey: userToken1,              isSigner: false, isWritable: true  }, // token1Account
+        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  }, // token0Vault
+        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  }, // token1Vault
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // tokenProgram
+        { pubkey: TOKEN_2022,              isSigner: false, isWritable: false }, // tokenProgram2022
+        { pubkey: mint0,                   isSigner: false, isWritable: false }, // vault0Mint
+        { pubkey: mint1,                   isSigner: false, isWritable: false }, // vault1Mint
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  }, // lpMint
       ],
       data,
     });
@@ -1209,21 +1211,25 @@ async function removeLiquidity() {
 
     const data = buildIxData(discBytes, lpLamports, 0n, 0n);
 
+    const TOKEN_2022 = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+    const MEMO_PID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
     const ix = new TransactionInstruction({
       programId: XDEX_PID,
       keys: [
-        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false },
-        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  },
-        { pubkey: userLpAta,               isSigner: false, isWritable: true  },
-        { pubkey: userToken0,              isSigner: false, isWritable: true  },
-        { pubkey: userToken1,              isSigner: false, isWritable: true  },
-        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  },
-        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // owner
+        { pubkey: POOL_AUTH,               isSigner: false, isWritable: false }, // authority
+        { pubkey: POOL_STATE,              isSigner: false, isWritable: true  }, // poolState
+        { pubkey: userLpAta,               isSigner: false, isWritable: true  }, // ownerLpToken
+        { pubkey: userToken0,              isSigner: false, isWritable: true  }, // token0Account
+        { pubkey: userToken1,              isSigner: false, isWritable: true  }, // token1Account
+        { pubkey: VAULT_0,                 isSigner: false, isWritable: true  }, // token0Vault
+        { pubkey: VAULT_1,                 isSigner: false, isWritable: true  }, // token1Vault
+        { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // tokenProgram
+        { pubkey: TOKEN_2022,              isSigner: false, isWritable: false }, // tokenProgram2022
+        { pubkey: mint0,                   isSigner: false, isWritable: false }, // vault0Mint
+        { pubkey: mint1,                   isSigner: false, isWritable: false }, // vault1Mint
+        { pubkey: LP_MINT,                 isSigner: false, isWritable: true  }, // lpMint
+        { pubkey: MEMO_PID,               isSigner: false, isWritable: false }, // memoProgram
       ],
       data,
     });
