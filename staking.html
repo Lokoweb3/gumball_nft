@@ -1620,6 +1620,7 @@ loadAll = async function() {
   await loadSwapBalances();
   await loadLpStakeState();
   updateAnalytics();
+  if (!priceHistoryLoaded) await loadPriceHistory();
   recordPrice();
   // Update LP pending + analytics every second
   if (!window._lpTimer) {
@@ -1718,6 +1719,20 @@ function updateAnalytics() {
 
 let priceHistory = []; // { time: timestamp, price: number }
 let chartRange = '1h';
+let priceHistoryLoaded = false;
+
+async function loadPriceHistory() {
+  try {
+    const resp = await fetch('/api/price-history');
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      priceHistory = data.map(d => ({ time: d.t, price: d.p }));
+      priceHistoryLoaded = true;
+      drawChart();
+      console.log(`Loaded ${priceHistory.length} price points from server`);
+    }
+  } catch(e) { console.log('Price history not available:', e.message); }
+}
 
 function recordPrice() {
   const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;

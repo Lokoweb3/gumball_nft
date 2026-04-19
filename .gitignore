@@ -22,3 +22,4 @@ faucet-wallet.json
 .claude/
 main
 scripts/mint-legendary*.cjs
+price-history.json

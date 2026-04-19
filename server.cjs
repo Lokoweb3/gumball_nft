@@ -124,6 +124,83 @@ app.post("/api/faucet", async (req, res) => {
   }
 });
 
+// ── Price History ───────────────────────────────────────────────────────────
+const PRICE_FILE = path.join(__dirname, "price-history.json");
+const PRICE_INTERVAL = 30_000; // Record every 30 seconds
+const MAX_PRICE_POINTS = 20_160; // 7 days at 30s intervals
+
+const PROGRAM_ID = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
+const XDEX_PID = new PublicKey("7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf");
+const AMM_CONFIG = new PublicKey("3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY");
+const GUM_MINT = new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
+
+// Derive pool PDAs
+const mint0 = WSOL_MINT.toBuffer().compare(GUM_MINT.toBuffer()) < 0 ? WSOL_MINT : GUM_MINT;
+const mint1 = WSOL_MINT.toBuffer().compare(GUM_MINT.toBuffer()) < 0 ? GUM_MINT : WSOL_MINT;
+const isGumToken0 = mint0.equals(GUM_MINT);
+const [POOL_STATE] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool"), AMM_CONFIG.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], XDEX_PID
+);
+const [VAULT_0] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool_vault"), POOL_STATE.toBuffer(), mint0.toBuffer()], XDEX_PID
+);
+const [VAULT_1] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool_vault"), POOL_STATE.toBuffer(), mint1.toBuffer()], XDEX_PID
+);
+
+const priceConnection = new Connection("https://rpc.testnet.x1.xyz", "confirmed");
+
+// Load existing history
+let priceHistory = [];
+try {
+  if (fs.existsSync(PRICE_FILE)) {
+    priceHistory = JSON.parse(fs.readFileSync(PRICE_FILE, "utf8"));
+    console.log(`Loaded ${priceHistory.length} price points from disk`);
+  }
+} catch(e) { priceHistory = []; }
+
+async function recordPrice() {
+  try {
+    const [v0Info, v1Info] = await Promise.all([
+      priceConnection.getAccountInfo(VAULT_0),
+      priceConnection.getAccountInfo(VAULT_1),
+    ]);
+    if (!v0Info || !v1Info) return;
+
+    const r0 = Number(Buffer.from(v0Info.data).readBigUInt64LE(64));
+    const r1 = Number(Buffer.from(v1Info.data).readBigUInt64LE(64));
+
+    const gumReserve = isGumToken0 ? r0 : r1;
+    const xntReserve = isGumToken0 ? r1 : r0;
+
+    if (gumReserve === 0 || xntReserve === 0) return;
+
+    const price = (xntReserve / 1e9) / (gumReserve / 1e6);
+    priceHistory.push({ t: Date.now(), p: parseFloat(price.toFixed(9)) });
+
+    // Trim to max points
+    if (priceHistory.length > MAX_PRICE_POINTS) {
+      priceHistory = priceHistory.slice(-MAX_PRICE_POINTS);
+    }
+
+    // Save to disk every 5 minutes (10 recordings)
+    if (priceHistory.length % 10 === 0) {
+      fs.writeFileSync(PRICE_FILE, JSON.stringify(priceHistory));
+    }
+  } catch(e) { /* silent — pool might not exist yet */ }
+}
+
+// Start recording
+setInterval(recordPrice, PRICE_INTERVAL);
+setTimeout(recordPrice, 5000); // First record after 5s
+
+app.get("/api/price-history", (req, res) => {
+  const since = parseInt(req.query.since) || 0;
+  const data = since ? priceHistory.filter(p => p.t > since) : priceHistory;
+  res.json(data);
+});
+
 // ── Health / Oracle / Monitor ───────────────────────────────────────────────
 let oracleProcess = null;
 let monitorProcess = null;
