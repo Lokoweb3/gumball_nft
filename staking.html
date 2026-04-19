@@ -224,6 +224,28 @@ header{
     </div>
   </div>
 
+  <!-- GUM Price Chart -->
+  <div class="analytics-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="analytics-title" style="margin:0;">// GUM / XNT PRICE</div>
+      <div style="display:flex;gap:6px;">
+        <button class="max-btn" onclick="setChartRange('1h')" id="chartBtn1h">1H</button>
+        <button class="max-btn" onclick="setChartRange('6h')" id="chartBtn6h">6H</button>
+        <button class="max-btn" onclick="setChartRange('24h')" id="chartBtn24h" style="border-color:var(--teal);color:var(--teal);">24H</button>
+        <button class="max-btn" onclick="setChartRange('all')" id="chartBtnall">ALL</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+      <div style="font-family:'Press Start 2P',cursive;font-size:0.6rem;color:var(--gold);" id="chartPrice">—</div>
+      <div style="font-size:0.35rem;" id="chartChange">—</div>
+    </div>
+    <canvas id="priceChart" width="900" height="200" style="width:100%;height:200px;border:1px solid var(--border);background:var(--black);border-radius:4px;"></canvas>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.3rem;color:var(--gray);">
+      <span id="chartTimeStart">—</span>
+      <span id="chartTimeEnd">—</span>
+    </div>
+  </div>
+
   <!-- Emission rates -->
   <div class="emission-table">
     <div class="emission-title">// GUM EMISSION RATES</div>
@@ -1578,6 +1600,7 @@ loadAll = async function() {
   await loadSwapBalances();
   await loadLpStakeState();
   updateAnalytics();
+  recordPrice();
   // Update LP pending + analytics every second
   if (!window._lpTimer) {
     window._lpTimer = setInterval(() => {
@@ -1670,6 +1693,124 @@ function updateAnalytics() {
     document.getElementById('aTvl').textContent = '—';
   }
 }
+
+// ── PRICE CHART ──────────────────────────────────────────────────────────────
+
+let priceHistory = []; // { time: timestamp, price: number }
+let chartRange = '24h';
+
+function recordPrice() {
+  const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
+  const xntReserve = isGumToken0 ? poolReserve1 : poolReserve0;
+  if (gumReserve > 0 && xntReserve > 0) {
+    const price = (xntReserve / 1e9) / (gumReserve / 1e6);
+    priceHistory.push({ time: Date.now(), price });
+    // Keep max 24h of data at 30s intervals = 2880 points
+    if (priceHistory.length > 2880) priceHistory.shift();
+    drawChart();
+  }
+}
+
+function setChartRange(range) {
+  chartRange = range;
+  ['1h','6h','24h','all'].forEach(r => {
+    const btn = document.getElementById('chartBtn' + r);
+    if (btn) {
+      btn.style.borderColor = r === range ? 'var(--teal)' : '';
+      btn.style.color = r === range ? 'var(--teal)' : '';
+    }
+  });
+  drawChart();
+}
+
+function getChartData() {
+  const now = Date.now();
+  const ranges = { '1h': 3600000, '6h': 21600000, '24h': 86400000, 'all': Infinity };
+  const cutoff = now - (ranges[chartRange] || 86400000);
+  return priceHistory.filter(p => p.time >= cutoff);
+}
+
+function drawChart() {
+  const canvas = document.getElementById('priceChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const data = getChartData();
+  if (data.length < 2) {
+    ctx.fillStyle = '#6666aa';
+    ctx.font = '12px "Space Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Collecting price data...', w/2, h/2);
+    return;
+  }
+
+  const prices = data.map(d => d.price);
+  const minP = Math.min(...prices) * 0.995;
+  const maxP = Math.max(...prices) * 1.005;
+  const range = maxP - minP || 0.000001;
+  const minT = data[0].time;
+  const maxT = data[data.length - 1].time;
+  const tRange = maxT - minT || 1;
+
+  // Grid lines
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = 10 + (h - 20) * (i / 4);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // Price line
+  const isUp = prices[prices.length - 1] >= prices[0];
+  ctx.strokeStyle = isUp ? '#44ff88' : '#ff2244';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = ((d.time - minT) / tRange) * w;
+    const y = h - 10 - ((d.price - minP) / range) * (h - 20);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill under the line
+  const lastX = w;
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, isUp ? 'rgba(68,255,136,0.15)' : 'rgba(255,34,68,0.15)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.lineTo(lastX, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Current price display
+  const currentPrice = prices[prices.length - 1];
+  const firstPrice = prices[0];
+  const change = ((currentPrice - firstPrice) / firstPrice) * 100;
+  document.getElementById('chartPrice').textContent = currentPrice.toFixed(6) + ' XNT';
+  const changeEl = document.getElementById('chartChange');
+  changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+  changeEl.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Time labels
+  const fmtTime = t => new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  document.getElementById('chartTimeStart').textContent = fmtTime(minT);
+  document.getElementById('chartTimeEnd').textContent = fmtTime(maxT);
+}
+
+// Record price every 30 seconds
+setInterval(recordPrice, 30000);
 
 // Auto-connect on load
 window.addEventListener('load', async () => {
