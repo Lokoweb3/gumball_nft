@@ -1113,6 +1113,21 @@ async function executeSwap() {
     }
 
     tx.add(ix);
+
+    // Auto-unwrap WSOL after GUM→XNT swap so user gets native SOL
+    if (swapDirection === 'gum_to_xnt') {
+      // Close the WSOL ATA — sends all lamports back as native SOL
+      tx.add(new TransactionInstruction({
+        programId: TOKEN_PID,
+        keys: [
+          { pubkey: userOutputAta, isSigner: false, isWritable: true  }, // account to close
+          { pubkey: walletPubkey,  isSigner: false, isWritable: true  }, // destination
+          { pubkey: walletPubkey,  isSigner: true,  isWritable: false }, // owner
+        ],
+        data: new Uint8Array([9]), // CloseAccount instruction index
+      }));
+    }
+
     tx.feePayer = walletPubkey;
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
