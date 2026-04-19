@@ -1269,12 +1269,21 @@ async function addLiquidity() {
 
     // Wrap SOL into WSOL for the XNT side
     const wsolNeeded = isGumToken0 ? maxAmount1 : maxAmount0;
-    tx.add(solTransferIx(walletPubkey, wsolAta, Number(wsolNeeded) + 10000));
-    tx.add(new TransactionInstruction({
-      programId: TOKEN_PID,
-      keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
-      data: new Uint8Array([17]), // SyncNative
-    }));
+    // Check if WSOL ATA already has enough balance
+    const wsolInfo = await connection.getAccountInfo(wsolAta);
+    let existingWsol = 0;
+    if (wsolInfo && wsolInfo.data.length >= 72) {
+      existingWsol = Number(new DataView(wsolInfo.data.buffer, wsolInfo.data.byteOffset).getBigUint64(64, true));
+    }
+    const extraNeeded = Number(wsolNeeded) - existingWsol + 10000;
+    if (extraNeeded > 0) {
+      tx.add(solTransferIx(walletPubkey, wsolAta, extraNeeded));
+      tx.add(new TransactionInstruction({
+        programId: TOKEN_PID,
+        keys: [{ pubkey: wsolAta, isSigner: false, isWritable: true }],
+        data: new Uint8Array([17]), // SyncNative
+      }));
+    }
 
     tx.add(ix);
     tx.feePayer = walletPubkey;
