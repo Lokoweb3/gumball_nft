@@ -229,10 +229,15 @@ header{
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div class="analytics-title" style="margin:0;">// GUM / XNT PRICE</div>
       <div style="display:flex;gap:6px;">
-        <button class="max-btn" onclick="setChartRange('1h')" id="chartBtn1h">1H</button>
-        <button class="max-btn" onclick="setChartRange('6h')" id="chartBtn6h">6H</button>
-        <button class="max-btn" onclick="setChartRange('24h')" id="chartBtn24h" style="border-color:var(--teal);color:var(--teal);">24H</button>
-        <button class="max-btn" onclick="setChartRange('all')" id="chartBtnall">ALL</button>
+        <button class="max-btn" onclick="setChartRange('1m')" id="chartBtn1m">1M</button>
+        <button class="max-btn" onclick="setChartRange('5m')" id="chartBtn5m">5M</button>
+        <button class="max-btn" onclick="setChartRange('15m')" id="chartBtn15m">15M</button>
+        <button class="max-btn" onclick="setChartRange('30m')" id="chartBtn30m">30M</button>
+        <button class="max-btn" onclick="setChartRange('1h')" id="chartBtn1h" style="border-color:var(--teal);color:var(--teal);">1H</button>
+        <button class="max-btn" onclick="setChartRange('4h')" id="chartBtn4h">4H</button>
+        <button class="max-btn" onclick="setChartRange('12h')" id="chartBtn12h">12H</button>
+        <button class="max-btn" onclick="setChartRange('1d')" id="chartBtn1d">1D</button>
+        <button class="max-btn" onclick="setChartRange('7d')" id="chartBtn7d">7D</button>
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
@@ -1697,7 +1702,7 @@ function updateAnalytics() {
 // ── PRICE CHART ──────────────────────────────────────────────────────────────
 
 let priceHistory = []; // { time: timestamp, price: number }
-let chartRange = '24h';
+let chartRange = '1h';
 
 function recordPrice() {
   const gumReserve = isGumToken0 ? poolReserve0 : poolReserve1;
@@ -1705,15 +1710,15 @@ function recordPrice() {
   if (gumReserve > 0 && xntReserve > 0) {
     const price = (xntReserve / 1e9) / (gumReserve / 1e6);
     priceHistory.push({ time: Date.now(), price });
-    // Keep max 24h of data at 30s intervals = 2880 points
-    if (priceHistory.length > 2880) priceHistory.shift();
+    // Keep max 7 days of data at 10s intervals = ~60480 points
+    if (priceHistory.length > 60480) priceHistory.shift();
     drawChart();
   }
 }
 
 function setChartRange(range) {
   chartRange = range;
-  ['1h','6h','24h','all'].forEach(r => {
+  ['1m','5m','15m','30m','1h','4h','12h','1d','7d'].forEach(r => {
     const btn = document.getElementById('chartBtn' + r);
     if (btn) {
       btn.style.borderColor = r === range ? 'var(--teal)' : '';
@@ -1725,7 +1730,7 @@ function setChartRange(range) {
 
 function getChartData() {
   const now = Date.now();
-  const ranges = { '1h': 3600000, '6h': 21600000, '24h': 86400000, 'all': Infinity };
+  const ranges = { '1m': 60000, '5m': 300000, '15m': 900000, '30m': 1800000, '1h': 3600000, '4h': 14400000, '12h': 43200000, '1d': 86400000, '7d': 604800000 };
   const cutoff = now - (ranges[chartRange] || 86400000);
   return priceHistory.filter(p => p.time >= cutoff);
 }
@@ -1809,8 +1814,8 @@ function drawChart() {
   document.getElementById('chartTimeEnd').textContent = fmtTime(maxT);
 }
 
-// Record price every 30 seconds
-setInterval(recordPrice, 30000);
+// Record price every 10 seconds for granular short timeframes
+setInterval(recordPrice, 10000);
 
 // Auto-connect on load
 window.addEventListener('load', async () => {
