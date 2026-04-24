@@ -837,7 +837,6 @@ async function claimAll() {
   if (!walletPubkey || stakedGumballs.length === 0) return;
   const btn = document.getElementById('claimAllBtn');
   btn.disabled = true;
-  btn.textContent = 'CLAIMING...';
   try {
     const provider = getProvider();
     const discBytes = await disc("claim");
@@ -845,34 +844,44 @@ async function claimAll() {
     const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
-    const tx = new Transaction();
-    for (const g of stakedGumballs) {
-      const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), g.nftMint.toBytes()], PROGRAM_ID);
-      tx.add(new TransactionInstruction({
-        programId: PROGRAM_ID,
-        keys: [
-          { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-          { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
-          { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
-          { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
-          { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
-          { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
-          { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
-        ],
-        data: discBytes,
-      }));
+    // Batch 4 claims per transaction to fit Solana's 1232-byte limit
+    const BATCH = 4;
+    const total = stakedGumballs.length;
+    let claimed = 0;
+
+    for (let i = 0; i < total; i += BATCH) {
+      const batch = stakedGumballs.slice(i, i + BATCH);
+      btn.textContent = `CLAIMING ${i+1}-${Math.min(i+BATCH, total)}/${total}...`;
+      const tx = new Transaction();
+      for (const g of batch) {
+        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), g.nftMint.toBytes()], PROGRAM_ID);
+        tx.add(new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+            { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+            { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+            { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+            { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+            { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+            { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+          ],
+          data: discBytes,
+        }));
+      }
+
+      tx.feePayer = walletPubkey;
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      const signed = await provider.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(sig, "confirmed");
+      claimed += batch.length;
     }
 
-    tx.feePayer = walletPubkey;
-    const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
-    const signed = await provider.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize());
-    await connection.confirmTransaction(sig, "confirmed");
-
-    toast(`CLAIMED GUM FROM ${stakedGumballs.length} GUMBALLS!`, 'success');
+    toast(`CLAIMED GUM FROM ${claimed} GUMBALLS!`, 'success');
     await loadAll();
   } catch(e) {
     console.error("Claim all error:", e);
