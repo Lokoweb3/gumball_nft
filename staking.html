@@ -1453,23 +1453,21 @@ async function loadLpStakeState() {
   lpPositions = [];
   if (!walletPubkey) { renderLpPositions(); return; }
   try {
-    // Load both old (97) and new (107) stake account sizes
-    const [oldAccts, newAccts] = await Promise.all([
-      connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: LP_STAKE_SIZE_V1 }] }),
-      connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: LP_STAKE_SIZE }] }),
-    ]);
-    const accounts = [...oldAccts, ...newAccts];
+    // Only load new (107) stake accounts — old (97) positions can't be deserialized
+    // by the new contract after the lock feature was added.
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: LP_STAKE_SIZE }],
+    });
     for (const { pubkey, account } of accounts) {
       const d = account.data;
       const dv = new DataView(d.buffer, d.byteOffset);
-      const isV2 = d.length === LP_STAKE_SIZE;
       const positionMint = new PublicKey(d.slice(8, 40));
       const lpMintKey = new PublicKey(d.slice(40, 72));
       const amount = Number(dv.getBigUint64(72, true));
       const stakedAt = Number(dv.getBigInt64(80, true));
       const lastClaimed = Number(dv.getBigInt64(88, true));
-      const lockUntil = isV2 ? Number(dv.getBigInt64(96, true)) : 0;
-      const multiplier = isV2 ? dv.getUint16(104, true) : 100; // default 1x for old
+      const lockUntil = Number(dv.getBigInt64(96, true));
+      const multiplier = dv.getUint16(104, true);
       if (amount === 0) continue;
       const posAta = getAta(positionMint, walletPubkey);
       try {
