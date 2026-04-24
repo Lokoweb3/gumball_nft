@@ -1769,9 +1769,12 @@ function updateAnalytics() {
   let nftDaily = 0;
   stakedGumballs.forEach(g => { nftDaily += nftDailyRates[g.rarity] || 10; });
 
-  // Calculate daily GUM from LP staking
+  // Calculate daily GUM from LP staking (with multiplier)
   let lpDaily = 0;
-  lpPositions.forEach(p => { lpDaily += (p.amount / 1e9) * 100; });
+  lpPositions.forEach(p => {
+    const mult = (p.multiplier || 100) / 100;
+    lpDaily += (p.amount / 1e9) * 100 * mult;
+  });
 
   const totalDaily = nftDaily + lpDaily;
   const totalMonthly = totalDaily * 30;
