@@ -1415,6 +1415,16 @@ const LP_RATE_PER_SEC = 1157407;
 let lpPositions = [];
 let selectedLockDays = 30;
 
+function penaltyBpsForMult(multiplier) {
+  switch (multiplier) {
+    case 100: return 1000; // 10%
+    case 150: return 1500; // 15%
+    case 200: return 2000; // 20%
+    case 300: return 2500; // 25%
+    default: return 1000;
+  }
+}
+
 function setLockTier(days) {
   selectedLockDays = days;
   [30, 90, 180, 365].forEach(d => {
@@ -1489,7 +1499,6 @@ function renderLpPositions() {
           </div>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--gold);" data-lp-pos="${i}">${pending.toFixed(2)} GUM</div>
         </div>
-        ${isLocked ? '' : `
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center;">
           <input type="range" id="us${i}" min="1" max="100" value="100" oninput="document.getElementById('ul${i}').textContent=this.value+'%'" style="flex:1;accent-color:var(--red);" />
           <span id="ul${i}" style="font-family:'Press Start 2P',cursive;font-size:0.3rem;color:var(--red);min-width:35px;">100%</span>
@@ -1500,10 +1509,10 @@ function renderLpPositions() {
           <button class="max-btn" onclick="document.getElementById('us${i}').value=75;document.getElementById('ul${i}').textContent='75%'">75%</button>
           <button class="max-btn" onclick="document.getElementById('us${i}').value=100;document.getElementById('ul${i}').textContent='100%'">100%</button>
         </div>
-        `}
+        ${isLocked ? `<div style="font-size:0.35rem;color:var(--red);margin-top:8px;">⚠ Early unstake: ${(penaltyBpsForMult(p.multiplier)/100).toFixed(0)}% penalty + forfeit pending GUM</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button class="card-btn claim" onclick="claimLpPosition(${i})" style="flex:1;padding:6px;">CLAIM GUM</button>
-          ${isLocked ? `<button class="card-btn unstake" disabled style="flex:1;padding:6px;opacity:0.4;cursor:not-allowed;">LOCKED</button>` : `<button class="card-btn unstake" onclick="unstakeLpPosition(${i})" style="flex:1;padding:6px;">UNSTAKE</button>`}
+          <button class="card-btn unstake" onclick="unstakeLpPosition(${i})" style="flex:1;padding:6px;${isLocked ? 'border-color:var(--red);' : ''}">${isLocked ? 'UNSTAKE EARLY' : 'UNSTAKE'}</button>
         </div>
       </div>`;
   }).join('');
@@ -1630,6 +1639,15 @@ async function unstakeLpPosition(idx) {
   const pct = parseInt(document.getElementById(`us${idx}`).value) || 100;
   const unstakeAmount = BigInt(Math.floor(p.amount * pct / 100));
   if (unstakeAmount === 0n) { toast('AMOUNT TOO SMALL', 'error'); return; }
+
+  const now = Math.floor(Date.now() / 1000);
+  const isEarly = (p.lockUntil || 0) > now;
+  if (isEarly) {
+    const penaltyPct = (penaltyBpsForMult(p.multiplier) / 100).toFixed(0);
+    const netLp = (Number(unstakeAmount) * (1 - penaltyBpsForMult(p.multiplier) / 10000) / 1e9).toFixed(6);
+    const ok = confirm(`Early unstake penalty: ${penaltyPct}%\n\nYou will receive ${netLp} LP tokens\nYou will forfeit pending GUM rewards\n\nContinue?`);
+    if (!ok) return;
+  }
   try {
     const provider = getProvider();
     const realDisc = await disc("unstake_lp");

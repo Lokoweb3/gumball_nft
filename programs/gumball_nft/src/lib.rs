@@ -1316,9 +1316,7 @@ pub mod gumball_nft {
         require!(ctx.accounts.position_ata.amount == 1, GumballError::Unauthorized);
 
         let now = Clock::get()?.unix_timestamp;
-
-        // Enforce lock period
-        require!(now >= ctx.accounts.lp_stake_account.lock_until, GumballError::LockActive);
+        let is_early = now < ctx.accounts.lp_stake_account.lock_until;
 
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
@@ -1326,12 +1324,30 @@ pub mod gumball_nft {
 
         require!(amount > 0 && amount <= staked_amount, GumballError::InvalidPrice);
 
-        let reward = (elapsed as u128)
-            .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
-            .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
-            .checked_mul(multiplier).ok_or(GumballError::MathOverflow)?
-            / 100_000_000_000u128;
-        let reward = reward as u64;
+        // Calculate early unstake penalty (in bps, 10000 = 100%)
+        // 30d lock = 10%, 90d = 15%, 180d = 20%, 365d = 25%
+        let penalty_bps: u64 = if is_early {
+            match multiplier {
+                100 => 1000,
+                150 => 1500,
+                200 => 2000,
+                300 => 2500,
+                _ => 1000,
+            }
+        } else { 0 };
+
+        // Net amount returned to user after penalty
+        let penalty = (amount as u128 * penalty_bps as u128 / 10000) as u64;
+        let net_amount = amount.checked_sub(penalty).ok_or(GumballError::MathOverflow)?;
+
+        // No GUM rewards on early unstake
+        let reward = if is_early { 0 } else {
+            ((elapsed as u128)
+                .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
+                .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
+                .checked_mul(multiplier).ok_or(GumballError::MathOverflow)?
+                / 100_000_000_000u128) as u64
+        };
 
         let bump = ctx.accounts.stake_config.bump;
         let seeds = &[b"stake_config".as_ref(), &[bump]];
@@ -1357,7 +1373,7 @@ pub mod gumball_nft {
             }
         }
 
-        // Return LP tokens
+        // Return LP tokens (minus penalty). Penalty stays in vault.
         anchor_spl::token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -1368,7 +1384,7 @@ pub mod gumball_nft {
                 },
                 &[seeds],
             ),
-            amount,
+            net_amount,
         )?;
 
         ctx.accounts.lp_stake_account.last_claimed = now;
@@ -2319,5 +2335,4 @@ pub enum GumballError {
     #[msg("Offer has expired")]                      OfferExpired,
     #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
     #[msg("Invalid lock period — use 30, 90, 180, or 365 days")] InvalidLockPeriod,
-    #[msg("LP position is still locked")]            LockActive,
 }
