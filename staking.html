@@ -273,7 +273,10 @@ header{
   <!-- Staked NFTs -->
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);">
     <div style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;">// YOUR STAKED GUMBALLS</div>
-    <button class="card-btn claim" id="claimAllBtn" onclick="claimAll()" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
+    <div style="display:flex;gap:6px;">
+      <button class="card-btn claim" id="claimAllBtn" onclick="claimAll()" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
+      <button class="card-btn unstake" id="unstakeAllBtn" onclick="unstakeAll()" style="width:auto;padding:8px 16px;display:none;">UNSTAKE ALL</button>
+    </div>
   </div>
   <div id="stakedGrid" class="grid">
     <div class="empty-msg">CONNECT WALLET TO VIEW STAKED GUMBALLS</div>
@@ -624,12 +627,15 @@ async function loadUnstakedNfts() {
 function renderStaked() {
   const el = document.getElementById('stakedGrid');
   const claimAllBtn = document.getElementById('claimAllBtn');
+  const unstakeAllBtn = document.getElementById('unstakeAllBtn');
   if (stakedGumballs.length === 0) {
     el.innerHTML = '<div class="empty-msg">NO STAKED GUMBALLS</div>';
     if (claimAllBtn) claimAllBtn.style.display = 'none';
+    if (unstakeAllBtn) unstakeAllBtn.style.display = 'none';
     return;
   }
   if (claimAllBtn) claimAllBtn.style.display = 'inline-block';
+  if (unstakeAllBtn) unstakeAllBtn.style.display = 'inline-block';
   el.innerHTML = stakedGumballs.map(g => {
     const rate = EMISSION_RATES[g.rarity] || 10;
     const pending = getPending(g);
@@ -831,6 +837,71 @@ async function unstakeNft(mintStr) {
     console.error("Unstake error:", e);
     toast('UNSTAKE FAILED: ' + (e.message || '').slice(0, 60), 'error');
   }
+}
+
+async function unstakeAll() {
+  if (!walletPubkey || stakedGumballs.length === 0) return;
+  if (!confirm(`Unstake all ${stakedGumballs.length} gumballs and claim GUM?`)) return;
+
+  const btn = document.getElementById('unstakeAllBtn');
+  btn.disabled = true;
+  try {
+    const provider = getProvider();
+    const discBytes = await disc("unstake");
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const stakerGumAta = getAta(gumMintPda, walletPubkey);
+
+    // Unstake instruction has 12 accounts — limit to 2 per tx (~360 bytes per ix)
+    const BATCH = 2;
+    const total = stakedGumballs.length;
+    let unstaked = 0;
+
+    for (let i = 0; i < total; i += BATCH) {
+      const batch = stakedGumballs.slice(i, i + BATCH);
+      btn.textContent = `UNSTAKING ${i+1}-${Math.min(i+BATCH, total)}/${total}...`;
+      const tx = new Transaction();
+      for (const g of batch) {
+        const nftMint = g.nftMint;
+        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+        const vaultAta = getAta(nftMint, stakeConfigPda);
+        const userAta = getAta(nftMint, walletPubkey);
+        tx.add(new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+            { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
+            { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
+            { pubkey: nftMint,                 isSigner: false, isWritable: false },
+            { pubkey: vaultAta,                isSigner: false, isWritable: true  },
+            { pubkey: userAta,                 isSigner: false, isWritable: true  },
+            { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+            { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+            { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
+            { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: RENT_SYSVAR_PID,         isSigner: false, isWritable: false },
+          ],
+          data: discBytes,
+        }));
+      }
+      tx.feePayer = walletPubkey;
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      const signed = await provider.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(sig, "confirmed");
+      unstaked += batch.length;
+    }
+
+    toast(`UNSTAKED ${unstaked} GUMBALLS!`, 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Unstake all error:", e);
+    toast('UNSTAKE ALL FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'UNSTAKE ALL';
 }
 
 async function claimAll() {
