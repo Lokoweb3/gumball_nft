@@ -129,6 +129,13 @@ header{
 .liq-tab{font-family:'Press Start 2P',cursive;font-size:0.35rem;padding:8px 16px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;letter-spacing:1px;}
 .liq-tab.active{border-color:var(--teal);color:var(--teal);background:rgba(0,255,204,0.08);}
 
+.lock-tier{
+  padding:10px 6px;border:1px solid var(--border);background:var(--black);
+  color:var(--gray);cursor:pointer;text-align:center;transition:all 0.2s;
+}
+.lock-tier:hover{border-color:var(--teal);color:var(--white);}
+.lock-tier[data-active="true"]{border-color:var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);}
+
 .toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
 .toast{padding:12px 16px;font-family:'Space Mono',monospace;font-size:0.45rem;border-radius:4px;animation:fadeIn 0.3s;}
 .toast.success{background:rgba(0,255,204,0.15);border:1px solid var(--teal);color:var(--teal);}
@@ -359,7 +366,7 @@ header{
   <div class="section-title" style="margin-top:32px;">// LP STAKING — NFT POSITIONS</div>
   <div class="swap-box" style="max-width:100%;">
     <div class="swap-info" style="margin-bottom:12px;display:flex;">
-      <div>Reward: 100 GUM/day per LP token | Each position is a tradeable NFT</div>
+      <div>Lock LP tokens — longer lock = higher GUM rewards | Position NFT is tradeable</div>
     </div>
 
     <!-- New position -->
@@ -372,7 +379,35 @@ header{
       </div>
       <div class="swap-balance" id="availableLpBalance">Available: —</div>
     </div>
-    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT</button>
+
+    <!-- Lock tier selector -->
+    <div class="swap-field" style="margin-bottom:12px;">
+      <div class="swap-label">LOCK PERIOD</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;">
+        <button class="lock-tier" id="lock30" onclick="setLockTier(30)" data-active="true">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">30D</div>
+          <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1x</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">100/day</div>
+        </button>
+        <button class="lock-tier" id="lock90" onclick="setLockTier(90)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">90D</div>
+          <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1.5x</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">150/day</div>
+        </button>
+        <button class="lock-tier" id="lock180" onclick="setLockTier(180)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">180D</div>
+          <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">2x</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">200/day</div>
+        </button>
+        <button class="lock-tier" id="lock365" onclick="setLockTier(365)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">365D</div>
+          <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">3x</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">300/day</div>
+        </button>
+      </div>
+    </div>
+
+    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT (30 DAY LOCK)</button>
 
     <!-- Active positions -->
     <div class="swap-label" style="margin-bottom:8px;">YOUR POSITIONS</div>
@@ -1375,9 +1410,20 @@ function setLiqTab(tab) {
 
 // ── LP STAKING (NFT POSITIONS) ───────────────────────────────────────────────
 
-const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 1; // 97
+const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 2 + 1; // 107 (with lock fields)
 const LP_RATE_PER_SEC = 1157407;
 let lpPositions = [];
+let selectedLockDays = 30;
+
+function setLockTier(days) {
+  selectedLockDays = days;
+  [30, 90, 180, 365].forEach(d => {
+    const btn = document.getElementById('lock' + d);
+    if (btn) btn.setAttribute('data-active', d === days ? 'true' : 'false');
+  });
+  const labels = { 30: '30 DAY LOCK', 90: '90 DAY LOCK', 180: '180 DAY LOCK', 365: '365 DAY LOCK' };
+  document.getElementById('stakeLpBtn').textContent = `STAKE LP → MINT POSITION NFT (${labels[days]})`;
+}
 
 function setLpStakeMax() {
   document.getElementById('lpStakeInput').value = (userLpBalance / 1e9).toFixed(6);
@@ -1398,6 +1444,8 @@ async function loadLpStakeState() {
       const amount = Number(dv.getBigUint64(72, true));
       const stakedAt = Number(dv.getBigInt64(80, true));
       const lastClaimed = Number(dv.getBigInt64(88, true));
+      const lockUntil = Number(dv.getBigInt64(96, true));
+      const multiplier = dv.getUint16(104, true);
       if (amount === 0) continue;
       const posAta = getAta(positionMint, walletPubkey);
       try {
@@ -1405,7 +1453,7 @@ async function loadLpStakeState() {
         if (!ataInfo || ataInfo.data.length < 72) continue;
         const bal = Number(new DataView(ataInfo.data.buffer, ataInfo.data.byteOffset).getBigUint64(64, true));
         if (bal !== 1) continue;
-        lpPositions.push({ positionMint, lpMintKey, amount, stakedAt, lastClaimed, stakePda: pubkey, positionAta: posAta });
+        lpPositions.push({ positionMint, lpMintKey, amount, stakedAt, lastClaimed, lockUntil, multiplier, stakePda: pubkey, positionAta: posAta });
       } catch(e) {}
     }
     document.getElementById('stakeLpBtn').disabled = false;
@@ -1421,20 +1469,27 @@ function renderLpPositions() {
     el.innerHTML = '<div class="empty-msg" style="padding:20px;">NO ACTIVE POSITIONS</div>';
     return;
   }
+  const now = Math.floor(Date.now() / 1000);
   el.innerHTML = lpPositions.map((p, i) => {
     const pending = getLpPending(p);
     const ms = p.positionMint.toBase58();
     const stakedDate = new Date(p.stakedAt * 1000).toLocaleDateString();
+    const lockUntilDate = new Date((p.lockUntil || 0) * 1000).toLocaleDateString();
+    const isLocked = (p.lockUntil || 0) > now;
+    const daysLeft = isLocked ? Math.ceil(((p.lockUntil || 0) - now) / 86400) : 0;
+    const mult = ((p.multiplier || 100) / 100).toFixed(1);
     return `
       <div class="swap-field" style="margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div>
             <a href="${EXPLORER}/account/${ms}" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--purple);margin-bottom:4px;text-decoration:none;display:block;">NFT: ${ms.slice(0,6)}...${ms.slice(-4)} &#8599;</a>
-            <div style="font-size:0.42rem;color:var(--white);">${(p.amount / 1e9).toFixed(6)} LP</div>
+            <div style="font-size:0.42rem;color:var(--white);">${(p.amount / 1e9).toFixed(6)} LP &middot; <span style="color:var(--gold);">${mult}x</span></div>
             <div style="font-size:0.35rem;color:var(--gray);">Since ${stakedDate}</div>
+            <div style="font-size:0.35rem;color:${isLocked ? 'var(--red)' : 'var(--green)'};">${isLocked ? `🔒 Locked ${daysLeft}d (until ${lockUntilDate})` : `🔓 Unlocked`}</div>
           </div>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--gold);" data-lp-pos="${i}">${pending.toFixed(2)} GUM</div>
         </div>
+        ${isLocked ? '' : `
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center;">
           <input type="range" id="us${i}" min="1" max="100" value="100" oninput="document.getElementById('ul${i}').textContent=this.value+'%'" style="flex:1;accent-color:var(--red);" />
           <span id="ul${i}" style="font-family:'Press Start 2P',cursive;font-size:0.3rem;color:var(--red);min-width:35px;">100%</span>
@@ -1445,9 +1500,10 @@ function renderLpPositions() {
           <button class="max-btn" onclick="document.getElementById('us${i}').value=75;document.getElementById('ul${i}').textContent='75%'">75%</button>
           <button class="max-btn" onclick="document.getElementById('us${i}').value=100;document.getElementById('ul${i}').textContent='100%'">100%</button>
         </div>
+        `}
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button class="card-btn claim" onclick="claimLpPosition(${i})" style="flex:1;padding:6px;">CLAIM GUM</button>
-          <button class="card-btn unstake" onclick="unstakeLpPosition(${i})" style="flex:1;padding:6px;">UNSTAKE</button>
+          ${isLocked ? `<button class="card-btn unstake" disabled style="flex:1;padding:6px;opacity:0.4;cursor:not-allowed;">LOCKED</button>` : `<button class="card-btn unstake" onclick="unstakeLpPosition(${i})" style="flex:1;padding:6px;">UNSTAKE</button>`}
         </div>
       </div>`;
   }).join('');
@@ -1456,7 +1512,8 @@ function renderLpPositions() {
 function getLpPending(p) {
   const now = Math.floor(Date.now() / 1000);
   const elapsed = now - p.lastClaimed;
-  return (elapsed * LP_RATE_PER_SEC * (p.amount / 1e9)) / 1e6;
+  const mult = (p.multiplier || 100) / 100;
+  return (elapsed * LP_RATE_PER_SEC * (p.amount / 1e9) * mult) / 1e6;
 }
 
 async function stakeLpTokens() {
@@ -1480,7 +1537,13 @@ async function stakeLpTokens() {
     const [metadataPda] = PublicKey.findProgramAddressSync(
       [strToU8("metadata"), METAPLEX_PID.toBytes(), positionMint.publicKey.toBytes()], METAPLEX_PID
     );
-    const data = buildIxData(realDisc, lpLamports);
+    // Build instruction data: disc(8) + amount(u64, 8) + lock_days(u16, 2)
+    const data = new Uint8Array(8 + 8 + 2);
+    data.set(realDisc, 0);
+    const dv = new DataView(data.buffer);
+    dv.setBigUint64(8, lpLamports, true);
+    dv.setUint16(16, selectedLockDays, true);
+
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [

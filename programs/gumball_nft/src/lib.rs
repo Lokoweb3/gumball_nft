@@ -1135,8 +1135,18 @@ pub mod gumball_nft {
 
     /// Stake LP tokens — mints a position NFT representing the staked amount.
     /// The NFT is tradeable — whoever holds it controls the position.
-    pub fn stake_lp(ctx: Context<StakeLp>, amount: u64) -> Result<()> {
+    /// lock_days: 30 (1x), 90 (1.5x), 180 (2x), 365 (3x)
+    pub fn stake_lp(ctx: Context<StakeLp>, amount: u64, lock_days: u16) -> Result<()> {
         require!(amount > 0, GumballError::InvalidPrice);
+
+        // Determine multiplier based on lock period (in bps, 100 = 1x)
+        let multiplier: u16 = match lock_days {
+            30 => 100,
+            90 => 150,
+            180 => 200,
+            365 => 300,
+            _ => return Err(GumballError::InvalidLockPeriod.into()),
+        };
 
         // Transfer LP tokens to vault
         anchor_spl::token::transfer(
@@ -1173,6 +1183,8 @@ pub mod gumball_nft {
         lp_stake.amount = amount;
         lp_stake.staked_at = now;
         lp_stake.last_claimed = now;
+        lp_stake.lock_until = now + (lock_days as i64) * 86400;
+        lp_stake.lock_multiplier = multiplier;
         lp_stake.bump = ctx.bumps.lp_stake_account;
 
         // Create Metaplex metadata for position NFT
@@ -1256,11 +1268,14 @@ pub mod gumball_nft {
         let now = Clock::get()?.unix_timestamp;
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
+        let multiplier = ctx.accounts.lp_stake_account.lock_multiplier as u128;
 
+        // reward = elapsed * rate * amount * multiplier / 1e9 / 100
         let reward = (elapsed as u128)
             .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
             .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
-            / 1_000_000_000u128;
+            .checked_mul(multiplier).ok_or(GumballError::MathOverflow)?
+            / 100_000_000_000u128; // 1e9 * 100
         let reward = reward as u64;
 
         if reward == 0 { return Ok(()); }
@@ -1301,15 +1316,21 @@ pub mod gumball_nft {
         require!(ctx.accounts.position_ata.amount == 1, GumballError::Unauthorized);
 
         let now = Clock::get()?.unix_timestamp;
+
+        // Enforce lock period
+        require!(now >= ctx.accounts.lp_stake_account.lock_until, GumballError::LockActive);
+
         let elapsed = (now - ctx.accounts.lp_stake_account.last_claimed) as u64;
         let staked_amount = ctx.accounts.lp_stake_account.amount;
+        let multiplier = ctx.accounts.lp_stake_account.lock_multiplier as u128;
 
         require!(amount > 0 && amount <= staked_amount, GumballError::InvalidPrice);
 
         let reward = (elapsed as u128)
             .checked_mul(LP_EMISSION_PER_SECOND as u128).ok_or(GumballError::MathOverflow)?
             .checked_mul(staked_amount as u128).ok_or(GumballError::MathOverflow)?
-            / 1_000_000_000u128;
+            .checked_mul(multiplier).ok_or(GumballError::MathOverflow)?
+            / 100_000_000_000u128;
         let reward = reward as u64;
 
         let bump = ctx.accounts.stake_config.bump;
@@ -2241,14 +2262,16 @@ impl StakeAccount { pub const LEN: usize = 32+32+1+8+8+1; }
 
 #[account]
 pub struct LpStakeAccount {
-    pub position_mint: Pubkey,  // 32 — NFT mint representing this position
-    pub lp_mint:       Pubkey,  // 32
-    pub amount:        u64,     //  8
-    pub staked_at:     i64,     //  8
-    pub last_claimed:  i64,     //  8
-    pub bump:          u8,      //  1
+    pub position_mint:    Pubkey,  // 32 — NFT mint representing this position
+    pub lp_mint:          Pubkey,  // 32
+    pub amount:           u64,     //  8
+    pub staked_at:        i64,     //  8
+    pub last_claimed:     i64,     //  8
+    pub lock_until:       i64,     //  8 — unix timestamp when lock expires
+    pub lock_multiplier:  u16,     //  2 — reward multiplier in bps (100 = 1x, 200 = 2x)
+    pub bump:             u8,      //  1
 }
-impl LpStakeAccount { pub const LEN: usize = 32+32+8+8+8+1; }
+impl LpStakeAccount { pub const LEN: usize = 32+32+8+8+8+8+2+1; }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
@@ -2295,4 +2318,6 @@ pub enum GumballError {
     #[msg("Mint request has expired")]               RequestExpired,
     #[msg("Offer has expired")]                      OfferExpired,
     #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
+    #[msg("Invalid lock period — use 30, 90, 180, or 365 days")] InvalidLockPeriod,
+    #[msg("LP position is still locked")]            LockActive,
 }
