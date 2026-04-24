@@ -1425,6 +1425,26 @@ const LP_RATE_PER_SEC = 1157407;
 let lpPositions = [];
 let selectedLockDays = 30;
 
+function formatCountdown(secs) {
+  if (secs <= 0) return "0s";
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function getLockProgress(p) {
+  const now = Math.floor(Date.now() / 1000);
+  const total = (p.lockUntil || 0) - (p.stakedAt || 0);
+  if (total <= 0) return 100;
+  const elapsed = now - (p.stakedAt || 0);
+  return Math.min(100, Math.max(0, (elapsed / total) * 100));
+}
+
 function penaltyBpsForMult(multiplier) {
   switch (multiplier) {
     case 100: return 1000; // 10%
@@ -1507,7 +1527,13 @@ function renderLpPositions() {
             <a href="${EXPLORER}/account/${ms}" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--purple);margin-bottom:4px;text-decoration:none;display:block;">NFT: ${ms.slice(0,6)}...${ms.slice(-4)} &#8599;</a>
             <div style="font-size:0.42rem;color:var(--white);">${(p.amount / 1e9).toFixed(6)} LP &middot; <span style="color:var(--gold);">${mult}x</span></div>
             <div style="font-size:0.35rem;color:var(--gray);">Since ${stakedDate}</div>
-            <div style="font-size:0.35rem;color:${isLocked ? 'var(--red)' : 'var(--green)'};">${isLocked ? `🔒 Locked ${daysLeft}d (until ${lockUntilDate})` : `🔓 Unlocked`}</div>
+            <div style="font-size:0.35rem;color:${isLocked ? 'var(--red)' : 'var(--green)'};" data-lp-status="${i}">${isLocked ? `🔒 Locked · ${formatCountdown((p.lockUntil || 0) - now)}` : `🔓 Unlocked`}</div>
+            ${isLocked ? `
+              <div style="margin-top:6px;background:rgba(255,34,68,0.1);border:1px solid rgba(255,34,68,0.3);border-radius:3px;height:6px;overflow:hidden;">
+                <div data-lp-progress="${i}" style="height:100%;background:linear-gradient(90deg,var(--red),var(--gold));width:${getLockProgress(p)}%;transition:width 0.3s;"></div>
+              </div>
+              <div style="font-size:0.3rem;color:var(--gray);margin-top:2px;">Unlocks ${lockUntilDate}</div>
+            ` : ''}
           </div>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--gold);" data-lp-pos="${i}">${pending.toFixed(2)} GUM</div>
         </div>
@@ -1718,9 +1744,19 @@ loadAll = async function() {
   // Update LP pending + analytics every second
   if (!window._lpTimer) {
     window._lpTimer = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000);
       lpPositions.forEach((p, i) => {
         const el = document.querySelector(`[data-lp-pos="${i}"]`);
         if (el) el.textContent = getLpPending(p).toFixed(2) + ' GUM';
+        // Update lock countdown + progress bar
+        const statusEl = document.querySelector(`[data-lp-status="${i}"]`);
+        const progressEl = document.querySelector(`[data-lp-progress="${i}"]`);
+        const remaining = (p.lockUntil || 0) - now;
+        if (statusEl) {
+          statusEl.textContent = remaining > 0 ? `🔒 Locked · ${formatCountdown(remaining)}` : `🔓 Unlocked`;
+          statusEl.style.color = remaining > 0 ? 'var(--red)' : 'var(--green)';
+        }
+        if (progressEl) progressEl.style.width = getLockProgress(p) + '%';
       });
       updateAnalytics();
     }, 1000);
