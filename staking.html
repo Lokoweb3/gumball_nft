@@ -1419,6 +1419,7 @@ function setLiqTab(tab) {
 
 // ── LP STAKING (NFT POSITIONS) ───────────────────────────────────────────────
 
+const LP_STAKE_SIZE_V1 = 97; // old: no lock fields
 const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 2 + 1; // 107 (with lock fields)
 const LP_RATE_PER_SEC = 1157407;
 let lpPositions = [];
@@ -1452,19 +1453,23 @@ async function loadLpStakeState() {
   lpPositions = [];
   if (!walletPubkey) { renderLpPositions(); return; }
   try {
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ dataSize: LP_STAKE_SIZE }],
-    });
+    // Load both old (97) and new (107) stake account sizes
+    const [oldAccts, newAccts] = await Promise.all([
+      connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: LP_STAKE_SIZE_V1 }] }),
+      connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: LP_STAKE_SIZE }] }),
+    ]);
+    const accounts = [...oldAccts, ...newAccts];
     for (const { pubkey, account } of accounts) {
       const d = account.data;
       const dv = new DataView(d.buffer, d.byteOffset);
+      const isV2 = d.length === LP_STAKE_SIZE;
       const positionMint = new PublicKey(d.slice(8, 40));
       const lpMintKey = new PublicKey(d.slice(40, 72));
       const amount = Number(dv.getBigUint64(72, true));
       const stakedAt = Number(dv.getBigInt64(80, true));
       const lastClaimed = Number(dv.getBigInt64(88, true));
-      const lockUntil = Number(dv.getBigInt64(96, true));
-      const multiplier = dv.getUint16(104, true);
+      const lockUntil = isV2 ? Number(dv.getBigInt64(96, true)) : 0;
+      const multiplier = isV2 ? dv.getUint16(104, true) : 100; // default 1x for old
       if (amount === 0) continue;
       const posAta = getAta(positionMint, walletPubkey);
       try {
