@@ -672,9 +672,9 @@ function renderUnstaked() {
 }
 
 function getPending(g) {
-  const now = Math.floor(Date.now() / 1000);
-  const elapsed = now - g.lastClaimed;
-  const ratePerSec = [115740, 289351, 694444, 1736111, 5787037][g.rarity] || 115740;
+  const now = chainNow();
+  const elapsed = Math.max(0, now - g.lastClaimed);
+  const ratePerSec = [115, 289, 694, 1736, 5787][g.rarity] || 115;
   return (elapsed * ratePerSec) / 1e6;
 }
 
@@ -1438,7 +1438,7 @@ function formatCountdown(secs) {
 }
 
 function getLockProgress(p) {
-  const now = Math.floor(Date.now() / 1000);
+  const now = chainNow();
   const total = (p.lockUntil || 0) - (p.stakedAt || 0);
   if (total <= 0) return 100;
   const elapsed = now - (p.stakedAt || 0);
@@ -1511,7 +1511,7 @@ function renderLpPositions() {
     el.innerHTML = '<div class="empty-msg" style="padding:20px;">NO ACTIVE POSITIONS</div>';
     return;
   }
-  const now = Math.floor(Date.now() / 1000);
+  const now = chainNow();
   el.innerHTML = lpPositions.map((p, i) => {
     const pending = getLpPending(p);
     const ms = p.positionMint.toBase58();
@@ -1556,9 +1556,31 @@ function renderLpPositions() {
   }).join('');
 }
 
+// Track blockchain time offset from wall clock
+let blockchainTimeOffset = 0; // seconds; on-chain_time = wall_time - offset
+
+async function syncBlockchainTime() {
+  try {
+    const slot = await connection.getSlot();
+    const blockTime = await connection.getBlockTime(slot);
+    if (blockTime) {
+      const wallNow = Math.floor(Date.now() / 1000);
+      blockchainTimeOffset = wallNow - blockTime;
+      console.log(`Blockchain time offset: ${blockchainTimeOffset}s (${(blockchainTimeOffset/3600).toFixed(2)}h)`);
+    }
+  } catch(e) { console.error('syncBlockchainTime:', e); }
+}
+
+// Re-sync every 60 seconds
+setInterval(syncBlockchainTime, 60000);
+
+function chainNow() {
+  return Math.floor(Date.now() / 1000) - blockchainTimeOffset;
+}
+
 function getLpPending(p) {
-  const now = Math.floor(Date.now() / 1000);
-  const elapsed = now - p.lastClaimed;
+  const now = chainNow();
+  const elapsed = Math.max(0, now - p.lastClaimed);
   const mult = (p.multiplier || 100) / 100;
   return (elapsed * LP_RATE_PER_SEC * (p.amount / 1e9) * mult) / 1e6;
 }
@@ -1678,7 +1700,7 @@ async function unstakeLpPosition(idx) {
   const unstakeAmount = BigInt(Math.floor(p.amount * pct / 100));
   if (unstakeAmount === 0n) { toast('AMOUNT TOO SMALL', 'error'); return; }
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = chainNow();
   const isEarly = (p.lockUntil || 0) > now;
   if (isEarly) {
     const penaltyPct = (penaltyBpsForMult(p.multiplier) / 100).toFixed(0);
@@ -1734,6 +1756,7 @@ async function unstakeLpPosition(idx) {
 // Add pool + LP stake loading to loadAll
 const _origLoadAll = loadAll;
 loadAll = async function() {
+  await syncBlockchainTime();
   await _origLoadAll();
   await loadPoolState();
   await loadSwapBalances();
@@ -1744,7 +1767,7 @@ loadAll = async function() {
   // Update LP pending + analytics every second
   if (!window._lpTimer) {
     window._lpTimer = setInterval(() => {
-      const now = Math.floor(Date.now() / 1000);
+      const now = chainNow();
       lpPositions.forEach((p, i) => {
         const el = document.querySelector(`[data-lp-pos="${i}"]`);
         if (el) el.textContent = getLpPending(p).toFixed(2) + ' GUM';
