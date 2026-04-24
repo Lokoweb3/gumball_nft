@@ -36,17 +36,18 @@ const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
 // Common=10/day, Uncommon=25/day, Rare=60/day, Epic=150/day, Legendary=500/day
 const GUM_DECIMALS: u8 = 6;
 const GUM_MAX_SUPPLY: u64 = 1_000_000_000 * 1_000_000; // 1B GUM (6 decimals)
+// Correct: X GUM/day * 1e6 decimals / 86400 sec
+// Previous values were 1000x too high — math error in comments.
 const EMISSION_PER_SECOND: [u64; 5] = [
-    115_740,   // Common:    10 * 1e6 / 86400 = 115,740
-    289_351,   // Uncommon:  25 * 1e6 / 86400 = 289,351
-    694_444,   // Rare:      60 * 1e6 / 86400 = 694,444
-    1_736_111, // Epic:     150 * 1e6 / 86400 = 1,736,111
-    5_787_037, // Legendary:500 * 1e6 / 86400 = 5,787,037
+    115,   // Common:    10 GUM/day = 10 * 1e6 / 86400 = 115.74
+    289,   // Uncommon:  25 GUM/day = 25 * 1e6 / 86400 = 289.35
+    694,   // Rare:      60 GUM/day = 60 * 1e6 / 86400 = 694.44
+    1_736, // Epic:     150 GUM/day = 150 * 1e6 / 86400 = 1,736.11
+    5_787, // Legendary:500 GUM/day = 500 * 1e6 / 86400 = 5,787.04
 ];
 
 // LP staking: 100 GUM/day per LP token staked (scaled by LP amount)
-// Rate is per 1 LP token (9 decimals) per second
-const LP_EMISSION_PER_SECOND: u64 = 1_157_407; // 100 * 1e6 / 86400
+const LP_EMISSION_PER_SECOND: u64 = 1_157; // 100 GUM/day = 100 * 1e6 / 86400 = 1,157.41
 
 // GumballData raw byte offsets for UncheckedAccount parsing in burn instructions.
 // Must match GumballData struct layout: disc(8) + owner(32) + machine(32) + serial(8) + flavor(1) + color(1) + rarity(1)
