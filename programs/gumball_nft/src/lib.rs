@@ -1411,6 +1411,59 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    /// Legacy unstake for 97-byte LpStakeAccount positions (pre-lock feature).
+    /// Returns all LP tokens + closes the account. No GUM rewards (legacy).
+    pub fn legacy_unstake_lp<'info>(ctx: Context<'_, '_, 'info, 'info, LegacyUnstakeLp<'info>>) -> Result<()> {
+        require!(ctx.accounts.position_ata.amount == 1, GumballError::Unauthorized);
+
+        let stake_info = ctx.accounts.lp_stake_account.to_account_info();
+        require!(stake_info.data_len() == 97, GumballError::InvalidAccount);
+
+        // Read old layout: position_mint (8..40), amount (72..80), bump (96)
+        let data = stake_info.try_borrow_data()?;
+        let position_mint = Pubkey::try_from(&data[8..40])
+            .map_err(|_| error!(GumballError::InvalidAccount))?;
+        let amount = u64::from_le_bytes(data[72..80].try_into()
+            .map_err(|_| error!(GumballError::InvalidAccount))?);
+        drop(data);
+
+        require!(position_mint == ctx.accounts.position_mint.key(), GumballError::Unauthorized);
+        require!(ctx.accounts.position_ata.mint == position_mint, GumballError::Unauthorized);
+
+        let bump = ctx.accounts.stake_config.bump;
+        let seeds = &[b"stake_config".as_ref(), &[bump]];
+
+        // Return all LP tokens
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.vault_lp_ata.to_account_info(),
+                    to:        ctx.accounts.user_lp_ata.to_account_info(),
+                    authority: ctx.accounts.stake_config.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+
+        // Burn position NFT
+        burn(CpiContext::new(ctx.accounts.token_program.to_account_info(), Burn {
+            mint:      ctx.accounts.position_mint.to_account_info(),
+            from:      ctx.accounts.position_ata.to_account_info(),
+            authority: ctx.accounts.claimer.to_account_info(),
+        }), 1)?;
+
+        // Close the stake account
+        let claimer_info = ctx.accounts.claimer.to_account_info();
+        **claimer_info.try_borrow_mut_lamports()? += stake_info.lamports();
+        **stake_info.try_borrow_mut_lamports()? = 0;
+        stake_info.try_borrow_mut_data()?.fill(0);
+
+        emit!(LpUnstakedEvent { staker: ctx.accounts.claimer.key(), amount, reward: 0 });
+        Ok(())
+    }
+
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2247,6 +2300,30 @@ pub struct UnstakeLp<'info> {
     pub gum_mint: Account<'info, Mint>,
     #[account(init_if_needed, payer = claimer, associated_token::mint = gum_mint, associated_token::authority = claimer)]
     pub claimer_gum_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct LegacyUnstakeLp<'info> {
+    #[account(mut)]
+    pub claimer: Signer<'info>,
+    #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    /// CHECK: old 97-byte LpStakeAccount, manually validated
+    #[account(mut)]
+    pub lp_stake_account: AccountInfo<'info>,
+    #[account(mut)]
+    pub position_mint: Account<'info, Mint>,
+    #[account(mut, constraint = position_ata.owner == claimer.key())]
+    pub position_ata: Account<'info, TokenAccount>,
+    pub lp_mint: Account<'info, Mint>,
+    #[account(mut, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
+    pub vault_lp_ata: Account<'info, TokenAccount>,
+    #[account(init_if_needed, payer = claimer, associated_token::mint = lp_mint, associated_token::authority = claimer)]
+    pub user_lp_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
