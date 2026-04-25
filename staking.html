@@ -1830,6 +1830,7 @@ loadAll = async function() {
   await syncBlockchainTime();
   await _origLoadAll();
   await loadPoolState();
+  await loadGlobalEmission();
   await loadSwapBalances();
   await loadLpStakeState();
   updateAnalytics();
@@ -1856,6 +1857,33 @@ loadAll = async function() {
     }, 1000);
   }
 };
+
+async function loadGlobalEmission() {
+  try {
+    const NFT_DAILY = [10, 25, 60, 150, 500];
+    // Sum NFT emissions: scan all StakeAccount (90 bytes)
+    const nftAccts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: 90 }],
+    });
+    let nftDaily = 0;
+    for (const a of nftAccts) {
+      const rarity = a.account.data[8 + 32 + 32]; // after disc+owner+nft_mint
+      nftDaily += NFT_DAILY[rarity] || 10;
+    }
+    // Sum LP emissions: scan all LpStakeAccount (107 bytes)
+    const lpAccts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: 107 }],
+    });
+    let lpDaily = 0;
+    for (const a of lpAccts) {
+      const dv = new DataView(a.account.data.buffer, a.account.data.byteOffset);
+      const amount = Number(dv.getBigUint64(72, true));
+      const mult = dv.getUint16(104, true);
+      lpDaily += (amount / 1e9) * 100 * (mult / 100);
+    }
+    window._globalEmission = Math.floor(nftDaily + lpDaily);
+  } catch(e) { console.error('loadGlobalEmission:', e); }
+}
 
 function updateAnalytics() {
   // Calculate daily GUM from NFT staking
@@ -1928,11 +1956,9 @@ function updateAnalytics() {
   const totalClaimed = parseFloat(totalClaimedEl?.textContent || '0');
   document.getElementById('aGumSupply').textContent = totalClaimed.toLocaleString();
 
-  // Global emission rate (all stakers)
-  // Would need to scan all stake accounts — approximate from total staked count
+  // Global emission rate (all stakers) — uses cached value from loadGlobalEmission
+  document.getElementById('aGlobalEmission').textContent = (window._globalEmission || 0).toLocaleString();
   const totalStakedCount = parseInt(document.getElementById('sStaked')?.textContent || '0');
-  const avgDailyPerNft = 50; // rough average across rarities
-  document.getElementById('aGlobalEmission').textContent = (totalStakedCount * avgDailyPerNft).toLocaleString();
 
   // TVL
   if (gumPrice > 0) {
