@@ -2223,23 +2223,23 @@ pub struct StakeLp<'info> {
     #[account(mut)]
     pub staker: Signer<'info>,
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
-    pub stake_config: Account<'info, StakeConfig>,
+    pub stake_config: Box<Account<'info, StakeConfig>>,
     #[account(
         init, payer = staker, space = 8 + LpStakeAccount::LEN,
         seeds = [b"lp_stake", position_mint.key().as_ref()], bump,
     )]
-    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    pub lp_stake_account: Box<Account<'info, LpStakeAccount>>,
     /// Position NFT mint — created fresh for each new position
     #[account(init, payer = staker, mint::decimals = 0, mint::authority = stake_config, mint::freeze_authority = stake_config)]
-    pub position_mint: Account<'info, Mint>,
+    pub position_mint: Box<Account<'info, Mint>>,
     /// Position NFT ATA for the staker
     #[account(init_if_needed, payer = staker, associated_token::mint = position_mint, associated_token::authority = staker)]
-    pub position_ata: Account<'info, TokenAccount>,
-    pub lp_mint: Account<'info, Mint>,
+    pub position_ata: Box<Account<'info, TokenAccount>>,
+    pub lp_mint: Box<Account<'info, Mint>>,
     #[account(mut, constraint = user_lp_ata.mint == lp_mint.key() && user_lp_ata.owner == staker.key())]
-    pub user_lp_ata: Account<'info, TokenAccount>,
+    pub user_lp_ata: Box<Account<'info, TokenAccount>>,
     #[account(init_if_needed, payer = staker, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
-    pub vault_lp_ata: Account<'info, TokenAccount>,
+    pub vault_lp_ata: Box<Account<'info, TokenAccount>>,
     /// CHECK: Metaplex metadata PDA — created by Metaplex program via CPI
     #[account(mut)]
     pub metadata_account: AccountInfo<'info>,
@@ -2256,19 +2256,19 @@ pub struct ClaimLpRewards<'info> {
     #[account(mut)]
     pub claimer: Signer<'info>,
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
-    pub stake_config: Account<'info, StakeConfig>,
+    pub stake_config: Box<Account<'info, StakeConfig>>,
     #[account(
         mut,
         seeds = [b"lp_stake", lp_stake_account.position_mint.as_ref()], bump = lp_stake_account.bump,
     )]
-    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    pub lp_stake_account: Box<Account<'info, LpStakeAccount>>,
     /// Caller must hold the position NFT — verified in instruction body
     #[account(constraint = position_ata.mint == lp_stake_account.position_mint && position_ata.owner == claimer.key())]
-    pub position_ata: Account<'info, TokenAccount>,
+    pub position_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut, seeds = [b"gum_mint"], bump)]
-    pub gum_mint: Account<'info, Mint>,
+    pub gum_mint: Box<Account<'info, Mint>>,
     #[account(init_if_needed, payer = claimer, associated_token::mint = gum_mint, associated_token::authority = claimer)]
-    pub claimer_gum_ata: Account<'info, TokenAccount>,
+    pub claimer_gum_ata: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -2280,27 +2280,27 @@ pub struct UnstakeLp<'info> {
     #[account(mut)]
     pub claimer: Signer<'info>,
     #[account(mut, seeds = [b"stake_config"], bump = stake_config.bump)]
-    pub stake_config: Account<'info, StakeConfig>,
+    pub stake_config: Box<Account<'info, StakeConfig>>,
     #[account(
         mut,
         seeds = [b"lp_stake", lp_stake_account.position_mint.as_ref()], bump = lp_stake_account.bump,
     )]
-    pub lp_stake_account: Account<'info, LpStakeAccount>,
+    pub lp_stake_account: Box<Account<'info, LpStakeAccount>>,
     /// Position NFT mint — burned on full withdrawal
     #[account(mut, constraint = position_mint.key() == lp_stake_account.position_mint)]
-    pub position_mint: Account<'info, Mint>,
+    pub position_mint: Box<Account<'info, Mint>>,
     /// Caller must hold the position NFT
     #[account(mut, constraint = position_ata.mint == lp_stake_account.position_mint && position_ata.owner == claimer.key())]
-    pub position_ata: Account<'info, TokenAccount>,
-    pub lp_mint: Account<'info, Mint>,
+    pub position_ata: Box<Account<'info, TokenAccount>>,
+    pub lp_mint: Box<Account<'info, Mint>>,
     #[account(mut, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
-    pub vault_lp_ata: Account<'info, TokenAccount>,
+    pub vault_lp_ata: Box<Account<'info, TokenAccount>>,
     #[account(init_if_needed, payer = claimer, associated_token::mint = lp_mint, associated_token::authority = claimer)]
-    pub user_lp_ata: Account<'info, TokenAccount>,
+    pub user_lp_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut, seeds = [b"gum_mint"], bump)]
-    pub gum_mint: Account<'info, Mint>,
+    pub gum_mint: Box<Account<'info, Mint>>,
     #[account(init_if_needed, payer = claimer, associated_token::mint = gum_mint, associated_token::authority = claimer)]
-    pub claimer_gum_ata: Account<'info, TokenAccount>,
+    pub claimer_gum_ata: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
