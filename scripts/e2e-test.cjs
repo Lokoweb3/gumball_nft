@@ -286,6 +286,217 @@ async function testStakeAndClaim() {
   return `staked, earned ${earned.toFixed(4)} GUM, unstaked`;
 }
 
+// ── XDEX helpers ────────────────────────────────────────────────────────────
+const GUM_MINT = new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const MEMO_PID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const sortedMints = WSOL.toBuffer().compare(GUM_MINT.toBuffer()) < 0 ? [WSOL, GUM_MINT] : [GUM_MINT, WSOL];
+const isGumToken0 = sortedMints[0].equals(GUM_MINT);
+const [POOL_STATE] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool"), AMM_CONFIG.toBuffer(), sortedMints[0].toBuffer(), sortedMints[1].toBuffer()], XDEX_PID);
+const [POOL_AUTH] = PublicKey.findProgramAddressSync([Buffer.from("vault_and_lp_mint_auth_seed")], XDEX_PID);
+const [VAULT_0] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool_vault"), POOL_STATE.toBuffer(), sortedMints[0].toBuffer()], XDEX_PID);
+const [VAULT_1] = PublicKey.findProgramAddressSync(
+  [Buffer.from("pool_vault"), POOL_STATE.toBuffer(), sortedMints[1].toBuffer()], XDEX_PID);
+const [OBSERVATION] = PublicKey.findProgramAddressSync(
+  [Buffer.from("observation"), POOL_STATE.toBuffer()], XDEX_PID);
+
+function createAtaIx(payer, ata, owner, mint) {
+  return new TransactionInstruction({
+    programId: ASSOC_PID,
+    keys: [
+      { pubkey: payer, isSigner: true,  isWritable: true  },
+      { pubkey: ata,   isSigner: false, isWritable: true  },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint,  isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PID, isSigner: false, isWritable: false },
+    ],
+    data: new Uint8Array(0),
+  });
+}
+
+async function testSwapGumToXnt() {
+  const gumAta = getAta(GUM_MINT, wallet.publicKey);
+  const wsolAta = getAta(WSOL, wallet.publicKey);
+  const gumBalance = await getTokenBalance(gumAta);
+  if (gumBalance < 1_000_000) throw new Error(`Need at least 1 GUM in wallet, have ${gumBalance/1e6}`);
+
+  const swapAmount = 1_000_000n; // 1 GUM
+  const tx = new Transaction();
+
+  // Ensure WSOL ATA exists
+  const wsolInfo = await c.getAccountInfo(wsolAta);
+  if (!wsolInfo) tx.add(createAtaIx(wallet.publicKey, wsolAta, wallet.publicKey, WSOL));
+
+  const inputVault = GUM_MINT.equals(sortedMints[0]) ? VAULT_0 : VAULT_1;
+  const outputVault = WSOL.equals(sortedMints[0]) ? VAULT_0 : VAULT_1;
+
+  tx.add(new TransactionInstruction({
+    programId: XDEX_PID,
+    keys: [
+      { pubkey: wallet.publicKey, isSigner: true,  isWritable: true  },
+      { pubkey: POOL_AUTH,        isSigner: false, isWritable: false },
+      { pubkey: AMM_CONFIG,       isSigner: false, isWritable: false },
+      { pubkey: POOL_STATE,       isSigner: false, isWritable: true  },
+      { pubkey: gumAta,           isSigner: false, isWritable: true  },
+      { pubkey: wsolAta,          isSigner: false, isWritable: true  },
+      { pubkey: inputVault,       isSigner: false, isWritable: true  },
+      { pubkey: outputVault,      isSigner: false, isWritable: true  },
+      { pubkey: TOKEN_PID,        isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PID,        isSigner: false, isWritable: false },
+      { pubkey: GUM_MINT,         isSigner: false, isWritable: false },
+      { pubkey: WSOL,             isSigner: false, isWritable: false },
+      { pubkey: OBSERVATION,      isSigner: false, isWritable: true  },
+    ],
+    data: ixData(disc("swap_base_input"), swapAmount, 0n),
+  }));
+
+  // Unwrap WSOL after swap (close account)
+  tx.add(new TransactionInstruction({
+    programId: TOKEN_PID,
+    keys: [
+      { pubkey: wsolAta,          isSigner: false, isWritable: true  },
+      { pubkey: wallet.publicKey, isSigner: false, isWritable: true  },
+      { pubkey: wallet.publicKey, isSigner: true,  isWritable: false },
+    ],
+    data: new Uint8Array([9]),
+  }));
+
+  const sig = await sendAndConfirmTransaction(c, tx, [wallet]);
+  return `swapped 1 GUM, sig ${sig.slice(0, 16)}...`;
+}
+
+async function testLpStakeFlow() {
+  const userLpAta = getAta(LP_MINT, wallet.publicKey);
+  const lpBal = await getTokenBalance(userLpAta);
+  if (lpBal < 100_000) throw new Error(`Need LP tokens to test staking, have ${lpBal/1e9}`);
+
+  const [stakeConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("stake_config")], PROGRAM_ID);
+  const positionMint = Keypair.generate();
+  const [lpStakePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_stake"), positionMint.publicKey.toBuffer()], PROGRAM_ID);
+  const positionAta = getAta(positionMint.publicKey, wallet.publicKey);
+  const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
+  const METAPLEX_PID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+  const [metadataPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), METAPLEX_PID.toBuffer(), positionMint.publicKey.toBuffer()],
+    METAPLEX_PID
+  );
+
+  // Stake a small amount with 30-day lock
+  const stakeAmount = BigInt(Math.min(Number(lpBal), 100_000)); // small amount
+  const stakeData = new Uint8Array(8 + 8 + 2);
+  stakeData.set(disc("stake_lp"), 0);
+  const sdv = new DataView(stakeData.buffer);
+  sdv.setBigUint64(8, stakeAmount, true);
+  sdv.setUint16(16, 30, true);
+
+  const stakeIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: stakeConfigPda, isSigner: false, isWritable: true },
+      { pubkey: lpStakePda, isSigner: false, isWritable: true },
+      { pubkey: positionMint.publicKey, isSigner: true, isWritable: true },
+      { pubkey: positionAta, isSigner: false, isWritable: true },
+      { pubkey: LP_MINT, isSigner: false, isWritable: false },
+      { pubkey: userLpAta, isSigner: false, isWritable: true },
+      { pubkey: vaultLpAta, isSigner: false, isWritable: true },
+      { pubkey: metadataPda, isSigner: false, isWritable: true },
+      { pubkey: METAPLEX_PID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PID, isSigner: false, isWritable: false },
+      { pubkey: ASSOC_PID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+    data: stakeData,
+  });
+
+  await sendAndConfirmTransaction(c, new Transaction().add(stakeIx), [wallet, positionMint]);
+
+  // Wait 2 sec to accrue rewards
+  await new Promise(r => setTimeout(r, 2000));
+
+  // Claim
+  const [gumMintPda] = PublicKey.findProgramAddressSync([Buffer.from("gum_mint")], PROGRAM_ID);
+  const claimerGumAta = getAta(gumMintPda, wallet.publicKey);
+  const claimIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: stakeConfigPda, isSigner: false, isWritable: true },
+      { pubkey: lpStakePda, isSigner: false, isWritable: true },
+      { pubkey: positionAta, isSigner: false, isWritable: false },
+      { pubkey: gumMintPda, isSigner: false, isWritable: true },
+      { pubkey: claimerGumAta, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PID, isSigner: false, isWritable: false },
+      { pubkey: ASSOC_PID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+    data: disc("claim_lp"),
+  });
+  await sendAndConfirmTransaction(c, new Transaction().add(claimIx), [wallet]);
+
+  // Unstake (full, 100% — early unstake with penalty since 30d lock active)
+  const unstakeData = ixData(disc("unstake_lp"), stakeAmount);
+  const unstakeIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: stakeConfigPda, isSigner: false, isWritable: true },
+      { pubkey: lpStakePda, isSigner: false, isWritable: true },
+      { pubkey: positionMint.publicKey, isSigner: false, isWritable: true },
+      { pubkey: positionAta, isSigner: false, isWritable: true },
+      { pubkey: LP_MINT, isSigner: false, isWritable: false },
+      { pubkey: vaultLpAta, isSigner: false, isWritable: true },
+      { pubkey: userLpAta, isSigner: false, isWritable: true },
+      { pubkey: gumMintPda, isSigner: false, isWritable: true },
+      { pubkey: claimerGumAta, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PID, isSigner: false, isWritable: false },
+      { pubkey: ASSOC_PID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+    data: unstakeData,
+  });
+  await sendAndConfirmTransaction(c, new Transaction().add(unstakeIx), [wallet]);
+
+  return `staked ${Number(stakeAmount)/1e9} LP, claimed, unstaked early (10% penalty)`;
+}
+
+async function testMarketplaceListings() {
+  const accts = await c.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: 89 }] });
+  return `${accts.length} active listings`;
+}
+
+async function testMarketplaceOffers() {
+  const accts = await c.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: 97 }] });
+  return `${accts.length} active offers`;
+}
+
+async function testVerifyPageData() {
+  // Pick a v5 gumball and verify its on-chain commitment can be computed
+  const accts = await c.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: 189 }] });
+  if (accts.length === 0) throw new Error("No v5 gumballs found");
+  const a = accts[0];
+  const d = a.account.data;
+  const commitment = d.slice(93, 125);
+  const userSeed = d.slice(125, 157);
+  const oracleSecret = d.slice(157, 189);
+  if (commitment.every(b => b === 0)) throw new Error("Commitment is zeroed (upgrade gumball)");
+  if (oracleSecret.every(b => b === 0)) throw new Error("Oracle secret is zeroed");
+
+  // Compute sha256(secret + oracle_pubkey) and compare to stored commitment
+  const ORACLE_PUBKEY = Buffer.from("53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy");
+  const oracleBytes = new PublicKey("53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy").toBytes();
+  const computed = crypto.createHash("sha256").update(Buffer.concat([Buffer.from(oracleSecret), Buffer.from(oracleBytes)])).digest();
+  if (!computed.equals(Buffer.from(commitment))) throw new Error("Commitment hash mismatch");
+  return `verified gumball ${a.pubkey.toBase58().slice(0, 12)}`;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n🧪 Gumball NFT End-to-End Tests`);
@@ -302,6 +513,11 @@ async function main() {
   await test("Faucet API endpoint", testFaucetEndpoint);
   await test("Price history endpoint", testPriceHistoryEndpoint);
   await test("Stake → Claim → Unstake flow", testStakeAndClaim);
+  await test("Swap GUM → XNT (with auto-unwrap)", testSwapGumToXnt);
+  await test("LP Stake → Claim → Unstake (early)", testLpStakeFlow);
+  await test("Marketplace listings", testMarketplaceListings);
+  await test("Marketplace offers", testMarketplaceOffers);
+  await test("Verify page commitment hash", testVerifyPageData);
 
   // Summary
   const passed = results.filter(r => r.status === 'PASS').length;
