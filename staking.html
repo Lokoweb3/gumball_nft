@@ -1508,6 +1508,26 @@ function formatCountdown(secs) {
   return `${s}s`;
 }
 
+function getProjectedGum(p) {
+  // Projected total GUM if held until unlock = current pending + remaining_seconds * rate
+  const now = chainNow();
+  const lockUntil = p.lockUntil || 0;
+  const mult = (p.multiplier || 100) / 100;
+  const remainingSec = Math.max(0, lockUntil - now);
+  const ratePerSec = (p.amount / 1e9) * 100 * mult / 86400; // GUM/sec
+  const futureRewards = remainingSec * ratePerSec;
+  const currentPending = getLpPending(p);
+  return currentPending + futureRewards;
+}
+
+function getProjectionLabel(p) {
+  const now = chainNow();
+  const lockUntil = p.lockUntil || 0;
+  if (lockUntil <= now) return "AT CURRENT RATE";
+  const days = Math.ceil((lockUntil - now) / 86400);
+  return `IF HELD TO UNLOCK (${days}d)`;
+}
+
 function getLockProgress(p) {
   const now = chainNow();
   const total = (p.lockUntil || 0) - (p.stakedAt || 0);
@@ -1606,7 +1626,14 @@ function renderLpPositions() {
               <div style="font-size:0.3rem;color:var(--gray);margin-top:2px;">Unlocks ${lockUntilDate}</div>
             ` : ''}
           </div>
-          <div style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--gold);" data-lp-pos="${i}">${pending.toFixed(2)} GUM</div>
+          <div style="text-align:right;">
+            <div style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:var(--gold);" data-lp-pos="${i}">${pending.toFixed(2)} GUM</div>
+            <div style="font-size:0.32rem;color:var(--gray);margin-top:4px;">PENDING</div>
+            <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">
+              <div style="font-family:'Press Start 2P',cursive;font-size:0.35rem;color:var(--teal);" data-lp-projected="${i}">${getProjectedGum(p).toLocaleString(undefined,{maximumFractionDigits:0})} GUM</div>
+              <div style="font-size:0.32rem;color:var(--gray);margin-top:2px;">${getProjectionLabel(p)}</div>
+            </div>
+          </div>
         </div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center;">
           <input type="range" id="us${i}" min="1" max="100" value="100" oninput="document.getElementById('ul${i}').textContent=this.value+'%'" style="flex:1;accent-color:var(--red);" />
@@ -1843,6 +1870,8 @@ loadAll = async function() {
       lpPositions.forEach((p, i) => {
         const el = document.querySelector(`[data-lp-pos="${i}"]`);
         if (el) el.textContent = getLpPending(p).toFixed(2) + ' GUM';
+        const projEl = document.querySelector(`[data-lp-projected="${i}"]`);
+        if (projEl) projEl.textContent = getProjectedGum(p).toLocaleString(undefined,{maximumFractionDigits:0}) + ' GUM';
         // Update lock countdown + progress bar
         const statusEl = document.querySelector(`[data-lp-status="${i}"]`);
         const progressEl = document.querySelector(`[data-lp-progress="${i}"]`);
