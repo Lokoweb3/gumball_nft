@@ -1756,7 +1756,10 @@ function setLockTier(tier) {
 }
 
 function setLpStakeMax() {
-  document.getElementById('lpStakeInput').value = (userLpBalance / 1e9).toFixed(6);
+  // Floor to 6 decimals so MAX never exceeds the raw balance (avoids InsufficientFunds
+  // when the LP balance has more than 6 decimals of precision).
+  const truncated = Math.floor(userLpBalance / 1000) / 1e6;
+  document.getElementById('lpStakeInput').value = truncated.toFixed(6);
 }
 
 async function loadLpStakeState() {
@@ -1891,7 +1894,9 @@ async function stakeLpTokens() {
   try {
     const provider = getProvider();
     const realDisc = await disc("stake_lp");
-    const lpLamports = BigInt(Math.floor(amount * 1e9));
+    let lpLamports = BigInt(Math.floor(amount * 1e9));
+    // Cap to actual balance — guards against UI rounding overshooting the LP ATA balance
+    if (lpLamports > BigInt(userLpBalance)) lpLamports = BigInt(userLpBalance);
     const METAPLEX_PID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
     const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
     const positionMint = solanaWeb3.Keypair.generate();
