@@ -780,6 +780,10 @@ async function buyGumball(mintKeyStr) {
     const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
     const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
 
+    // Phase 2: NFT/LP staker fee pools (50/25/25 split of royalty)
+    const [nftXntPool] = PublicKey.findProgramAddressSync([strToU8("nft_xnt_pool")], PROGRAM_ID);
+    const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
+
     const discBytes = await disc("buy_gumball");
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
@@ -794,6 +798,8 @@ async function buyGumball(mintKeyStr) {
         { pubkey: escrowAta,           isSigner: false, isWritable: true  },
         { pubkey: buyerAta,            isSigner: false, isWritable: true  },
         { pubkey: gumballPda,          isSigner: false, isWritable: true  },
+        { pubkey: nftXntPool,          isSigner: false, isWritable: true  }, // Phase 2
+        { pubkey: lpXntPool,           isSigner: false, isWritable: true  }, // Phase 2
         { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -910,6 +916,10 @@ async function acceptOffer(nftMintStr, buyerStr) {
     const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
     const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
 
+    // Phase 2: NFT/LP staker fee pools (50/25/25 split of royalty)
+    const [nftXntPool] = PublicKey.findProgramAddressSync([strToU8("nft_xnt_pool")], PROGRAM_ID);
+    const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
+
     const discBytes = await disc("accept_offer");
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
@@ -923,6 +933,8 @@ async function acceptOffer(nftMintStr, buyerStr) {
         { pubkey: sellerAta,           isSigner: false, isWritable: true  }, // seller_ata
         { pubkey: buyerAta,            isSigner: false, isWritable: true  }, // buyer_ata
         { pubkey: gumballPda,          isSigner: false, isWritable: true  }, // gumball_data
+        { pubkey: nftXntPool,          isSigner: false, isWritable: true  }, // nft_xnt_pool (Phase 2)
+        { pubkey: lpXntPool,           isSigner: false, isWritable: true  }, // lp_xnt_pool  (Phase 2)
         { pubkey: TOKEN_PID,           isSigner: false, isWritable: false }, // token_program
         { pubkey: ASSOC_PID,           isSigner: false, isWritable: false }, // associated_token_program
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program

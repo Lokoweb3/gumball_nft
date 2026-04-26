@@ -19,6 +19,8 @@ node_modules/
 .env
 .wallet-temp.json
 faucet-wallet.json
+gum-mint-keypair.json
+program.so
 .claude/
 main
 scripts/mint-legendary*.cjs

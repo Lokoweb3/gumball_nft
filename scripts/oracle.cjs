@@ -301,6 +301,10 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
   const machineInfo    = await connection.getAccountInfo(MACHINE_PDA);
   const treasuryPubkey = new PublicKey(machineInfo.data.slice(8 + 32, 8 + 32 + 32));
 
+  // PHASE 2: NFT/LP fee pools (50/40/10 split of mint revenue)
+  const [nftXntPool] = PublicKey.findProgramAddressSync([Buffer.from("nft_xnt_pool")], PROGRAM_ID);
+  const [lpXntPool]  = PublicKey.findProgramAddressSync([Buffer.from("lp_xnt_pool")],  PROGRAM_ID);
+
   // Data: discriminator (8) + secret (32)
   const data = Buffer.concat([disc("reveal_and_mint"), Buffer.from(secret)]);
 
@@ -322,6 +326,8 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
       { pubkey: gumballData,                isSigner: false, isWritable: true  }, // gumball_data
       { pubkey: gumballSvg,                 isSigner: false, isWritable: true  }, // gumball_svg
       { pubkey: SLOT_HASHES,                isSigner: false, isWritable: false }, // slot_hashes
+      { pubkey: nftXntPool,                 isSigner: false, isWritable: true  }, // nft_xnt_pool (PHASE 2)
+      { pubkey: lpXntPool,                  isSigner: false, isWritable: true  }, // lp_xnt_pool  (PHASE 2)
       { pubkey: TOKEN_PROGRAM_ID,           isSigner: false, isWritable: false },
       { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId,    isSigner: false, isWritable: false },

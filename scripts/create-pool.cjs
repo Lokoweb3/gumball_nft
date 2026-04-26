@@ -7,8 +7,8 @@ const fs = require("fs");
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const XDEX_PID      = new PublicKey("7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf");
-const AMM_CONFIG     = new PublicKey("3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY"); // index 1, 0.13 SOL fee
-const GUM_MINT       = new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+const AMM_CONFIG     = new PublicKey(process.env.AMM_CONFIG || "3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY"); // default: index 1
+const GUM_MINT       = new PublicKey(process.env.GUM_MINT || "47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
 const WSOL_MINT      = new PublicKey("So11111111111111111111111111111111111111112");
 const TOKEN_PID      = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOC_PID      = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");

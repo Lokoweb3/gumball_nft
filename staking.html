@@ -275,6 +275,7 @@ header{
     <div style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;">// YOUR STAKED GUMBALLS</div>
     <div style="display:flex;gap:6px;">
       <button class="card-btn claim" id="claimAllBtn" onclick="claimAll()" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
+      <button class="card-btn claim" id="claimAllXntBtn" onclick="claimAllXntFeesNft()" style="width:auto;padding:8px 16px;display:none;">CLAIM XNT FEES (NFT)</button>
       <button class="card-btn unstake" id="unstakeAllBtn" onclick="unstakeAll()" style="width:auto;padding:8px 16px;display:none;">UNSTAKE ALL</button>
     </div>
   </div>
@@ -383,34 +384,39 @@ header{
       <div class="swap-balance" id="availableLpBalance">Available: —</div>
     </div>
 
-    <!-- Lock tier selector -->
+    <!-- Lock tier selector — Phase 1 5-tier API (0=Flexible..4=Diamond) -->
     <div class="swap-field" style="margin-bottom:12px;">
       <div class="swap-label">LOCK PERIOD</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;">
-        <button class="lock-tier" id="lock30" onclick="setLockTier(30)" data-active="true">
-          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">30D</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;">
+        <button class="lock-tier" id="lock0" onclick="setLockTier(0)" data-active="true">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">FLEX</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1x</div>
-          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">100/day</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">0% pen</div>
         </button>
-        <button class="lock-tier" id="lock90" onclick="setLockTier(90)">
-          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">90D</div>
+        <button class="lock-tier" id="lock1" onclick="setLockTier(1)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">30D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1.5x</div>
-          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">150/day</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">10% pen</div>
         </button>
-        <button class="lock-tier" id="lock180" onclick="setLockTier(180)">
-          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">180D</div>
+        <button class="lock-tier" id="lock2" onclick="setLockTier(2)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">90D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">2x</div>
-          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">200/day</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">15% pen</div>
         </button>
-        <button class="lock-tier" id="lock365" onclick="setLockTier(365)">
-          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">365D</div>
+        <button class="lock-tier" id="lock3" onclick="setLockTier(3)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">180D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">3x</div>
-          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">300/day</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">20% pen</div>
+        </button>
+        <button class="lock-tier" id="lock4" onclick="setLockTier(4)">
+          <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">365D</div>
+          <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">5x</div>
+          <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">25% pen</div>
         </button>
       </div>
     </div>
 
-    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT (30 DAY LOCK)</button>
+    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT (FLEXIBLE)</button>
 
     <!-- Active positions -->
     <div class="swap-label" style="margin-bottom:8px;">YOUR POSITIONS</div>
@@ -442,7 +448,7 @@ const BALL_COLORS = {"Cherry Red":"#cc2244","Grape Purple":"#8833cc","Ocean Blue
 const EMISSION_RATES = [10, 25, 60, 150, 500]; // GUM per day
 
 const GD_V5 = 189;
-const STAKE_ACCOUNT_SIZE = 8 + 32 + 32 + 1 + 8 + 8 + 1; // 90
+const STAKE_ACCOUNT_SIZE = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 16 + 1; // 114 (Phase 1 layout: + weight u64 + reward_debt u128)
 
 let walletPubkey = null;
 let stakedGumballs = [];
@@ -514,7 +520,7 @@ async function loadAll() {
 
 async function loadStakeConfig() {
   try {
-    const [configPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [configPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
     const info = await connection.getAccountInfo(configPda);
     if (!info) return;
     const dv = new DataView(info.data.buffer, info.data.byteOffset);
@@ -599,7 +605,7 @@ async function loadUnstakedNfts() {
     if (!mintKey) continue;
 
     // Check not already staked
-    const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake"), mintKey.toBytes()], PROGRAM_ID);
+    const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), mintKey.toBytes()], PROGRAM_ID);
     const stakeInfo = await connection.getAccountInfo(stakePda);
     if (stakeInfo) continue;
 
@@ -627,14 +633,17 @@ async function loadUnstakedNfts() {
 function renderStaked() {
   const el = document.getElementById('stakedGrid');
   const claimAllBtn = document.getElementById('claimAllBtn');
+  const claimAllXntBtn = document.getElementById('claimAllXntBtn');
   const unstakeAllBtn = document.getElementById('unstakeAllBtn');
   if (stakedGumballs.length === 0) {
     el.innerHTML = '<div class="empty-msg">NO STAKED GUMBALLS</div>';
     if (claimAllBtn) claimAllBtn.style.display = 'none';
+    if (claimAllXntBtn) claimAllXntBtn.style.display = 'none';
     if (unstakeAllBtn) unstakeAllBtn.style.display = 'none';
     return;
   }
   if (claimAllBtn) claimAllBtn.style.display = 'inline-block';
+  if (claimAllXntBtn) claimAllXntBtn.style.display = 'inline-block';
   if (unstakeAllBtn) unstakeAllBtn.style.display = 'inline-block';
   el.innerHTML = stakedGumballs.map(g => {
     const rate = EMISSION_RATES[g.rarity] || 10;
@@ -707,8 +716,8 @@ async function stakeNft(mintStr) {
   try {
     const provider = getProvider();
     const nftMint = new PublicKey(mintStr);
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
     const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
     const userAta = getAta(nftMint, walletPubkey);
     const vaultAta = getAta(nftMint, stakeConfigPda);
@@ -717,13 +726,14 @@ async function stakeNft(mintStr) {
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
-        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
-        { pubkey: gumballPda,              isSigner: false, isWritable: false },
-        { pubkey: nftMint,                 isSigner: false, isWritable: false },
-        { pubkey: userAta,                 isSigner: false, isWritable: true  },
-        { pubkey: vaultAta,                isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // staker
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  }, // stake_account
+        { pubkey: gumballPda,              isSigner: false, isWritable: false }, // gumball_data
+        { pubkey: nftMint,                 isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: userAta,                 isSigner: false, isWritable: true  }, // user_ata
+        { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
+        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: false }, // nft_reward_vault (Phase 1)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -753,20 +763,21 @@ async function claimRewards(mintStr) {
   try {
     const provider = getProvider();
     const nftMint = new PublicKey(mintStr);
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
     const discBytes = await disc("claim");
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
-        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
-        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
-        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // staker
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  }, // stake_account
+        { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
+        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // nft_reward_vault (Phase 1)
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  }, // staker_gum_ata
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -796,9 +807,9 @@ async function unstakeNft(mintStr) {
   try {
     const provider = getProvider();
     const nftMint = new PublicKey(mintStr);
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const vaultAta = getAta(nftMint, stakeConfigPda);
     const userAta = getAta(nftMint, walletPubkey);
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
@@ -807,14 +818,15 @@ async function unstakeNft(mintStr) {
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
-        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
-        { pubkey: nftMint,                 isSigner: false, isWritable: false },
-        { pubkey: vaultAta,                isSigner: false, isWritable: true  },
-        { pubkey: userAta,                 isSigner: false, isWritable: true  },
-        { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
-        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // staker
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  }, // stake_account
+        { pubkey: nftMint,                 isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
+        { pubkey: userAta,                 isSigner: false, isWritable: true  }, // user_ata
+        { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
+        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // nft_reward_vault (Phase 1)
+        { pubkey: stakerGumAta,            isSigner: false, isWritable: true  }, // staker_gum_ata
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -848,8 +860,8 @@ async function unstakeAll() {
   try {
     const provider = getProvider();
     const discBytes = await disc("unstake");
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
     // Unstake instruction has 12 accounts — limit to 2 per tx (~360 bytes per ix)
@@ -863,7 +875,7 @@ async function unstakeAll() {
       const tx = new Transaction();
       for (const g of batch) {
         const nftMint = g.nftMint;
-        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), nftMint.toBytes()], PROGRAM_ID);
+        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
         const vaultAta = getAta(nftMint, stakeConfigPda);
         const userAta = getAta(nftMint, walletPubkey);
         tx.add(new TransactionInstruction({
@@ -875,7 +887,8 @@ async function unstakeAll() {
             { pubkey: nftMint,                 isSigner: false, isWritable: false },
             { pubkey: vaultAta,                isSigner: false, isWritable: true  },
             { pubkey: userAta,                 isSigner: false, isWritable: true  },
-            { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+            { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // Phase 1: read-only
+            { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // Phase 1
             { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
             { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
             { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
@@ -911,8 +924,8 @@ async function claimAll() {
   try {
     const provider = getProvider();
     const discBytes = await disc("claim");
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
     // Batch 4 claims per transaction to fit Solana's 1232-byte limit
@@ -925,14 +938,15 @@ async function claimAll() {
       btn.textContent = `CLAIMING ${i+1}-${Math.min(i+BATCH, total)}/${total}...`;
       const tx = new Transaction();
       for (const g of batch) {
-        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake"), g.nftMint.toBytes()], PROGRAM_ID);
+        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), g.nftMint.toBytes()], PROGRAM_ID);
         tx.add(new TransactionInstruction({
           programId: PROGRAM_ID,
           keys: [
             { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
             { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  },
             { pubkey: stakeAccountPda,         isSigner: false, isWritable: true  },
-            { pubkey: gumMintPda,              isSigner: false, isWritable: true  },
+            { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // Phase 1: read-only
+            { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // Phase 1
             { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
             { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
             { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
@@ -962,12 +976,152 @@ async function claimAll() {
   btn.textContent = 'CLAIM ALL GUM';
 }
 
+// ── PHASE 2: XNT FEE SHARE CLAIMS ────────────────────────────────────────────
+
+/// Claim accumulated XNT fees for one staked NFT.
+async function claimXntFeesNft(nftMintStr) {
+  if (!walletPubkey) return;
+  try {
+    const provider = getProvider();
+    const nftMint = new PublicKey(nftMintStr);
+    const [stakeConfigPda]  = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
+    const [xntDebt]         = PublicKey.findProgramAddressSync([strToU8("xnt_debt_nft"), nftMint.toBytes()], PROGRAM_ID);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // staker
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: false }, // stake_config
+        { pubkey: stakeAccountPda,         isSigner: false, isWritable: false }, // stake_account
+        { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  }, // nft_xnt_pool
+        { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  }, // nft_xnt_state
+        { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // xnt_debt
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: await disc("claim_xnt_fees_nft"),
+    });
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+    toast('XNT FEES CLAIMED!', 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Claim XNT fees error:", e);
+    toast('CLAIM XNT FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+}
+
+/// Claim XNT fees for all staked NFTs in one batch.
+async function claimAllXntFeesNft() {
+  if (!walletPubkey || stakedGumballs.length === 0) return;
+  const btn = document.getElementById('claimAllXntBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'CLAIMING XNT...'; }
+  try {
+    const provider = getProvider();
+    const realDisc = await disc("claim_xnt_fees_nft");
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+
+    // Each ix has 7 accounts; safely batch 5/tx
+    const BATCH = 5;
+    let claimed = 0;
+    for (let i = 0; i < stakedGumballs.length; i += BATCH) {
+      const batch = stakedGumballs.slice(i, i + BATCH);
+      const tx = new Transaction();
+      for (const g of batch) {
+        const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), g.nftMint.toBytes()], PROGRAM_ID);
+        const [xntDebt]         = PublicKey.findProgramAddressSync([strToU8("xnt_debt_nft"), g.nftMint.toBytes()], PROGRAM_ID);
+        tx.add(new TransactionInstruction({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: walletPubkey,            isSigner: true,  isWritable: true  },
+            { pubkey: stakeConfigPda,          isSigner: false, isWritable: false },
+            { pubkey: stakeAccountPda,         isSigner: false, isWritable: false },
+            { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  },
+            { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  },
+            { pubkey: xntDebt,                 isSigner: false, isWritable: true  },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data: realDisc,
+        }));
+      }
+      tx.feePayer = walletPubkey;
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      const signed = await provider.signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(sig, "confirmed");
+      claimed += batch.length;
+    }
+    toast(`CLAIMED XNT FROM ${claimed} POSITIONS!`, 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Claim all XNT error:", e);
+    toast('CLAIM XNT FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'CLAIM XNT FEES (NFT)'; }
+}
+
+/// Claim XNT fees for one LP position.
+async function claimXntFeesLp(idx) {
+  if (!walletPubkey || !lpPositions[idx]) return;
+  const p = lpPositions[idx];
+  try {
+    const provider = getProvider();
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [xntDebt]        = PublicKey.findProgramAddressSync([strToU8("xnt_debt_lp"), p.positionMint.toBytes()], PROGRAM_ID);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,            isSigner: true,  isWritable: true  }, // claimer
+        { pubkey: stakeConfigPda,          isSigner: false, isWritable: false }, // stake_config
+        { pubkey: p.stakePda,              isSigner: false, isWritable: false }, // lp_stake_account
+        { pubkey: p.positionAta,           isSigner: false, isWritable: false }, // position_ata
+        { pubkey: LP_XNT_POOL,             isSigner: false, isWritable: true  }, // lp_xnt_pool
+        { pubkey: LP_XNT_STATE,            isSigner: false, isWritable: true  }, // lp_xnt_state
+        { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // xnt_debt
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: await disc("claim_xnt_fees_lp"),
+    });
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+    toast('LP XNT FEES CLAIMED!', 'success');
+    await loadAll();
+  } catch(e) {
+    console.error("Claim LP XNT error:", e);
+    toast('CLAIM XNT FAILED: ' + (e.message || '').slice(0, 60), 'error');
+  }
+}
+
 // ── SWAP & LIQUIDITY ─────────────────────────────────────────────────────────
 
 const XDEX_PID = new PublicKey('7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf');
-const AMM_CONFIG = new PublicKey('3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY');
+// Phase 3: new pool uses AMM_CONFIG index 0 (since the old (PDA-mint) GUM/XNT pair already
+// exists at index 1). New fixed-supply GUM mint replaces the program-owned PDA mint.
+const AMM_CONFIG = new PublicKey('77zjKzW2UTth9vMNxfHQsA7YcweTcgNgcCUMyTAXo1T9');
 const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-const [GUM_MINT_PDA] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+// GUM_MINT_PDA name kept for compatibility with downstream code; now points at the
+// fixed-supply GUM mint (mint authority revoked, 1B total supply).
+const GUM_MINT_PDA = new PublicKey('2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1');
+// Phase 1 reward vault PDAs (program-owned token accounts holding GUM emissions)
+const [NFT_REWARD_VAULT] = PublicKey.findProgramAddressSync([strToU8("nft_reward_vault")], PROGRAM_ID);
+const [LP_REWARD_VAULT]  = PublicKey.findProgramAddressSync([strToU8("lp_reward_vault")],  PROGRAM_ID);
+// Phase 2 XNT fee pool PDAs (lamport-holding accounts for XNT fee shares)
+const [NFT_XNT_POOL]    = PublicKey.findProgramAddressSync([strToU8("nft_xnt_pool")],    PROGRAM_ID);
+const [LP_XNT_POOL]     = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],     PROGRAM_ID);
+const [NFT_XNT_STATE]   = PublicKey.findProgramAddressSync([strToU8("xnt_fee_state_nft")], PROGRAM_ID);
+const [LP_XNT_STATE]    = PublicKey.findProgramAddressSync([strToU8("xnt_fee_state_lp")],  PROGRAM_ID);
 
 // Sort mints for XDEX (token0 must be smaller pubkey)
 const mint0 = WSOL_MINT.toBuffer().compare(GUM_MINT_PDA.toBuffer()) < 0 ? WSOL_MINT : GUM_MINT_PDA;
@@ -1529,12 +1683,14 @@ function setLiqTab(tab) {
 }
 
 // ── LP STAKING (NFT POSITIONS) ───────────────────────────────────────────────
+// Phase 1 Pattern B: 5 lock tiers (0=Flexible..4=Diamond), accumulator-based emission.
 
-const LP_STAKE_SIZE_V1 = 97; // old: no lock fields
-const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 2 + 1; // 107 (with lock fields)
-const LP_RATE_PER_SEC = 1157;
+const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 2 + 1 + 16 + 16 + 1; // 140 bytes (Phase 1 layout)
+const LOCK_TIER_DAYS  = [0,    30,   90,   180,  365];
+const LOCK_TIER_MULT  = [100,  150,  200,  300,  500]; // bps; multiplier ÷ 100
+const LOCK_TIER_PEN   = [0,    1000, 1500, 2000, 2500]; // bps early-exit penalty
 let lpPositions = [];
-let selectedLockDays = 30;
+let selectedLockTier = 0; // 0=Flexible, 1=Bronze, 2=Silver, 3=Gold, 4=Diamond
 
 function formatCountdown(secs) {
   if (secs <= 0) return "0s";
@@ -1586,14 +1742,14 @@ function penaltyBpsForMult(multiplier) {
   }
 }
 
-function setLockTier(days) {
-  selectedLockDays = days;
-  [30, 90, 180, 365].forEach(d => {
-    const btn = document.getElementById('lock' + d);
-    if (btn) btn.setAttribute('data-active', d === days ? 'true' : 'false');
-  });
-  const labels = { 30: '30 DAY LOCK', 90: '90 DAY LOCK', 180: '180 DAY LOCK', 365: '365 DAY LOCK' };
-  document.getElementById('stakeLpBtn').textContent = `STAKE LP → MINT POSITION NFT (${labels[days]})`;
+function setLockTier(tier) {
+  selectedLockTier = tier;
+  for (let i = 0; i < 5; i++) {
+    const btn = document.getElementById('lock' + i);
+    if (btn) btn.setAttribute('data-active', i === tier ? 'true' : 'false');
+  }
+  const labels = ['FLEXIBLE', 'BRONZE — 30D LOCK', 'SILVER — 90D LOCK', 'GOLD — 180D LOCK', 'DIAMOND — 365D LOCK'];
+  document.getElementById('stakeLpBtn').textContent = `STAKE LP → MINT POSITION NFT (${labels[tier]})`;
 }
 
 function setLpStakeMax() {
@@ -1734,9 +1890,9 @@ async function stakeLpTokens() {
     const realDisc = await disc("stake_lp");
     const lpLamports = BigInt(Math.floor(amount * 1e9));
     const METAPLEX_PID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
     const positionMint = solanaWeb3.Keypair.generate();
-    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake"), positionMint.publicKey.toBytes()], PROGRAM_ID);
+    const [lpStakePda] = PublicKey.findProgramAddressSync([strToU8("lp_stake_v2"), positionMint.publicKey.toBytes()], PROGRAM_ID);
     const positionAta = getAta(positionMint.publicKey, walletPubkey);
     const userLpAta = getAta(LP_MINT, walletPubkey);
     const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
@@ -1744,26 +1900,27 @@ async function stakeLpTokens() {
     const [metadataPda] = PublicKey.findProgramAddressSync(
       [strToU8("metadata"), METAPLEX_PID.toBytes(), positionMint.publicKey.toBytes()], METAPLEX_PID
     );
-    // Build instruction data: disc(8) + amount(u64, 8) + lock_days(u16, 2)
-    const data = new Uint8Array(8 + 8 + 2);
+    // Phase 1: data layout is now disc(8) + amount(u64, 8) + lock_tier(u8, 1) = 17 bytes
+    const data = new Uint8Array(8 + 8 + 1);
     data.set(realDisc, 0);
     const dv = new DataView(data.buffer);
     dv.setBigUint64(8, lpLamports, true);
-    dv.setUint16(16, selectedLockDays, true);
+    dv.setUint8(16, selectedLockTier);
 
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,              isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,            isSigner: false, isWritable: true  },
-        { pubkey: lpStakePda,                isSigner: false, isWritable: true  },
-        { pubkey: positionMint.publicKey,    isSigner: true,  isWritable: true  },
-        { pubkey: positionAta,               isSigner: false, isWritable: true  },
-        { pubkey: LP_MINT,                   isSigner: false, isWritable: false },
-        { pubkey: userLpAta,                 isSigner: false, isWritable: true  },
-        { pubkey: vaultLpAta,                isSigner: false, isWritable: true  },
-        { pubkey: metadataPda,               isSigner: false, isWritable: true  },
-        { pubkey: METAPLEX_PID,              isSigner: false, isWritable: false },
+        { pubkey: walletPubkey,              isSigner: true,  isWritable: true  }, // staker
+        { pubkey: stakeConfigPda,            isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: lpStakePda,                isSigner: false, isWritable: true  }, // lp_stake_account
+        { pubkey: positionMint.publicKey,    isSigner: true,  isWritable: true  }, // position_mint
+        { pubkey: positionAta,               isSigner: false, isWritable: true  }, // position_ata
+        { pubkey: LP_MINT,                   isSigner: false, isWritable: false }, // lp_mint
+        { pubkey: userLpAta,                 isSigner: false, isWritable: true  }, // user_lp_ata
+        { pubkey: vaultLpAta,                isSigner: false, isWritable: true  }, // vault_lp_ata
+        { pubkey: LP_REWARD_VAULT,           isSigner: false, isWritable: false }, // lp_reward_vault (Phase 1)
+        { pubkey: metadataPda,               isSigner: false, isWritable: true  }, // metadata_account
+        { pubkey: METAPLEX_PID,              isSigner: false, isWritable: false }, // metadata_program
         { pubkey: TOKEN_PID,                 isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,                 isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId,   isSigner: false, isWritable: false },
@@ -1796,18 +1953,19 @@ async function claimLpPosition(idx) {
   try {
     const provider = getProvider();
     const realDisc = await disc("claim_lp");
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const claimerGumAta = getAta(gumMintPda, walletPubkey);
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,      isSigner: false, isWritable: true  },
-        { pubkey: p.stakePda,          isSigner: false, isWritable: true  },
-        { pubkey: p.positionAta,       isSigner: false, isWritable: false },
-        { pubkey: gumMintPda,          isSigner: false, isWritable: true  },
-        { pubkey: claimerGumAta,       isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // claimer
+        { pubkey: stakeConfigPda,      isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: p.stakePda,          isSigner: false, isWritable: true  }, // lp_stake_account
+        { pubkey: p.positionAta,       isSigner: false, isWritable: false }, // position_ata
+        { pubkey: gumMintPda,          isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
+        { pubkey: LP_REWARD_VAULT,     isSigner: false, isWritable: true  }, // lp_reward_vault (Phase 1)
+        { pubkey: claimerGumAta,       isSigner: false, isWritable: true  }, // claimer_gum_ata
         { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -1849,8 +2007,8 @@ async function unstakeLpPosition(idx) {
   try {
     const provider = getProvider();
     const realDisc = await disc("unstake_lp");
-    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config")], PROGRAM_ID);
-    const [gumMintPda] = PublicKey.findProgramAddressSync([strToU8("gum_mint")], PROGRAM_ID);
+    const [stakeConfigPda] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const gumMintPda = GUM_MINT_PDA; // Phase 3: now the fixed-supply mint, not a PDA
     const userLpAta = getAta(LP_MINT, walletPubkey);
     const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
     const claimerGumAta = getAta(gumMintPda, walletPubkey);
@@ -1858,16 +2016,17 @@ async function unstakeLpPosition(idx) {
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  },
-        { pubkey: stakeConfigPda,      isSigner: false, isWritable: true  },
-        { pubkey: p.stakePda,          isSigner: false, isWritable: true  },
-        { pubkey: p.positionMint,      isSigner: false, isWritable: true  },
-        { pubkey: p.positionAta,       isSigner: false, isWritable: true  },
-        { pubkey: LP_MINT,             isSigner: false, isWritable: false },
-        { pubkey: vaultLpAta,          isSigner: false, isWritable: true  },
-        { pubkey: userLpAta,           isSigner: false, isWritable: true  },
-        { pubkey: gumMintPda,          isSigner: false, isWritable: true  },
-        { pubkey: claimerGumAta,       isSigner: false, isWritable: true  },
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // claimer
+        { pubkey: stakeConfigPda,      isSigner: false, isWritable: true  }, // stake_config
+        { pubkey: p.stakePda,          isSigner: false, isWritable: true  }, // lp_stake_account
+        { pubkey: p.positionMint,      isSigner: false, isWritable: true  }, // position_mint
+        { pubkey: p.positionAta,       isSigner: false, isWritable: true  }, // position_ata
+        { pubkey: LP_MINT,             isSigner: false, isWritable: true  }, // lp_mint (Phase 1: writable for penalty burn)
+        { pubkey: vaultLpAta,          isSigner: false, isWritable: true  }, // vault_lp_ata
+        { pubkey: userLpAta,           isSigner: false, isWritable: true  }, // user_lp_ata
+        { pubkey: gumMintPda,          isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
+        { pubkey: LP_REWARD_VAULT,     isSigner: false, isWritable: true  }, // lp_reward_vault (Phase 1)
+        { pubkey: claimerGumAta,       isSigner: false, isWritable: true  }, // claimer_gum_ata
         { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -1928,27 +2087,23 @@ loadAll = async function() {
 };
 
 async function loadGlobalEmission() {
+  // Phase 1 Pattern B: daily emission = 0.3% of vault balance, regardless of staker count.
+  // Display the COMBINED nft_reward_vault + lp_reward_vault projected daily emission.
   try {
-    const NFT_DAILY = [10, 25, 60, 150, 500];
-    // Sum NFT emissions: scan all StakeAccount (90 bytes)
-    const nftAccts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ dataSize: 90 }],
-    });
-    let nftDaily = 0;
-    for (const a of nftAccts) {
-      const rarity = a.account.data[8 + 32 + 32]; // after disc+owner+nft_mint
-      nftDaily += NFT_DAILY[rarity] || 10;
+    const [nftVaultInfo, lpVaultInfo] = await Promise.all([
+      connection.getAccountInfo(NFT_REWARD_VAULT),
+      connection.getAccountInfo(LP_REWARD_VAULT),
+    ]);
+    let nftDaily = 0, lpDaily = 0;
+    if (nftVaultInfo) {
+      const dv = new DataView(nftVaultInfo.data.buffer, nftVaultInfo.data.byteOffset);
+      const bal = Number(dv.getBigUint64(64, true)); // SPL token amount at offset 64
+      nftDaily = (bal * 0.003) / 1e6; // 0.3%/day, GUM has 6 decimals
     }
-    // Sum LP emissions: scan all LpStakeAccount (107 bytes)
-    const lpAccts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ dataSize: 107 }],
-    });
-    let lpDaily = 0;
-    for (const a of lpAccts) {
-      const dv = new DataView(a.account.data.buffer, a.account.data.byteOffset);
-      const amount = Number(dv.getBigUint64(72, true));
-      const mult = dv.getUint16(104, true);
-      lpDaily += (amount / 1e9) * 100 * (mult / 100);
+    if (lpVaultInfo) {
+      const dv = new DataView(lpVaultInfo.data.buffer, lpVaultInfo.data.byteOffset);
+      const bal = Number(dv.getBigUint64(64, true));
+      lpDaily = (bal * 0.003) / 1e6;
     }
     window._globalEmission = Math.floor(nftDaily + lpDaily);
   } catch(e) { console.error('loadGlobalEmission:', e); }

@@ -1692,6 +1692,10 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
     const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
     const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
 
+    // Phase 2: NFT/LP staker fee pools (50/40/10 split of upgrade fee)
+    const [nftXntPool] = PublicKey.findProgramAddressSync([strToU8("nft_xnt_pool")], PROGRAM_ID);
+    const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
+
     let discBytes, keys, remainingAccounts = [], extraSigners = [newMint];
 
     if (burnsNeeded === 2) {
@@ -1714,6 +1718,8 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
         { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
         { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
         { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
+        { pubkey: nftXntPool,              isSigner: false, isWritable: true  }, // nft_xnt_pool (Phase 2)
+        { pubkey: lpXntPool,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (Phase 2)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
@@ -1737,6 +1743,8 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
         { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
         { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
         { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
+        { pubkey: nftXntPool,              isSigner: false, isWritable: true  }, // nft_xnt_pool (Phase 2)
+        { pubkey: lpXntPool,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (Phase 2)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program

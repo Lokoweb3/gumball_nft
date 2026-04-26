@@ -131,8 +131,10 @@ const MAX_PRICE_POINTS = 20_160; // 7 days at 30s intervals
 
 const PROGRAM_ID = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const XDEX_PID = new PublicKey("7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf");
-const AMM_CONFIG = new PublicKey("3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY");
-const GUM_MINT = new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+// Phase 3: new GUM mint + new pool (AMM_CONFIG index 0, since the old GUM/XNT pair
+// already exists at index 1 with the abandoned PDA mint).
+const AMM_CONFIG = new PublicKey("77zjKzW2UTth9vMNxfHQsA7YcweTcgNgcCUMyTAXo1T9");
+const GUM_MINT = new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1");
 const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
 
 // Derive pool PDAs
