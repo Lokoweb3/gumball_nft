@@ -555,8 +555,11 @@ async function loadStakedNfts() {
     const dv = new DataView(data.buffer, data.byteOffset);
     const nftMint = new PublicKey(data.slice(8+32, 8+32+32));
     const rarity = data[8+32+32];
-    const stakedAt = Number(dv.getBigInt64(8+32+32+1, true));
-    const lastClaimed = Number(dv.getBigInt64(8+32+32+1+8, true));
+    // Phase 1 StakeAccount layout: disc(8) owner(32) nft_mint(32) rarity(1)
+    // weight u64(8) staked_at i64(8) last_claimed i64(8) reward_debt u128(16) bump(1)
+    const weight      = Number(dv.getBigUint64(8+32+32+1, true));
+    const stakedAt    = Number(dv.getBigInt64 (8+32+32+1+8, true));
+    const lastClaimed = Number(dv.getBigInt64 (8+32+32+1+8+8, true));
 
     // Read gumball data for traits
     const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
@@ -572,7 +575,7 @@ async function loadStakedNfts() {
       const ballColor = BALL_COLORS[colorName] || "#2266ee";
 
       stakedGumballs.push({
-        stakePda: pubkey, nftMint, rarity, stakedAt, lastClaimed,
+        stakePda: pubkey, nftMint, rarity, weight, stakedAt, lastClaimed,
         serial, flavor, color, special, colorName, ballColor,
         flavorName: FLAVORS[flavor] || "Mystery",
         rarName: RARITY[rarity] || "Common",
@@ -652,8 +655,14 @@ function renderStaked() {
   if (claimAllBtn) claimAllBtn.style.display = 'inline-block';
   if (claimAllXntBtn) claimAllXntBtn.style.display = 'inline-block';
   if (unstakeAllBtn) unstakeAllBtn.style.display = 'inline-block';
+  // Pattern B per-card rate: my_weight / total_weight × vault_balance × 0.3% per day.
+  const totalNftWeight = Number(window._totalNftWeight || 0n);
+  const nftVaultBal    = Number(window._nftVaultBalance || 0);
   el.innerHTML = stakedGumballs.map(g => {
-    const rate = EMISSION_RATES[g.rarity] || 10;
+    const ratePerDay = totalNftWeight > 0
+      ? (g.weight / totalNftWeight) * (nftVaultBal * 0.003) / 1e6
+      : 0;
+    const rate = ratePerDay < 1 ? ratePerDay.toFixed(2) : ratePerDay.toFixed(0);
     const pending = getPending(g);
     return `
       <div class="card">
@@ -694,10 +703,17 @@ function renderUnstaked() {
 }
 
 function getPending(g) {
+  // Phase 1 Pattern B: pending = elapsed × my_weight / total_weight × vault × 0.3%/day.
+  // This is an approximation — the true on-chain value uses an accumulator and the
+  // user's reward_debt, but for display it's accurate enough between claims.
   const now = chainNow();
   const elapsed = Math.max(0, now - g.lastClaimed);
-  const ratePerSec = [115, 289, 694, 1736, 5787][g.rarity] || 115;
-  return (elapsed * ratePerSec) / 1e6;
+  const totalNftWeight = Number(window._totalNftWeight || 0n);
+  const nftVaultBal    = Number(window._nftVaultBalance || 0);
+  if (totalNftWeight === 0 || nftVaultBal === 0 || !g.weight) return 0;
+  const myShare = g.weight / totalNftWeight;
+  const ratePerSec = (nftVaultBal * 0.003) / 86400; // raw GUM units / sec
+  return (elapsed * myShare * ratePerSec) / 1e6;
 }
 
 // Live update pending rewards
