@@ -1689,6 +1689,9 @@ const LP_STAKE_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 2 + 1 + 16 + 16 + 1; // 140 
 const LOCK_TIER_DAYS  = [0,    30,   90,   180,  365];
 const LOCK_TIER_MULT  = [100,  150,  200,  300,  500]; // bps; multiplier ÷ 100
 const LOCK_TIER_PEN   = [0,    1000, 1500, 2000, 2500]; // bps early-exit penalty
+// Display-only approximation (Pattern B actual rate depends on vault balance and total weight).
+// Real claim amount is computed on-chain; this is just for the projected-pending number on cards.
+const LP_RATE_PER_SEC = 1157; // ≈ 100 GUM/day per LP token at 1× multiplier
 let lpPositions = [];
 let selectedLockTier = 0; // 0=Flexible, 1=Bronze, 2=Silver, 3=Gold, 4=Diamond
 
