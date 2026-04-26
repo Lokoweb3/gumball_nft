@@ -179,7 +179,7 @@ header{
     <div class="stat-box"><span class="stat-val" id="sStaked">0</span><span class="stat-lbl">TOTAL STAKED</span></div>
     <div class="stat-box"><span class="stat-val" id="sYourStaked">0</span><span class="stat-lbl">YOU STAKED</span></div>
     <div class="stat-box"><span class="stat-val" id="sPending">0.00</span><span class="stat-lbl">PENDING GUM</span></div>
-    <div class="stat-box"><span class="stat-val" id="sTotalClaimed">0</span><span class="stat-lbl">GUM MINTED</span></div>
+    <div class="stat-box"><span class="stat-val" id="sTotalClaimed">0</span><span class="stat-lbl">GUM CLAIMED</span></div>
   </div>
 
   <!-- Analytics Dashboard -->
@@ -524,8 +524,15 @@ async function loadStakeConfig() {
     const info = await connection.getAccountInfo(configPda);
     if (!info) return;
     const dv = new DataView(info.data.buffer, info.data.byteOffset);
-    const totalStaked = Number(dv.getBigUint64(8+32+32, true));
-    const totalClaimed = Number(dv.getBigUint64(8+32+32+8, true));
+    // Phase 1 StakeConfig layout:
+    //   disc(8) authority(32) gum_mint(32) nft_reward_vault(32) lp_reward_vault(32)
+    //   total_staked u64 (offset 136) | total_claimed u64 (144)
+    //   total_nft_weight u128 (152) | total_lp_weight u128 (168)
+    //   acc_nft (184) | acc_lp (200) | last_nft (216) | last_lp (224) | bump (232)
+    const totalStaked  = Number(dv.getBigUint64(136, true));
+    const totalClaimed = Number(dv.getBigUint64(144, true));
+    window._totalNftWeight = dv.getBigUint64(152, true);  // u128 low 64; sufficient for typical scale
+    window._totalLpWeight  = dv.getBigUint64(168, true);
     document.getElementById('sStaked').textContent = totalStaked.toLocaleString();
     document.getElementById('sTotalClaimed').textContent = (totalClaimed / 1e6).toFixed(0);
   } catch(e) {}
@@ -2106,11 +2113,13 @@ async function loadGlobalEmission() {
     if (nftVaultInfo) {
       const dv = new DataView(nftVaultInfo.data.buffer, nftVaultInfo.data.byteOffset);
       const bal = Number(dv.getBigUint64(64, true)); // SPL token amount at offset 64
+      window._nftVaultBalance = bal;
       nftDaily = (bal * 0.003) / 1e6; // 0.3%/day, GUM has 6 decimals
     }
     if (lpVaultInfo) {
       const dv = new DataView(lpVaultInfo.data.buffer, lpVaultInfo.data.byteOffset);
       const bal = Number(dv.getBigUint64(64, true));
+      window._lpVaultBalance = bal;
       lpDaily = (bal * 0.003) / 1e6;
     }
     window._globalEmission = Math.floor(nftDaily + lpDaily);
@@ -2118,17 +2127,24 @@ async function loadGlobalEmission() {
 }
 
 function updateAnalytics() {
-  // Calculate daily GUM from NFT staking
-  const nftDailyRates = [10, 25, 60, 150, 500];
-  let nftDaily = 0;
-  stakedGumballs.forEach(g => { nftDaily += nftDailyRates[g.rarity] || 10; });
+  // Phase 1 Pattern B: your daily GUM = your_weight / total_weight × (vault_balance × 0.3%/day).
+  // Vault emission per day is the same regardless of staker count — it's split pro-rata by weight.
+  const RARITY_WEIGHT = [1, 9, 47, 156, 591]; // mirrors contract constant
+  const totalNftWeight = Number(window._totalNftWeight || 0n);
+  const totalLpWeight  = Number(window._totalLpWeight  || 0n);
+  const nftVaultDaily  = (window._nftVaultBalance || 0) * 0.003 / 1e6; // GUM/day, vault drains 0.3%/day
+  const lpVaultDaily   = (window._lpVaultBalance  || 0) * 0.003 / 1e6;
 
-  // Calculate daily GUM from LP staking (with multiplier)
-  let lpDaily = 0;
+  let myNftWeight = 0;
+  stakedGumballs.forEach(g => { myNftWeight += RARITY_WEIGHT[g.rarity] || 1; });
+  let myLpWeight = 0;
   lpPositions.forEach(p => {
-    const mult = (p.multiplier || 100) / 100;
-    lpDaily += (p.amount / 1e9) * 100 * mult;
+    // contract: weight = amount × multiplier_bps / 100 (raw LP units)
+    myLpWeight += (p.amount * (p.multiplier || 100)) / 100;
   });
+
+  const nftDaily = totalNftWeight > 0 ? (myNftWeight / totalNftWeight) * nftVaultDaily : 0;
+  const lpDaily  = totalLpWeight  > 0 ? (myLpWeight  / totalLpWeight)  * lpVaultDaily  : 0;
 
   const totalDaily = nftDaily + lpDaily;
   const totalMonthly = totalDaily * 30;
