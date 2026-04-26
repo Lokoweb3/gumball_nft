@@ -1269,17 +1269,21 @@ function updateSwapBalanceDisplay() {
 
 function setSwapMax() {
   if (swapDirection === 'gum_to_xnt') {
-    document.getElementById('swapInput').value = (userGumBalance / 1e6).toFixed(2);
+    // Floor to GUM's 6-decimal precision so MAX never exceeds raw balance
+    const truncated = Math.floor(userGumBalance) / 1e6;
+    document.getElementById('swapInput').value = truncated.toFixed(6);
   } else {
-    // Leave some SOL for fees
-    const max = Math.max(0, userXntBalance - 10_000_000) / 1e9;
-    document.getElementById('swapInput').value = max.toFixed(4);
+    // Leave 0.01 XNT buffer for tx fees, then floor to 9 decimals (XNT precision)
+    const reserved = Math.max(0, userXntBalance - 10_000_000);
+    const truncated = Math.floor(reserved) / 1e9;
+    document.getElementById('swapInput').value = truncated.toFixed(9);
   }
   updateSwapEstimate();
 }
 
 function setLiqGumMax() {
-  document.getElementById('liqGumInput').value = (userGumBalance / 1e6).toFixed(2);
+  const truncated = Math.floor(userGumBalance) / 1e6;
+  document.getElementById('liqGumInput').value = truncated.toFixed(6);
   updateLiqEstimate();
 }
 
@@ -1346,12 +1350,17 @@ async function executeSwap() {
 
     if (swapDirection === 'gum_to_xnt') {
       amountIn = BigInt(Math.floor(input * 1e6));
+      // Cap to actual GUM balance so float→BigInt rounding can't overshoot
+      if (amountIn > BigInt(userGumBalance)) amountIn = BigInt(userGumBalance);
       const estOut = parseFloat(document.getElementById('swapOutput').value) || 0;
       minOut = BigInt(Math.floor(estOut * 1e9 * 0.95)); // 5% slippage
       inputMint = GUM_MINT_PDA;
       outputMint = WSOL_MINT;
     } else {
       amountIn = BigInt(Math.floor(input * 1e9));
+      // Cap to actual XNT balance minus 0.01 XNT fee buffer
+      const xntCap = BigInt(Math.max(0, userXntBalance - 10_000_000));
+      if (amountIn > xntCap) amountIn = xntCap;
       const estOut = parseFloat(document.getElementById('swapOutput').value) || 0;
       minOut = BigInt(Math.floor(estOut * 1e6 * 0.95));
       inputMint = WSOL_MINT;
