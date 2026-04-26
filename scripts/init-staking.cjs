@@ -83,8 +83,13 @@ async function main() {
   const [lpVaultPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("lp_reward_vault")], PROGRAM_ID,
   );
+  // HIGH-2 FIX: InitializeStaking now requires the Machine PDA + matching authority
+  const [machinePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("machine")], PROGRAM_ID,
+  );
 
-  console.log("\nStakeConfig PDA:    ", stakeConfigPda.toBase58());
+  console.log("\nMachine PDA:        ", machinePda.toBase58());
+  console.log("StakeConfig PDA:    ", stakeConfigPda.toBase58());
   console.log("NFT reward vault:   ", nftVaultPda.toBase58());
   console.log("LP reward vault:    ", lpVaultPda.toBase58());
 
@@ -97,7 +102,8 @@ async function main() {
     const initIx = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
-        { pubkey: wallet.publicKey,        isSigner: true,  isWritable: true  }, // authority
+        { pubkey: wallet.publicKey,        isSigner: true,  isWritable: true  }, // authority (must == machine.authority)
+        { pubkey: machinePda,              isSigner: false, isWritable: false }, // machine (HIGH-2 fix)
         { pubkey: stakeConfigPda,          isSigner: false, isWritable: true  }, // stake_config
         { pubkey: GUM_MINT,                isSigner: false, isWritable: false }, // gum_mint
         { pubkey: nftVaultPda,             isSigner: false, isWritable: true  }, // nft_reward_vault

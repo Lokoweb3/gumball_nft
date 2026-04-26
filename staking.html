@@ -745,6 +745,9 @@ async function stakeNft(mintStr) {
     const userAta = getAta(nftMint, walletPubkey);
     const vaultAta = getAta(nftMint, stakeConfigPda);
 
+    // Audit fix: stake now advances XNT accumulator + snapshots xnt_debt
+    const [xntDebt] = PublicKey.findProgramAddressSync([strToU8("xnt_debt_nft"), nftMint.toBytes()], PROGRAM_ID);
+
     const discBytes = await disc("stake");
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
@@ -756,7 +759,10 @@ async function stakeNft(mintStr) {
         { pubkey: nftMint,                 isSigner: false, isWritable: false }, // nft_mint
         { pubkey: userAta,                 isSigner: false, isWritable: true  }, // user_ata
         { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
-        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: false }, // nft_reward_vault (Phase 1)
+        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: false }, // nft_reward_vault
+        { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  }, // nft_xnt_state (audit fix)
+        { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  }, // nft_xnt_pool  (audit fix)
+        { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // xnt_debt      (audit fix)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -837,6 +843,9 @@ async function unstakeNft(mintStr) {
     const userAta = getAta(nftMint, walletPubkey);
     const stakerGumAta = getAta(gumMintPda, walletPubkey);
 
+    // Audit fix: unstake settles XNT pending + updates xnt_debt for re-stake safety
+    const [xntDebt] = PublicKey.findProgramAddressSync([strToU8("xnt_debt_nft"), nftMint.toBytes()], PROGRAM_ID);
+
     const discBytes = await disc("unstake");
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
@@ -847,9 +856,12 @@ async function unstakeNft(mintStr) {
         { pubkey: nftMint,                 isSigner: false, isWritable: false }, // nft_mint
         { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
         { pubkey: userAta,                 isSigner: false, isWritable: true  }, // user_ata
-        { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
-        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // nft_reward_vault (Phase 1)
+        { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // gum_mint
+        { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // nft_reward_vault
         { pubkey: stakerGumAta,            isSigner: false, isWritable: true  }, // staker_gum_ata
+        { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  }, // nft_xnt_state (audit fix)
+        { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  }, // nft_xnt_pool  (audit fix)
+        { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // xnt_debt      (audit fix)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -901,6 +913,7 @@ async function unstakeAll() {
         const [stakeAccountPda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), nftMint.toBytes()], PROGRAM_ID);
         const vaultAta = getAta(nftMint, stakeConfigPda);
         const userAta = getAta(nftMint, walletPubkey);
+        const [xntDebt] = PublicKey.findProgramAddressSync([strToU8("xnt_debt_nft"), nftMint.toBytes()], PROGRAM_ID);
         tx.add(new TransactionInstruction({
           programId: PROGRAM_ID,
           keys: [
@@ -910,9 +923,12 @@ async function unstakeAll() {
             { pubkey: nftMint,                 isSigner: false, isWritable: false },
             { pubkey: vaultAta,                isSigner: false, isWritable: true  },
             { pubkey: userAta,                 isSigner: false, isWritable: true  },
-            { pubkey: gumMintPda,              isSigner: false, isWritable: false }, // Phase 1: read-only
-            { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  }, // Phase 1
+            { pubkey: gumMintPda,              isSigner: false, isWritable: false },
+            { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: true  },
             { pubkey: stakerGumAta,            isSigner: false, isWritable: true  },
+            { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  }, // audit fix
+            { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  }, // audit fix
+            { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // audit fix
             { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
             { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -1947,6 +1963,9 @@ async function stakeLpTokens() {
     dv.setBigUint64(8, lpLamports, true);
     dv.setUint8(16, selectedLockTier);
 
+    // Audit fix: stake_lp now snapshots xnt_debt at stake-time
+    const [xntDebt] = PublicKey.findProgramAddressSync([strToU8("xnt_debt_lp"), positionMint.publicKey.toBytes()], PROGRAM_ID);
+
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
@@ -1958,7 +1977,10 @@ async function stakeLpTokens() {
         { pubkey: LP_MINT,                   isSigner: false, isWritable: false }, // lp_mint
         { pubkey: userLpAta,                 isSigner: false, isWritable: true  }, // user_lp_ata
         { pubkey: vaultLpAta,                isSigner: false, isWritable: true  }, // vault_lp_ata
-        { pubkey: LP_REWARD_VAULT,           isSigner: false, isWritable: false }, // lp_reward_vault (Phase 1)
+        { pubkey: LP_REWARD_VAULT,           isSigner: false, isWritable: false }, // lp_reward_vault
+        { pubkey: LP_XNT_STATE,              isSigner: false, isWritable: true  }, // lp_xnt_state (audit fix)
+        { pubkey: LP_XNT_POOL,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (audit fix)
+        { pubkey: xntDebt,                   isSigner: false, isWritable: true  }, // xnt_debt     (audit fix)
         { pubkey: metadataPda,               isSigner: false, isWritable: true  }, // metadata_account
         { pubkey: METAPLEX_PID,              isSigner: false, isWritable: false }, // metadata_program
         { pubkey: TOKEN_PID,                 isSigner: false, isWritable: false },
@@ -2053,6 +2075,9 @@ async function unstakeLpPosition(idx) {
     const vaultLpAta = getAta(LP_MINT, stakeConfigPda);
     const claimerGumAta = getAta(gumMintPda, walletPubkey);
     const data = buildIxData(realDisc, unstakeAmount);
+    // Audit fix: unstake_lp settles XNT pending + HIGH-3 partial-path xnt_debt sync
+    const [xntDebt] = PublicKey.findProgramAddressSync([strToU8("xnt_debt_lp"), p.positionMint.toBytes()], PROGRAM_ID);
+
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
@@ -2061,12 +2086,15 @@ async function unstakeLpPosition(idx) {
         { pubkey: p.stakePda,          isSigner: false, isWritable: true  }, // lp_stake_account
         { pubkey: p.positionMint,      isSigner: false, isWritable: true  }, // position_mint
         { pubkey: p.positionAta,       isSigner: false, isWritable: true  }, // position_ata
-        { pubkey: LP_MINT,             isSigner: false, isWritable: true  }, // lp_mint (Phase 1: writable for penalty burn)
+        { pubkey: LP_MINT,             isSigner: false, isWritable: true  }, // lp_mint (penalty burn)
         { pubkey: vaultLpAta,          isSigner: false, isWritable: true  }, // vault_lp_ata
         { pubkey: userLpAta,           isSigner: false, isWritable: true  }, // user_lp_ata
-        { pubkey: gumMintPda,          isSigner: false, isWritable: false }, // gum_mint (Phase 1: read-only)
-        { pubkey: LP_REWARD_VAULT,     isSigner: false, isWritable: true  }, // lp_reward_vault (Phase 1)
+        { pubkey: gumMintPda,          isSigner: false, isWritable: false }, // gum_mint
+        { pubkey: LP_REWARD_VAULT,     isSigner: false, isWritable: true  }, // lp_reward_vault
         { pubkey: claimerGumAta,       isSigner: false, isWritable: true  }, // claimer_gum_ata
+        { pubkey: LP_XNT_STATE,        isSigner: false, isWritable: true  }, // lp_xnt_state (audit fix)
+        { pubkey: LP_XNT_POOL,         isSigner: false, isWritable: true  }, // lp_xnt_pool  (audit fix)
+        { pubkey: xntDebt,             isSigner: false, isWritable: true  }, // xnt_debt     (audit fix)
         { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
