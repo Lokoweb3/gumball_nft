@@ -177,8 +177,11 @@ async function main() {
     check(`${which} last_seen re-baselined`, st.lastSeen === BigInt(after), `last_seen=${st.lastSeen}`);
   }
 
-  // ── TEST 2: stake — xnt_debt snapshot ──────────────────────────────────────
+  // ── TEST 2: stake — xnt_debt snapshot + Phase 3 early-mint weight bonus ────
   console.log("\nTEST 2 — stake creates xnt_debt with accumulator snapshot");
+  const gdInfo = await c.getAccountInfo(gumballData);
+  const gdSerial = gdInfo.data.readBigUInt64LE(72);
+  const gdRarity = gdInfo.data.readUInt8(82);
   const accAtStake = (await xntStateOf(c, nftState)).acc;
   await send(c, stakeIx());
   const sa = await c.getAccountInfo(stakeAccount);
@@ -187,6 +190,14 @@ async function main() {
   const debtVal = readU128LE(dbt.data, 8);
   const debtBump = dbt.data.readUInt8(24);
   check("StakeAccount created", !!sa, `weight=${weight}`);
+  // Mirror of the contract's stake_weight(): base × (10000 + bonus_bps) / 10000,
+  // bonus_bps = 5000 × (10000 − min(serial, 10000)) / 10000
+  const RW = [1n, 9n, 47n, 156n, 591n];
+  const capped = gdSerial > 10000n ? 10000n : gdSerial;
+  const bonusBps = 5000n * (10000n - capped) / 10000n;
+  const expectedWeight = RW[gdRarity % 5] * (10000n + bonusBps) / 10000n;
+  check("Phase 3 early-mint bonus applied", weight === expectedWeight,
+    `serial=${gdSerial} rarity=${gdRarity} -> weight ${weight} (expected ${expectedWeight})`);
   check("xnt_debt = weight × acc / SCALE", debtVal === (BigInt(weight) * accAtStake) / ACC_SCALE, `debt=${debtVal}`);
   check("xnt_debt bump set (not first-init sentinel)", debtBump !== 0, `bump=${debtBump}`);
 

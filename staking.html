@@ -2189,7 +2189,9 @@ function updateAnalytics() {
   const lpVaultDaily   = (window._lpVaultBalance  || 0) * 0.003 / 1e6;
 
   let myNftWeight = 0;
-  stakedGumballs.forEach(g => { myNftWeight += RARITY_WEIGHT[g.rarity] || 1; });
+  // Prefer the on-chain weight (includes the Phase 3 early-mint bonus);
+  // RARITY_WEIGHT is only the fallback for accounts that failed to parse.
+  stakedGumballs.forEach(g => { myNftWeight += g.weight || RARITY_WEIGHT[g.rarity] || 1; });
   let myLpWeight = 0;
   lpPositions.forEach(p => {
     // contract: weight = amount × multiplier_bps / 100 (raw LP units)

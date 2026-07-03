@@ -115,7 +115,7 @@ async function main() {
   crypto.createHash("sha256").update("account:GumballData").digest().copy(gd, 0, 0, 8);
   testWallet.publicKey.toBuffer().copy(gd, 8);       // owner
   machinePda.toBuffer().copy(gd, 40);                // machine
-  gd.writeBigUInt64LE(999999n, 72);                  // serial
+  gd.writeBigUInt64LE(100n, 72);                     // serial — early mint, exercises Phase 3 bonus
   gd.writeUInt8(0, 80);                              // flavor
   gd.writeUInt8(0, 81);                              // color
   gd.writeUInt8(2, 82);                              // rarity = Rare (weight 47)

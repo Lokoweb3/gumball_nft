@@ -710,3 +710,30 @@ are now at least recoverable to treasury via the sweep.
 stake/unstake on a fresh Program ID — all four staking instructions now require the XNT
 PDAs to exist.
 
+---
+
+### [2026-07-03] Phase 3 early-mint bonus + faucet hardening + announcer
+
+**Files:** `lib.rs`, `staking.html`, `server.cjs`, `faucet.html`, `scripts/announcer.cjs` (new),
+`ecosystem.config.cjs`, `scripts/make-localnet-fixtures.cjs`, `scripts/validate-staking-localnet.cjs`
+
+**What:**
+- **Phase 3 bonus:** `stake_weight(rarity, serial)` boosts NFT stake weight up to +50%
+  for serial #1, decaying linearly to +0% at #10,000. Applied at stake-time only and
+  cached in `StakeAccount.weight`, so unstake subtracts exactly what was added (no
+  drift for existing positions, which keep their un-boosted weight until re-staked).
+  Frontend analytics now read the on-chain weight instead of re-deriving from rarity.
+  Validation suite extended to 22 checks (fixture gumball is serial 100 → weight 70).
+- **Faucet:** cooldowns + per-IP log persist to `faucet-state.json` (FAUCET_STATE_FILE);
+  per-IP cap (FAUCET_IP_LIMIT, default 3/24h); optional Cloudflare Turnstile captcha
+  when TURNSTILE_SITE_KEY/SECRET_KEY are set (widget served conditionally via
+  /api/faucet-config). `trust proxy` enabled for real IPs behind Railway.
+- **Announcer:** `scripts/announcer.cjs` polls program signatures, decodes
+  GumballMinted/Upgraded/Sold events from Program-data logs, and posts to a public
+  Telegram channel (TELEGRAM_ANNOUNCE_CHAT). Runs as `gumball-announcer` in PM2;
+  exits cleanly when unconfigured (stop_exit_codes: [0]).
+
+**Why:** Rewards early minters with boosted staking yield (field was reserved since
+Phase 1); closes the faucet wallet-cycling loophole and restart-reset bug; turns the
+already-emitted on-chain events into free community visibility.
+

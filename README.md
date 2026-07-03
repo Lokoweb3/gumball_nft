@@ -145,6 +145,8 @@ Two staking streams earn GUM emissions plus a share of protocol XNT fees (`staki
 
 Stake gumballs to earn GUM from the NFT reward vault (0.3% of vault balance per day, distributed pro-rata by rarity weight: 1 / 9 / 47 / 156 / 591 for Common → Legendary).
 
+**Early-mint bonus (Phase 3):** stake weight is boosted by up to **+50%** for early serials — serial #1 gets the full boost, decaying linearly to +0% at serial #10,000 (`weight = rarity_weight × (10000 + 5000 × (10000 − serial) / 10000) / 10000`). The boost is locked in at stake-time and cached in the position.
+
 ### LP Staking
 
 Stake GUM LP tokens with a lock tier. Each position mints a tradeable position NFT — whoever holds it controls the position.
@@ -493,7 +495,7 @@ Live URL: `https://gumballnft-production.up.railway.app`
 
 - Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
 - Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
-- Faucet cooldowns are in-memory — reset on server restart
+- Faucet cooldowns persist to disk across restarts; on Railway, point `FAUCET_STATE_FILE` at a mounted volume to also survive redeploys
 
 ---
 
@@ -505,8 +507,9 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - [x] Phase 2 hardening — audit fixes (CRIT/HIGH), no-silent-forfeit settle, rent-leak close, admin sweep, 21-check localnet validation suite
 - [ ] Deploy the hardened program to X1 testnet (requires the upgrade-authority wallet)
 - [ ] Recover stranded pool surplus to treasury via `sweep-xnt-pool.cjs` once streams are empty
-- [ ] Phase 3 — mint-number stake bonus (weight boost for early serials; field already reserved in `StakeAccount`)
-- [ ] Persistent faucet cooldowns (survive server restarts)
+- [x] Phase 3 — early-mint stake bonus (+50% weight at serial #1, linear decay to #10,000)
+- [x] Persistent faucet cooldowns + per-IP limits + optional Turnstile captcha
+- [x] Public Telegram announcement bot (mints, upgrades, sales)
 - [ ] Mainnet readiness — delta re-audit, fresh-deploy checklist (`initialize_xnt_fees` before staking), treasury multisig
 
 ---

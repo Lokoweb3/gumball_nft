@@ -41,6 +41,23 @@ const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
 // when GUM is priced near the 1,000 XNT mainnet bootstrap point.
 const RARITY_WEIGHT: [u64; 5] = [1, 9, 47, 156, 591];
 
+// Phase 3: early-mint stake bonus — serial #1 earns +50% stake weight,
+// decaying linearly to +0% at serial 10,000. Applied only at stake-time;
+// the boosted weight is cached in StakeAccount so unstake subtracts the
+// exact amount that was added (no accounting drift for existing positions).
+// Floor division means low-weight Commons see little/no boost — the bonus
+// is meant to reward holding EARLY rare pulls, not to inflate Commons.
+const MINT_BONUS_MAX_BPS: u64 = 5_000;  // +50% at serial 1
+const MINT_BONUS_SUPPLY:  u64 = 10_000; // bonus reaches 0 at this serial
+
+fn stake_weight(rarity: u8, serial: u64) -> u64 {
+    let base = RARITY_WEIGHT[rarity as usize % 5];
+    let capped = serial.min(MINT_BONUS_SUPPLY);
+    let bonus_bps = MINT_BONUS_MAX_BPS * (MINT_BONUS_SUPPLY - capped) / MINT_BONUS_SUPPLY;
+    // max: 591 * 15_000 — nowhere near u64 overflow
+    base * (BPS_DENOMINATOR + bonus_bps) / BPS_DENOMINATOR
+}
+
 // Vault emission rate: 0.3% of vault balance per day, distributed pro-rata
 // by weight via accumulator pattern. Computed each claim:
 //   emission_per_sec = vault_balance × EMISSION_BPS_PER_DAY / 10_000 / 86_400
@@ -1135,7 +1152,8 @@ pub mod gumball_nft {
         require!(rarity <= RARITY_LEGENDARY, GumballError::InvalidAccount);
 
         let now = Clock::get()?.unix_timestamp;
-        let weight = RARITY_WEIGHT[rarity as usize % 5];
+        // Phase 3: rarity weight boosted by the early-mint bonus (see stake_weight)
+        let weight = stake_weight(rarity, ctx.accounts.gumball_data.serial);
 
         // Update GUM accumulator BEFORE adding new weight — new staker
         // shouldn't earn rewards from time before they joined.
@@ -3213,7 +3231,7 @@ pub struct StakeAccount {
     pub owner:        Pubkey,  // 32
     pub nft_mint:     Pubkey,  // 32
     pub rarity:       u8,      //  1
-    pub weight:       u64,     //  8 — cached: RARITY_WEIGHT[rarity] (mint# bonus added in Phase 3)
+    pub weight:       u64,     //  8 — cached: stake_weight(rarity, serial) — rarity weight × early-mint bonus
     pub staked_at:    i64,     //  8
     pub last_claimed: i64,     //  8 — informational only; not used in Pattern B math
     pub reward_debt:  u128,    // 16 — accumulator snapshot at last claim (scaled by ACC_SCALE)
