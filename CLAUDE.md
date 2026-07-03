@@ -645,3 +645,68 @@ XNT to try minting. A dedicated faucet wallet prevents draining the oracle's fun
 
 **Faucet wallet:** `BW74FxoPQua2WRMB2hXXK4EegPpXFjEKoPoD38XY9iDJ`
 
+---
+
+### [2026-04-26] Phase 2 XNT fee-sharing audit fixes (CRIT-1/2/3, HIGH-1/2/3, MED-3)
+
+**Files:** `lib.rs`, `scripts/init-staking.cjs`, `staking.html`
+
+**What:** (Retroactive entry for commit `edb3db7`.) Audit fixes for the XNT fee-sharing
+system: CRIT-1 reserve the pool PDAs' rent-exempt minimum on every payout (prevents
+tombstoning); CRIT-2 seed `last_seen_balance` with the pool's initial rent balance in
+`initialize_xnt_fees`; CRIT-3 snapshot per-position `XntDebt` at stake-time and detect
+first-touch accounts via `bump == 0` so historical accumulator value is never credited
+to new positions; HIGH-1 advance the XNT accumulator with the OLD total weight before
+any weight change in stake/unstake/stake_lp/unstake_lp (new required accounts on all
+four instructions); HIGH-2 gate `initialize_staking` on `machine.authority`; HIGH-3
+re-snapshot `xnt_debt` after partial LP unstake; MED-3 `checked_sub` on total weights.
+
+**Why:** Without these, a fresh staker could capture the entire historical accumulator,
+a flash-staker could dilute fees deposited before their stake, anyone could front-run
+`initialize_staking`, and a sole claimer could drain a pool PDA below rent exemption
+and brick every fee instruction.
+
+---
+
+### [2026-07-03] XNT fee-sharing hardening — settle helper, rent-leak close, admin sweep
+
+**Files:** `lib.rs`, `staking.html`, `scripts/test-stake.cjs`, `scripts/test-lp-stake.cjs`,
+`scripts/test-unstake-lp.cjs`, `scripts/sweep-xnt-pool.cjs` (new)
+
+**What:** Follow-up review of `edb3db7` found silent value-loss edges and duplication:
+
+- **Shared `settle_xnt_fees` helper** replaces the four near-identical settle blocks
+  (unstake, unstake_lp, claim_xnt_fees_nft, claim_xnt_fees_lp). Debt now advances by
+  ONLY the amount actually paid, so a remainder the pool can't cover stays pending
+  instead of being silently forfeited. `advance_xnt_for_stake` unifies the HIGH-1
+  pre-stake sequence (zero-weight absorb + accumulator update) for stake/stake_lp.
+- **Loud claim failures:** standalone claims now error with `InsufficientFunds` when
+  pending exists but the pool can't pay any of it (was a silent `Ok` after `edb3db7`),
+  restoring a user-visible signal. Partial payments succeed and preserve the remainder.
+- **XntDebt PDAs are closed** (rent refunded) on NFT unstake and full LP unstake —
+  previously every LP cycle permanently orphaned ~0.001 XNT of staker rent in a PDA
+  keyed by the burned position mint.
+- **`sweep_xnt_pool_nft` / `sweep_xnt_pool_lp`** admin instructions (authority =
+  `machine.authority`, only when the stream's total weight is 0): recover unattributed
+  pool lamports (zero-staker deposits, legacy forfeits, rounding dust) to treasury and
+  re-baseline `last_seen`. Previously those lamports were stranded in the pool forever.
+  Run via `node scripts/sweep-xnt-pool.cjs [nft|lp]`.
+- **Read-only pools in stake paths:** dropped `mut` on `nft_xnt_pool`/`lp_xnt_pool` in
+  `StakeNft`/`StakeLp` (only read for the accumulator); frontend passes them read-only.
+  `StakeLp.xnt_debt` is plain `init` (position_mint is always a fresh keypair).
+- **Test scripts fixed:** `test-stake.cjs`, `test-lp-stake.cjs`, `test-unstake-lp.cjs`
+  now pass the XNT accounts added in `edb3db7`. (`e2e-test.cjs` and
+  `unstake-all-nft.cjs` still target the legacy v1 staking layout and were already
+  incompatible before `edb3db7`.)
+
+**Why:** The `edb3db7` fixes closed the exploits but introduced accounting edges where
+users' XNT silently vanished (partial payouts, legacy first-touch, zero-staker periods)
+with no recovery path, plus a per-LP-cycle rent leak. Known accepted tradeoff: positions
+staked before `edb3db7` still forfeit their accrued share on first touch (their stake-time
+accumulator was never recorded, so any credit would be exploitable); the forfeited lamports
+are now at least recoverable to treasury via the sweep.
+
+**Deploy note:** `initialize_xnt_fees` MUST be run (scripts/init-xnt-fees.cjs) before any
+stake/unstake on a fresh Program ID — all four staking instructions now require the XNT
+PDAs to exist.
+

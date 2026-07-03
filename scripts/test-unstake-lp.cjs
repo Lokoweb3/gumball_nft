@@ -60,6 +60,16 @@ async function main() {
   const positionAta   = getAta(POSITION_MINT, wallet.publicKey);
   const userLpAta     = getAta(LP_MINT, wallet.publicKey);
   const claimerGumAta = getAta(GUM_MINT, wallet.publicKey);
+  // Phase 2 XNT fee-sharing accounts (required by unstake_lp since audit fixes)
+  const [lpXntStatePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_fee_state_lp")], PROGRAM_ID,
+  );
+  const [lpXntPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_xnt_pool")], PROGRAM_ID,
+  );
+  const [xntDebtPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_debt_lp"), POSITION_MINT.toBuffer()], PROGRAM_ID,
+  );
 
   // Read current LP stake amount + lock
   const lpInfo = await connection.getAccountInfo(lpStakePda);
@@ -103,6 +113,9 @@ async function main() {
       { pubkey: GUM_MINT,                isSigner: false, isWritable: false }, // gum_mint
       { pubkey: lpVaultPda,              isSigner: false, isWritable: true  }, // lp_reward_vault
       { pubkey: claimerGumAta,           isSigner: false, isWritable: true  }, // claimer_gum_ata
+      { pubkey: lpXntStatePda,           isSigner: false, isWritable: true  }, // lp_xnt_state
+      { pubkey: lpXntPoolPda,            isSigner: false, isWritable: true  }, // lp_xnt_pool
+      { pubkey: xntDebtPda,              isSigner: false, isWritable: true  }, // xnt_debt
       { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
       { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program

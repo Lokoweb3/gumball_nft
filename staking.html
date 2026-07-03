@@ -761,7 +761,7 @@ async function stakeNft(mintStr) {
         { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
         { pubkey: NFT_REWARD_VAULT,        isSigner: false, isWritable: false }, // nft_reward_vault
         { pubkey: NFT_XNT_STATE,           isSigner: false, isWritable: true  }, // nft_xnt_state (audit fix)
-        { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: true  }, // nft_xnt_pool  (audit fix)
+        { pubkey: NFT_XNT_POOL,            isSigner: false, isWritable: false }, // nft_xnt_pool (read-only in stake)
         { pubkey: xntDebt,                 isSigner: false, isWritable: true  }, // xnt_debt      (audit fix)
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false },
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false },
@@ -1979,7 +1979,7 @@ async function stakeLpTokens() {
         { pubkey: vaultLpAta,                isSigner: false, isWritable: true  }, // vault_lp_ata
         { pubkey: LP_REWARD_VAULT,           isSigner: false, isWritable: false }, // lp_reward_vault
         { pubkey: LP_XNT_STATE,              isSigner: false, isWritable: true  }, // lp_xnt_state (audit fix)
-        { pubkey: LP_XNT_POOL,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (audit fix)
+        { pubkey: LP_XNT_POOL,               isSigner: false, isWritable: false }, // lp_xnt_pool (read-only in stake_lp)
         { pubkey: xntDebt,                   isSigner: false, isWritable: true  }, // xnt_debt     (audit fix)
         { pubkey: metadataPda,               isSigner: false, isWritable: true  }, // metadata_account
         { pubkey: METAPLEX_PID,              isSigner: false, isWritable: false }, // metadata_program

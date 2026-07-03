@@ -81,6 +81,16 @@ async function main() {
   const [metadataPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("metadata"), METAPLEX.toBuffer(), positionMint.publicKey.toBuffer()], METAPLEX,
   );
+  // Phase 2 XNT fee-sharing accounts (required by stake_lp since audit fixes)
+  const [lpXntStatePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_fee_state_lp")], PROGRAM_ID,
+  );
+  const [lpXntPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("lp_xnt_pool")], PROGRAM_ID,
+  );
+  const [xntDebtPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_debt_lp"), positionMint.publicKey.toBuffer()], PROGRAM_ID,
+  );
 
   // ── Step 1: stake_lp(amount, lock_tier) ──────────────────────────────────
   console.log(`\nStaking ${STAKE_AMOUNT_LP} LP at tier ${LOCK_TIER}...`);
@@ -101,6 +111,9 @@ async function main() {
       { pubkey: userLpAta,               isSigner: false, isWritable: true  }, // user_lp_ata
       { pubkey: vaultLpAta,              isSigner: false, isWritable: true  }, // vault_lp_ata
       { pubkey: lpVaultPda,              isSigner: false, isWritable: false }, // lp_reward_vault
+      { pubkey: lpXntStatePda,           isSigner: false, isWritable: true  }, // lp_xnt_state
+      { pubkey: lpXntPoolPda,            isSigner: false, isWritable: false }, // lp_xnt_pool (read-only in stake_lp)
+      { pubkey: xntDebtPda,              isSigner: false, isWritable: true  }, // xnt_debt
       { pubkey: metadataPda,             isSigner: false, isWritable: true  }, // metadata_account
       { pubkey: METAPLEX,                isSigner: false, isWritable: false }, // metadata_program
       { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program

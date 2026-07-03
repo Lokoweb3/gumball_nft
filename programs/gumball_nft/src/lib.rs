@@ -1147,18 +1147,14 @@ pub mod gumball_nft {
 
         // HIGH-1 FIX: advance XNT fee accumulator using OLD total_weight so that
         // fees deposited before this stake are credited to existing stakers,
-        // not diluted across the new weight.
+        // not diluted across the new weight. Zero-weight absorb semantics are
+        // documented on the helper; absorbed surplus is recoverable to treasury
+        // via sweep_xnt_pool_nft.
         let xnt_pool_balance = ctx.accounts.nft_xnt_pool.to_account_info().lamports();
-        let old_total_weight = ctx.accounts.stake_config.total_nft_weight;
-        // First-staker safety: if no one was staked, "absorb" any pre-existing fees
-        // into last_seen so this staker doesn't capture them on first claim.
-        if old_total_weight == 0 {
-            ctx.accounts.nft_xnt_state.last_seen_balance = xnt_pool_balance;
-        }
-        update_xnt_accumulator(
+        advance_xnt_for_stake(
             &mut ctx.accounts.nft_xnt_state,
             xnt_pool_balance,
-            old_total_weight,
+            ctx.accounts.stake_config.total_nft_weight,
         )?;
 
         // Transfer NFT to vault
@@ -1260,8 +1256,8 @@ pub mod gumball_nft {
     }
 
     /// Unstake — claim final rewards and return NFT to owner. Closes StakeAccount.
-    /// Also settles any pending XNT fee share so it's not orphaned (StakeAccount
-    /// closes; XntDebt persists for potential re-stake).
+    /// Also settles any pending XNT fee share and closes the XntDebt PDA (rent
+    /// refunded to the staker; stake() re-creates it on a future re-stake).
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         update_nft_accumulator(
@@ -1311,30 +1307,23 @@ pub mod gumball_nft {
             }
         }
 
-        // Settle pending XNT fee share to staker. xnt_debt may have just been
-        // init_if_needed'd (legacy stake without prior xnt_debt) — handle both cases.
-        let xnt_acc      = ctx.accounts.nft_xnt_state.acc_xnt_per_weight;
-        let xnt_entitled = weight.checked_mul(xnt_acc).ok_or(GumballError::MathOverflow)? / ACC_SCALE;
-        let xnt_first_init = ctx.accounts.xnt_debt.bump == 0;
-        let xnt_pending  = if xnt_first_init { 0u128 }
-                           else { xnt_entitled.saturating_sub(ctx.accounts.xnt_debt.debt) };
-        if xnt_pending > 0 {
-            let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
-            let withdrawable = xnt_pool_balance.saturating_sub(rent_min);
-            let xnt_to_pay = (xnt_pending.min(withdrawable as u128)) as u64;
-            if xnt_to_pay > 0 {
-                **ctx.accounts.nft_xnt_pool.to_account_info().try_borrow_mut_lamports()? -= xnt_to_pay;
-                **ctx.accounts.staker.to_account_info().try_borrow_mut_lamports()? += xnt_to_pay;
-                ctx.accounts.nft_xnt_state.last_seen_balance = ctx.accounts.nft_xnt_state
-                    .last_seen_balance.saturating_sub(xnt_to_pay);
-                emit!(XntFeeClaimedEvent {
-                    claimer: staker_key, stake_type: 0, amount: xnt_to_pay,
-                });
-            }
+        // Settle pending XNT fee share to the staker (pays what the pool can
+        // cover; first-touch guard inside the helper), then close the XntDebt
+        // PDA — stake() re-creates and re-snapshots it on any re-stake, so
+        // keeping it open would only strand its rent with the position gone.
+        {
+            let pool_info   = ctx.accounts.nft_xnt_pool.to_account_info();
+            let staker_info = ctx.accounts.staker.to_account_info();
+            settle_xnt_fees(
+                &mut ctx.accounts.nft_xnt_state,
+                &pool_info,
+                &staker_info,
+                &mut ctx.accounts.xnt_debt,
+                weight,
+                ctx.bumps.xnt_debt,
+            )?;
+            close_xnt_debt(&ctx.accounts.xnt_debt.to_account_info(), &staker_info)?;
         }
-        // Update xnt_debt so a future re-stake of the same NFT starts fresh.
-        ctx.accounts.xnt_debt.debt = xnt_entitled;
-        ctx.accounts.xnt_debt.bump = ctx.bumps.xnt_debt;
 
         // Return NFT from vault to staker
         anchor_spl::token::transfer(
@@ -1387,16 +1376,14 @@ pub mod gumball_nft {
         )?;
 
         // HIGH-1 FIX: advance XNT accumulator using OLD total_lp_weight so existing
-        // stakers get full credit for fees deposited up to this stake.
+        // stakers get full credit for fees deposited up to this stake. Zero-weight
+        // absorb semantics documented on the helper; surplus recoverable via
+        // sweep_xnt_pool_lp.
         let xnt_pool_balance = ctx.accounts.lp_xnt_pool.to_account_info().lamports();
-        let old_total_lp_weight = ctx.accounts.stake_config.total_lp_weight;
-        if old_total_lp_weight == 0 {
-            ctx.accounts.lp_xnt_state.last_seen_balance = xnt_pool_balance;
-        }
-        update_xnt_accumulator(
+        advance_xnt_for_stake(
             &mut ctx.accounts.lp_xnt_state,
             xnt_pool_balance,
-            old_total_lp_weight,
+            ctx.accounts.stake_config.total_lp_weight,
         )?;
 
         // Transfer LP tokens to vault
@@ -1690,30 +1677,22 @@ pub mod gumball_nft {
             )?;
         }
 
-        // HIGH-3 FIX: settle pending XNT BEFORE shrinking weight, then re-snapshot
-        // xnt_debt against the new weight so partial-unstake doesn't leave debt
-        // accounting drifted relative to the smaller position.
-        let xnt_acc      = ctx.accounts.lp_xnt_state.acc_xnt_per_weight;
-        let xnt_entitled = position_weight
-            .checked_mul(xnt_acc).ok_or(GumballError::MathOverflow)?
-            / ACC_SCALE;
-        let xnt_first_init = ctx.accounts.xnt_debt.bump == 0;
-        let xnt_pending  = if xnt_first_init { 0u128 }
-                           else { xnt_entitled.saturating_sub(ctx.accounts.xnt_debt.debt) };
-        if xnt_pending > 0 {
-            let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
-            let withdrawable = xnt_pool_balance.saturating_sub(rent_min);
-            let xnt_to_pay = (xnt_pending.min(withdrawable as u128)) as u64;
-            if xnt_to_pay > 0 {
-                **ctx.accounts.lp_xnt_pool.to_account_info().try_borrow_mut_lamports()? -= xnt_to_pay;
-                **ctx.accounts.claimer.to_account_info().try_borrow_mut_lamports()? += xnt_to_pay;
-                ctx.accounts.lp_xnt_state.last_seen_balance = ctx.accounts.lp_xnt_state
-                    .last_seen_balance.saturating_sub(xnt_to_pay);
-                emit!(XntFeeClaimedEvent {
-                    claimer: ctx.accounts.claimer.key(), stake_type: 1, amount: xnt_to_pay,
-                });
-            }
-        }
+        // HIGH-3 FIX: settle pending XNT BEFORE shrinking weight. The helper pays
+        // what the pool can cover and advances debt only by the amount paid;
+        // `xnt_remaining` carries any unpaid remainder into the re-snapshot below.
+        let xnt_remaining = {
+            let pool_info    = ctx.accounts.lp_xnt_pool.to_account_info();
+            let claimer_info = ctx.accounts.claimer.to_account_info();
+            let (_, remaining) = settle_xnt_fees(
+                &mut ctx.accounts.lp_xnt_state,
+                &pool_info,
+                &claimer_info,
+                &mut ctx.accounts.xnt_debt,
+                position_weight,
+                ctx.bumps.xnt_debt,
+            )?;
+            remaining
+        };
 
         // Update total_lp_weight — remove the proportional weight of the unstaked LP.
         // MED-3: use checked_sub to fail loudly on accounting drift.
@@ -1731,9 +1710,15 @@ pub mod gumball_nft {
                 authority: ctx.accounts.claimer.to_account_info(),
             }), 1)?;
 
-            // Update xnt_debt one last time so it reflects "fully settled".
-            ctx.accounts.xnt_debt.debt = xnt_entitled;
-            ctx.accounts.xnt_debt.bump = ctx.bumps.xnt_debt;
+            // Close the XntDebt PDA and refund its rent — the position mint is
+            // burned above and StakeLp always creates a fresh mint, so this PDA
+            // could never be reached again and would strand its rent forever.
+            // (Any XNT the pool couldn't cover just now stays in the pool as
+            // unattributed surplus, recoverable via sweep_xnt_pool_lp.)
+            close_xnt_debt(
+                &ctx.accounts.xnt_debt.to_account_info(),
+                &ctx.accounts.claimer.to_account_info(),
+            )?;
 
             let lp_info = ctx.accounts.lp_stake_account.to_account_info();
             let claimer_info = ctx.accounts.claimer.to_account_info();
@@ -1753,13 +1738,15 @@ pub mod gumball_nft {
                 .checked_mul(acc).ok_or(GumballError::MathOverflow)?
                 / ACC_SCALE;
             ctx.accounts.lp_stake_account.last_claimed = now;
-            // HIGH-3 FIX: re-snapshot xnt_debt at NEW weight × current xnt_acc.
-            // Without this, after partial unstake, the saved debt is for OLD weight,
-            // causing entitled-debt to drift over time and break payouts.
-            ctx.accounts.xnt_debt.debt = new_weight
+            // HIGH-3 FIX: re-snapshot xnt_debt at NEW weight × current xnt_acc,
+            // minus any remainder the pool couldn't pay just now — so the
+            // position's unpaid pending XNT survives the re-snapshot instead
+            // of being silently forfeited. (bump was set by settle_xnt_fees.)
+            let xnt_acc  = ctx.accounts.lp_xnt_state.acc_xnt_per_weight;
+            let xnt_snap = new_weight
                 .checked_mul(xnt_acc).ok_or(GumballError::MathOverflow)?
                 / ACC_SCALE;
-            ctx.accounts.xnt_debt.bump = ctx.bumps.xnt_debt;
+            ctx.accounts.xnt_debt.debt = xnt_snap.saturating_sub(xnt_remaining);
         }
 
         emit!(LpUnstakedEvent {
@@ -1860,48 +1847,23 @@ pub mod gumball_nft {
         update_xnt_accumulator(&mut ctx.accounts.nft_xnt_state, pool_balance, total_weight)?;
 
         let weight = ctx.accounts.stake_account.weight as u128;
-        let acc = ctx.accounts.nft_xnt_state.acc_xnt_per_weight;
-        let entitled = weight.checked_mul(acc).ok_or(GumballError::MathOverflow)? / ACC_SCALE;
-
-        // CRIT-3 FIX: detect first-claim via bump==0 (Anchor zeroes data on init_if_needed,
-        // so a freshly-created XntDebt has bump=0). Snapshot current acc as debt without
-        // paying out — historical accumulator value is NOT credited to this position.
-        let is_first_init = ctx.accounts.xnt_debt.bump == 0;
-        if is_first_init {
-            ctx.accounts.xnt_debt.debt = entitled;
-            ctx.accounts.xnt_debt.bump = ctx.bumps.xnt_debt;
-            return Ok(());
-        }
-
-        let pending = entitled.saturating_sub(ctx.accounts.xnt_debt.debt);
-        if pending == 0 {
-            return Ok(());
-        }
-
-        // CRIT-1 FIX: reserve the pool's rent-exempt minimum so the PDA can never
-        // be tombstoned by garbage collection. Without this, a sole staker could
-        // drain the pool to zero and brick all fee-collecting instructions.
-        let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
-        let withdrawable = pool_balance.saturating_sub(rent_min);
-        let to_pay = (pending.min(withdrawable as u128)) as u64;
-        if to_pay == 0 {
-            return Ok(());
-        }
-
-        // Transfer lamports from program-owned pool PDA to staker
-        **ctx.accounts.nft_xnt_pool.to_account_info().try_borrow_mut_lamports()? -= to_pay;
-        **ctx.accounts.staker.to_account_info().try_borrow_mut_lamports()? += to_pay;
-
-        ctx.accounts.xnt_debt.debt = entitled;
-        // Maintain last_seen invariant — pool just shrank by to_pay
-        ctx.accounts.nft_xnt_state.last_seen_balance = ctx.accounts.nft_xnt_state
-            .last_seen_balance.saturating_sub(to_pay);
-
-        emit!(XntFeeClaimedEvent {
-            claimer: ctx.accounts.staker.key(),
-            stake_type: 0,
-            amount: to_pay,
-        });
+        let (paid, remaining) = {
+            let pool_info   = ctx.accounts.nft_xnt_pool.to_account_info();
+            let staker_info = ctx.accounts.staker.to_account_info();
+            settle_xnt_fees(
+                &mut ctx.accounts.nft_xnt_state,
+                &pool_info,
+                &staker_info,
+                &mut ctx.accounts.xnt_debt,
+                weight,
+                ctx.bumps.xnt_debt,
+            )?
+        };
+        // Fail loudly when pending XNT exists but the pool couldn't pay ANY of
+        // it — a silent success is indistinguishable from "nothing pending" for
+        // the user. A partial payment succeeds; the unpaid remainder stays
+        // pending (debt advances only by what was paid) for a later claim.
+        require!(paid > 0 || remaining == 0, GumballError::InsufficientFunds);
         Ok(())
     }
 
@@ -1915,44 +1877,48 @@ pub mod gumball_nft {
         update_xnt_accumulator(&mut ctx.accounts.lp_xnt_state, pool_balance, total_weight)?;
 
         let weight = ctx.accounts.lp_stake_account.weight;
-        let acc = ctx.accounts.lp_xnt_state.acc_xnt_per_weight;
-        let entitled = weight.checked_mul(acc).ok_or(GumballError::MathOverflow)? / ACC_SCALE;
-
-        // CRIT-3 FIX: first-claim guard — snapshot current acc without paying out
-        // historical accumulator value to brand-new XntDebt accounts.
-        let is_first_init = ctx.accounts.xnt_debt.bump == 0;
-        if is_first_init {
-            ctx.accounts.xnt_debt.debt = entitled;
-            ctx.accounts.xnt_debt.bump = ctx.bumps.xnt_debt;
-            return Ok(());
-        }
-
-        let pending = entitled.saturating_sub(ctx.accounts.xnt_debt.debt);
-        if pending == 0 {
-            return Ok(());
-        }
-
-        // CRIT-1 FIX: reserve rent-exempt minimum so the pool PDA can't be tombstoned.
-        let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
-        let withdrawable = pool_balance.saturating_sub(rent_min);
-        let to_pay = (pending.min(withdrawable as u128)) as u64;
-        if to_pay == 0 {
-            return Ok(());
-        }
-
-        **ctx.accounts.lp_xnt_pool.to_account_info().try_borrow_mut_lamports()? -= to_pay;
-        **ctx.accounts.claimer.to_account_info().try_borrow_mut_lamports()? += to_pay;
-
-        ctx.accounts.xnt_debt.debt = entitled;
-        ctx.accounts.lp_xnt_state.last_seen_balance = ctx.accounts.lp_xnt_state
-            .last_seen_balance.saturating_sub(to_pay);
-
-        emit!(XntFeeClaimedEvent {
-            claimer: ctx.accounts.claimer.key(),
-            stake_type: 1,
-            amount: to_pay,
-        });
+        let (paid, remaining) = {
+            let pool_info    = ctx.accounts.lp_xnt_pool.to_account_info();
+            let claimer_info = ctx.accounts.claimer.to_account_info();
+            settle_xnt_fees(
+                &mut ctx.accounts.lp_xnt_state,
+                &pool_info,
+                &claimer_info,
+                &mut ctx.accounts.xnt_debt,
+                weight,
+                ctx.bumps.xnt_debt,
+            )?
+        };
+        // Same loud-failure semantics as claim_xnt_fees_nft.
+        require!(paid > 0 || remaining == 0, GumballError::InsufficientFunds);
         Ok(())
+    }
+
+    /// Admin: recover unattributed lamports from the NFT XNT fee pool while
+    /// NO ONE is staked (total_nft_weight == 0). Unattributed lamports come
+    /// from sources with no owner: fees absorbed while the pool had zero
+    /// stakers, shares forfeited by pre-XntDebt legacy positions, unpayable
+    /// remainders of closed positions, and accumulator rounding dust. With
+    /// zero weight there are no live entitlements, so the sweep cannot touch
+    /// any staker's share. Leaves the rent-exempt minimum in place and
+    /// re-baselines last_seen so accounting starts clean.
+    pub fn sweep_xnt_pool_nft(ctx: Context<SweepXntPoolNft>) -> Result<()> {
+        require!(ctx.accounts.stake_config.total_nft_weight == 0, GumballError::PoolHasStakers);
+        sweep_xnt_pool(
+            &mut ctx.accounts.nft_xnt_state,
+            &ctx.accounts.nft_xnt_pool.to_account_info(),
+            &ctx.accounts.treasury,
+        )
+    }
+
+    /// Admin: same as sweep_xnt_pool_nft, for the LP pool (total_lp_weight == 0).
+    pub fn sweep_xnt_pool_lp(ctx: Context<SweepXntPoolLp>) -> Result<()> {
+        require!(ctx.accounts.stake_config.total_lp_weight == 0, GumballError::PoolHasStakers);
+        sweep_xnt_pool(
+            &mut ctx.accounts.lp_xnt_state,
+            &ctx.accounts.lp_xnt_pool.to_account_info(),
+            &ctx.accounts.treasury,
+        )
     }
 
 }
@@ -1991,9 +1957,11 @@ fn update_nft_accumulator(config: &mut StakeConfig, vault_balance: u64, now: i64
 /// pool balance changes via claim/deposit.
 fn update_xnt_accumulator(state: &mut XntFeeState, pool_balance: u64, total_weight: u128) -> Result<()> {
     if pool_balance <= state.last_seen_balance || total_weight == 0 {
-        // Either no new lamports OR no stakers to distribute to. If there are
-        // no stakers, we *don't* update last_seen — the lamports are reserved
-        // for the first stakers. They'll be credited when total_weight > 0.
+        // Either no new lamports OR no stakers to distribute to. With no
+        // stakers, last_seen is left unchanged here; the stake path
+        // (advance_xnt_for_stake) absorbs any zero-weight backlog into
+        // last_seen so a flash-staker can't capture it, and the admin can
+        // recover that surplus via sweep_xnt_pool_* while weight is zero.
         return Ok(());
     }
     let delta = (pool_balance - state.last_seen_balance) as u128;
@@ -2003,6 +1971,102 @@ fn update_xnt_accumulator(state: &mut XntFeeState, pool_balance: u64, total_weig
     state.acc_xnt_per_weight = state.acc_xnt_per_weight
         .checked_add(delta_acc).ok_or(GumballError::MathOverflow)?;
     state.last_seen_balance = pool_balance;
+    Ok(())
+}
+
+/// Advance the XNT accumulator ahead of a total-weight INCREASE (HIGH-1).
+/// When nobody is staked, lamports that arrived while total_weight == 0 are
+/// absorbed into `last_seen_balance` instead of being credited — otherwise the
+/// incoming staker could capture the entire backlog with a flash stake.
+/// Absorbed lamports remain in the pool as unattributed surplus; the admin can
+/// recover them to treasury via sweep_xnt_pool_* while the stream has no stakers.
+fn advance_xnt_for_stake(state: &mut XntFeeState, pool_balance: u64, old_total_weight: u128) -> Result<()> {
+    if old_total_weight == 0 {
+        state.last_seen_balance = pool_balance;
+    }
+    update_xnt_accumulator(state, pool_balance, old_total_weight)
+}
+
+/// Settle a position's pending XNT fee share (shared by unstake, unstake_lp,
+/// claim_xnt_fees_nft, claim_xnt_fees_lp):
+///   - CRIT-3: a first-touch XntDebt (bump == 0, i.e. freshly init_if_needed'd
+///     for a position staked before XntDebt existed) is snapshotted at the
+///     current accumulator WITHOUT payout — historical accumulator value is
+///     not credited to it.
+///   - CRIT-1: the pool's rent-exempt minimum is always reserved so the PDA
+///     can never be tombstoned.
+///   - Debt advances by ONLY the amount actually paid, so a remainder the pool
+///     can't cover right now stays pending instead of being forfeited.
+/// Returns (paid, remaining_pending).
+fn settle_xnt_fees<'info>(
+    state: &mut XntFeeState,
+    pool_info: &AccountInfo<'info>,
+    recipient_info: &AccountInfo<'info>,
+    xnt_debt: &mut XntDebt,
+    weight: u128,
+    canonical_bump: u8,
+) -> Result<(u64, u128)> {
+    let entitled = weight
+        .checked_mul(state.acc_xnt_per_weight).ok_or(GumballError::MathOverflow)?
+        / ACC_SCALE;
+    if xnt_debt.bump == 0 {
+        xnt_debt.debt = entitled;
+        xnt_debt.bump = canonical_bump;
+        return Ok((0, 0));
+    }
+    let pending = entitled.saturating_sub(xnt_debt.debt);
+    if pending == 0 {
+        return Ok((0, 0));
+    }
+    let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
+    let withdrawable = pool_info.lamports().saturating_sub(rent_min);
+    let to_pay = (pending.min(withdrawable as u128)) as u64;
+    if to_pay > 0 {
+        **pool_info.try_borrow_mut_lamports()? -= to_pay;
+        **recipient_info.try_borrow_mut_lamports()? += to_pay;
+        // Maintain the last_seen invariant — the pool just shrank by to_pay.
+        state.last_seen_balance = state.last_seen_balance.saturating_sub(to_pay);
+        emit!(XntFeeClaimedEvent {
+            claimer: recipient_info.key(),
+            stake_type: state.stake_type,
+            amount: to_pay,
+        });
+    }
+    xnt_debt.debt = xnt_debt.debt
+        .checked_add(to_pay as u128).ok_or(GumballError::MathOverflow)?;
+    Ok((to_pay, pending - to_pay as u128))
+}
+
+/// Close a per-position XntDebt PDA and refund its rent to `recipient`.
+/// Safe wherever the position itself is being closed: stake paths re-create
+/// the PDA via init_if_needed and re-snapshot the debt, so no state is lost.
+/// Same manual-close pattern as the LpStakeAccount close in unstake_lp.
+fn close_xnt_debt<'info>(
+    debt_info: &AccountInfo<'info>,
+    recipient_info: &AccountInfo<'info>,
+) -> Result<()> {
+    **recipient_info.try_borrow_mut_lamports()? += debt_info.lamports();
+    **debt_info.try_borrow_mut_lamports()? = 0;
+    debt_info.try_borrow_mut_data()?.fill(0);
+    Ok(())
+}
+
+/// Shared body for sweep_xnt_pool_nft / sweep_xnt_pool_lp. Caller has already
+/// verified the stream's total weight is zero (no live entitlements exist).
+fn sweep_xnt_pool<'info>(
+    state: &mut XntFeeState,
+    pool_info: &AccountInfo<'info>,
+    treasury_info: &AccountInfo<'info>,
+) -> Result<()> {
+    let rent_min = Rent::get()?.minimum_balance(8 + XntPool::LEN);
+    let surplus = pool_info.lamports().saturating_sub(rent_min);
+    require!(surplus > 0, GumballError::InsufficientFunds);
+    **pool_info.try_borrow_mut_lamports()? -= surplus;
+    **treasury_info.try_borrow_mut_lamports()? += surplus;
+    // Re-baseline: with zero stakers and the surplus gone, the pool holds only
+    // its rent again. This also clears historical drift (e.g. state accounts
+    // initialized pre-CRIT-2 that counted pool rent as fee revenue).
+    state.last_seen_balance = pool_info.lamports();
     Ok(())
 }
 
@@ -2758,11 +2822,14 @@ pub struct StakeNft<'info> {
     /// HIGH-1 FIX: XNT fee state — accumulator must advance before total_nft_weight changes.
     #[account(mut, seeds = [b"xnt_fee_state_nft"], bump = nft_xnt_state.bump)]
     pub nft_xnt_state: Box<Account<'info, XntFeeState>>,
-    /// HIGH-1 FIX: XNT fee pool — read lamports for accumulator update.
-    #[account(mut, seeds = [b"nft_xnt_pool"], bump = nft_xnt_pool.bump)]
+    /// HIGH-1 FIX: XNT fee pool — lamports are only READ here (accumulator
+    /// update); no mut, so stakes don't write-lock the shared pool.
+    #[account(seeds = [b"nft_xnt_pool"], bump = nft_xnt_pool.bump)]
     pub nft_xnt_pool: Box<Account<'info, XntPool>>,
     /// CRIT-3 FIX: per-position XNT debt initialized at stake-time so historical
     /// accumulator value is NOT credited to this position on first claim.
+    /// init_if_needed: the PDA may survive from an unstake under the previous
+    /// deploy (which didn't close it) — we overwrite it either way.
     #[account(init_if_needed, payer = staker, space = 8 + XntDebt::LEN,
               seeds = [b"xnt_debt_nft", nft_mint.key().as_ref()], bump)]
     pub xnt_debt: Box<Account<'info, XntDebt>>,
@@ -2851,7 +2918,8 @@ pub struct Unstake<'info> {
     /// XNT pool — settles any pending XNT to the staker on unstake, then we update last_seen.
     #[account(mut, seeds = [b"nft_xnt_pool"], bump = nft_xnt_pool.bump)]
     pub nft_xnt_pool: Box<Account<'info, XntPool>>,
-    /// XntDebt is settled and updated on unstake to prevent orphaned XNT debt.
+    /// XntDebt is settled then CLOSED on unstake (rent back to staker);
+    /// init_if_needed covers legacy positions that never had one.
     #[account(init_if_needed, payer = staker, space = 8 + XntDebt::LEN,
               seeds = [b"xnt_debt_nft", nft_mint.key().as_ref()], bump)]
     pub xnt_debt: Box<Account<'info, XntDebt>>,
@@ -2892,11 +2960,14 @@ pub struct StakeLp<'info> {
     /// HIGH-1 FIX: XNT fee state for LP — accumulator must advance before total_lp_weight grows.
     #[account(mut, seeds = [b"xnt_fee_state_lp"], bump = lp_xnt_state.bump)]
     pub lp_xnt_state: Box<Account<'info, XntFeeState>>,
-    /// HIGH-1 FIX: LP XNT pool for accumulator update.
-    #[account(mut, seeds = [b"lp_xnt_pool"], bump = lp_xnt_pool.bump)]
+    /// HIGH-1 FIX: LP XNT pool — lamports are only READ here (accumulator
+    /// update); no mut, so stakes don't write-lock the shared pool.
+    #[account(seeds = [b"lp_xnt_pool"], bump = lp_xnt_pool.bump)]
     pub lp_xnt_pool: Box<Account<'info, XntPool>>,
-    /// CRIT-3 FIX: per-position XNT debt initialized at stake-time.
-    #[account(init_if_needed, payer = staker, space = 8 + XntDebt::LEN,
+    /// CRIT-3 FIX: per-position XNT debt initialized at stake-time. Plain
+    /// `init` — position_mint is a fresh keypair created in this same
+    /// instruction, so this PDA can never pre-exist.
+    #[account(init, payer = staker, space = 8 + XntDebt::LEN,
               seeds = [b"xnt_debt_lp", position_mint.key().as_ref()], bump)]
     pub xnt_debt: Box<Account<'info, XntDebt>>,
     /// CHECK: Metaplex metadata PDA — created by Metaplex program via CPI
@@ -3081,6 +3152,40 @@ pub struct ClaimXntFeesLp<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct SweepXntPoolNft<'info> {
+    #[account(mut, address = machine.authority @ GumballError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    /// CHECK: validated against machine.treasury
+    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
+    pub treasury: AccountInfo<'info>,
+    #[account(seeds = [b"stake_config_v2"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(mut, seeds = [b"xnt_fee_state_nft"], bump = nft_xnt_state.bump)]
+    pub nft_xnt_state: Account<'info, XntFeeState>,
+    #[account(mut, seeds = [b"nft_xnt_pool"], bump = nft_xnt_pool.bump)]
+    pub nft_xnt_pool: Account<'info, XntPool>,
+}
+
+#[derive(Accounts)]
+pub struct SweepXntPoolLp<'info> {
+    #[account(mut, address = machine.authority @ GumballError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    /// CHECK: validated against machine.treasury
+    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
+    pub treasury: AccountInfo<'info>,
+    #[account(seeds = [b"stake_config_v2"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(mut, seeds = [b"xnt_fee_state_lp"], bump = lp_xnt_state.bump)]
+    pub lp_xnt_state: Account<'info, XntFeeState>,
+    #[account(mut, seeds = [b"lp_xnt_pool"], bump = lp_xnt_pool.bump)]
+    pub lp_xnt_pool: Account<'info, XntPool>,
+}
+
 // ─── Staking State ───────────────────────────────────────────────────────────
 
 #[account]
@@ -3214,4 +3319,5 @@ pub enum GumballError {
     #[msg("Offer has expired")]                      OfferExpired,
     #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
     #[msg("Invalid lock tier — must be 0 (Flexible), 1 (Bronze), 2 (Silver), 3 (Gold), or 4 (Diamond)")] InvalidLockPeriod,
+    #[msg("Cannot sweep while stakers are active")]  PoolHasStakers,
 }

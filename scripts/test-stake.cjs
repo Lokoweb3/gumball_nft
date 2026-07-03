@@ -111,6 +111,16 @@ async function main() {
   const [vaultAta] = PublicKey.findProgramAddressSync(
     [stakeConfigPda.toBuffer(), TOKEN_PID.toBuffer(), nftMint.toBuffer()], ASSOC_PID,
   );
+  // Phase 2 XNT fee-sharing accounts (required by stake since audit fixes)
+  const [nftXntStatePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_fee_state_nft")], PROGRAM_ID,
+  );
+  const [nftXntPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("nft_xnt_pool")], PROGRAM_ID,
+  );
+  const [xntDebtPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("xnt_debt_nft"), nftMint.toBuffer()], PROGRAM_ID,
+  );
 
   // ── Step 1: stake ────────────────────────────────────────────────────────
   const stakeExisting = await connection.getAccountInfo(stakeAccountPda);
@@ -129,6 +139,9 @@ async function main() {
         { pubkey: userAta,                 isSigner: false, isWritable: true  }, // user_ata
         { pubkey: vaultAta,                isSigner: false, isWritable: true  }, // vault_ata
         { pubkey: nftVaultPda,             isSigner: false, isWritable: false }, // nft_reward_vault
+        { pubkey: nftXntStatePda,          isSigner: false, isWritable: true  }, // nft_xnt_state
+        { pubkey: nftXntPoolPda,           isSigner: false, isWritable: false }, // nft_xnt_pool (read-only in stake)
+        { pubkey: xntDebtPda,              isSigner: false, isWritable: true  }, // xnt_debt
         { pubkey: TOKEN_PID,               isSigner: false, isWritable: false }, // token_program
         { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
