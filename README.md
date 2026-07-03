@@ -4,6 +4,19 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 
 **Security Grade: A-** — 5 rounds of core audit plus a dedicated staking/XNT fee-sharing audit and follow-up review round; all findings resolved and validated end-to-end against cloned live state.
 
+**Live app:** https://gumballnft-production.up.railway.app
+
+---
+
+## Quick Start
+
+1. **Get testnet XNT** — visit the [Faucet](https://gumballnft-production.up.railway.app/faucet.html) for 0.1 XNT (funds ~10 mints), once per wallet per 24h
+2. **Mint** — connect X1 Wallet / Backpack on the [main page](https://gumballnft-production.up.railway.app) and mint up to 10 gumballs with one approval
+3. **Verify fairness** — open `verify.html?serial=<your serial>` to auto-verify the commit-reveal proof stored on-chain in your NFT
+4. **Upgrade** — burn duplicates to climb the rarity ladder (guaranteed upgrade instead of random odds)
+5. **Stake** — stake gumballs or GUM/XNT LP on the [Staking page](https://gumballnft-production.up.railway.app/staking.html) to earn GUM emissions plus a share of protocol XNT fees
+6. **Trade** — list, bid, and buy on the built-in marketplace (5% royalty feeds the staking pools and treasury)
+
 ---
 
 ## Deployed Contracts
@@ -19,6 +32,21 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 | **Max Supply** | 10,000 |
 | **Max Per Tx** | 10 mints per transaction |
 | **Mint Timeout** | 300 seconds (5 min) before refund eligible |
+
+### Staking & Fee-Sharing Accounts
+
+| | Address |
+|---|---|
+| **GUM mint** | `2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1` |
+| **GUM/XNT LP mint** (XDEX) | `D2bJsDoWVuvykQbMgwFeH7cvuvXZjL2scsjPMVGwNXiV` |
+| **Stake config** (`stake_config_v2`) | `HNXj6GmgnPsL1YVs4sfyg5s6WH51RvT2mJhQFqkk7AW1` |
+| **NFT reward vault** | `fGakNVv1WcAxqm4RQBHTpyoAW8sc4qcDxXNGiDy7VfW` |
+| **LP reward vault** | `6omaC8VtVMNYRMfGcHxpGBdXLDDu2yaRgkavPLtTRVds` |
+| **NFT XNT fee pool** | `HoefqtECXfw7ZCCoe9XjUV3pAehthRBG5chTJtgKmtxj` |
+| **LP XNT fee pool** | `9EsiAMNYWK12ME1E3KxC87xP911HELCdgFZCAk1tVbmo` |
+| **NFT fee state** | `vQQfyjjCWdT9hoBaK58tW5U2PPgn2bs8reZrDYSozhn` |
+| **LP fee state** | `5XkBo5Lp3XRWte9YNQc3JJUvftv5Ci4RXLUgiPVK6kDr` |
+| **XDEX AMM program** | `7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf` |
 
 ---
 
@@ -77,6 +105,20 @@ Each upgrade charges an **upgrade fee** equal to the current dynamic mint price,
 Burns now auto-reclaim rent in the same transaction. No zombie PDAs are created.
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
+
+---
+
+## GUM Token & Swap
+
+**GUM** is the reward token earned by staking. It is a fixed-supply SPL token — **1,000,000,000 GUM** (6 decimals) with the **mint authority revoked**, verifiable on-chain at `2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1`. No more GUM can ever be created; all emissions come out of the pre-funded reward vaults.
+
+| | |
+|---|---|
+| **Earn** | Stake gumball NFTs or GUM/XNT LP — vaults emit 0.3% of their balance per day, pro-rata by stake weight |
+| **Swap** | `staking.html` has a built-in GUM ⇄ XNT swap routed through the XDEX CP-AMM pool on X1 |
+| **Provide liquidity** | LP tokens from the XDEX GUM/XNT pool can be staked with lock tiers for boosted weight + XNT fee share |
+
+The swap quotes live pool reserves, applies slippage protection (`minimum_amount_out`), and caps MAX swaps to the token's full decimal scale so rounding can never overshoot your balance.
 
 ---
 
@@ -442,3 +484,9 @@ Live URL: `https://gumballnft-production.up.railway.app`
 | `DEPLOY.md` | Server deployment checklist |
 | `NOTES.md` | Technical architecture notes |
 | `CLAUDE.md` | Development context and changelog |
+
+---
+
+## License
+
+[MIT](LICENSE) — the on-chain program, oracle, and frontend are fully open source, so anyone can independently audit the fairness guarantees that `verify.html` checks.
