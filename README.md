@@ -61,6 +61,21 @@ Randomness is generated via a **commit-reveal scheme**:
 
 The oracle cannot predict or manipulate outcomes: slot hash (32 bytes) is unknown at commit time, user seed is unknown until after commit is submitted.
 
+```mermaid
+sequenceDiagram
+    participant O as Oracle
+    participant P as Program
+    participant U as User
+    O->>P: submit_commitment — sha256(secret + oracle_pubkey)
+    U->>P: request_mint(quantity, user_seed) — XNT locked in PDA
+    Note over P: outcome now fixed, but unknown to both parties
+    O->>P: reveal_and_mint(secret)
+    P->>P: verify sha256(secret + oracle_pubkey) == commitment
+    P->>P: traits = sha256(secret + slot_hash + user_seed + mint_index)
+    P->>U: mint GumballData + GumballSvg — proof fields stored on-chain
+    Note over U: if no reveal within 5 min, refund_mint reclaims the XNT
+```
+
 | | |
 |---|---|
 | **Oracle wallet** | `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy` |
@@ -153,6 +168,23 @@ Protocol fees flow automatically into two lamport pools and are distributed pro-
 | Mint revenue | 50% | 40% | 10% |
 | Burn-to-upgrade fee | 50% | 40% | 10% |
 | Marketplace royalty | 50% | 25% | 25% |
+
+```mermaid
+flowchart TD
+    M[Mint revenue] -->|50%| T[Treasury]
+    B[Burn-to-upgrade fee] -->|50%| T
+    R[Marketplace royalty 5%] -->|50%| T
+    M -->|40%| NP[NFT XNT pool]
+    B -->|40%| NP
+    R -->|25%| NP
+    M -->|10%| LPP[LP XNT pool]
+    B -->|10%| LPP
+    R -->|25%| LPP
+    NP -->|claim, pro-rata by rarity weight| NS[NFT stakers]
+    LPP -->|claim, pro-rata by LP weight x lock multiplier| LS[LP stakers]
+    NP -.->|admin sweep, only at zero stakers| T
+    LPP -.->|admin sweep, only at zero stakers| T
+```
 
 Fee-sharing guarantees (hardened in the 2026-07 review round):
 
@@ -453,6 +485,20 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
 - Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
 - Faucet cooldowns are in-memory — reset on server restart
+
+---
+
+## Roadmap
+
+- [x] Core machine — commit-reveal mints, burn-to-upgrade, marketplace, dynamic pricing
+- [x] Phase 1 — NFT + LP staking (Pattern B GUM emissions, lock tiers, tradeable position NFTs)
+- [x] Phase 2 — XNT fee sharing (accumulator pools, per-position debt snapshots)
+- [x] Phase 2 hardening — audit fixes (CRIT/HIGH), no-silent-forfeit settle, rent-leak close, admin sweep, 21-check localnet validation suite
+- [ ] Deploy the hardened program to X1 testnet (requires the upgrade-authority wallet)
+- [ ] Recover stranded pool surplus to treasury via `sweep-xnt-pool.cjs` once streams are empty
+- [ ] Phase 3 — mint-number stake bonus (weight boost for early serials; field already reserved in `StakeAccount`)
+- [ ] Persistent faucet cooldowns (survive server restarts)
+- [ ] Mainnet readiness — delta re-audit, fresh-deploy checklist (`initialize_xnt_fees` before staking), treasury multisig
 
 ---
 
