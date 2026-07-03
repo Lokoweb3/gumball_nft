@@ -328,6 +328,9 @@ TELEGRAM_CHAT=your_chat_id
 ORACLE_ENCRYPTION_KEY=your_256bit_hex_key
 FAUCET_WALLET=./faucet-wallet.json
 
+# Optional public announcement bot (posts mints/upgrades/sales to a public channel)
+TELEGRAM_ANNOUNCE_CHAT=@your_public_channel
+
 # Optional faucet hardening
 FAUCET_IP_LIMIT=3                    # requests per IP per 24h (default 3)
 FAUCET_STATE_FILE=./faucet-state.json # cooldown persistence (point at a volume on Railway)
@@ -514,7 +517,8 @@ Live URL: `https://gumballnft-production.up.railway.app`
 |---|---|
 | `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
-| `scripts/monitor.cjs` | Telegram monitoring + remote commands |
+| `scripts/monitor.cjs` | Telegram monitoring + remote commands (private ops) |
+| `scripts/announcer.cjs` | Public Telegram channel bot (mints, upgrades, sales) |
 | `scripts/initialize.cjs` | Machine init / migration script |
 | `scripts/init-staking.cjs` | Staking init (stake config + GUM reward vaults) |
 | `scripts/init-xnt-fees.cjs` | XNT fee-sharing init (pools + accumulator state) |
