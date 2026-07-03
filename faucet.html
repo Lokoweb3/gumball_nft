@@ -145,6 +145,8 @@ header{
       <button class="faucet-btn" id="faucetBtn" onclick="requestFaucet()">REQUEST XNT</button>
     </div>
 
+    <div id="captchaBox" style="display:none; margin-top:12px;"></div>
+
     <div class="faucet-status" id="faucetStatus"></div>
   </div>
 
@@ -174,6 +176,26 @@ header{
 <script>
 const EXPLORER = 'https://explorer.testnet.x1.xyz';
 
+// Captcha is optional — enabled server-side via TURNSTILE_* env vars.
+let captchaEnabled = false;
+let captchaWidgetId = null;
+(async () => {
+  try {
+    const cfg = await (await fetch('/api/faucet-config')).json();
+    if (!cfg.captcha || !cfg.siteKey) return;
+    captchaEnabled = true;
+    const box = document.getElementById('captchaBox');
+    box.style.display = 'block';
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true;
+    s.onload = () => {
+      captchaWidgetId = turnstile.render(box, { sitekey: cfg.siteKey, theme: 'dark' });
+    };
+    document.head.appendChild(s);
+  } catch { /* config endpoint unavailable — captcha stays off */ }
+})();
+
 async function requestFaucet() {
   const input = document.getElementById('walletInput');
   const btn = document.getElementById('faucetBtn');
@@ -193,6 +215,17 @@ async function requestFaucet() {
     return;
   }
 
+  let captchaToken = null;
+  if (captchaEnabled) {
+    captchaToken = (typeof turnstile !== 'undefined' && captchaWidgetId !== null)
+      ? turnstile.getResponse(captchaWidgetId) : null;
+    if (!captchaToken) {
+      status.className = 'faucet-status error';
+      status.textContent = 'Please complete the captcha first.';
+      return;
+    }
+  }
+
   btn.disabled = true;
   btn.textContent = 'SENDING...';
   status.className = 'faucet-status loading';
@@ -202,7 +235,7 @@ async function requestFaucet() {
     const res = await fetch('/api/faucet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet }),
+      body: JSON.stringify({ wallet, captchaToken }),
     });
     const data = await res.json();
 
@@ -220,6 +253,9 @@ async function requestFaucet() {
 
   btn.disabled = false;
   btn.textContent = 'REQUEST XNT';
+  if (captchaEnabled && typeof turnstile !== 'undefined' && captchaWidgetId !== null) {
+    turnstile.reset(captchaWidgetId); // tokens are single-use
+  }
 }
 
 // Allow Enter key

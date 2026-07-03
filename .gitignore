@@ -26,3 +26,4 @@ main
 scripts/mint-legendary*.cjs
 price-history.json
 localnet-fixtures/
+faucet-state.json

@@ -27,6 +27,7 @@ if (process.env.ORACLE_WALLET_KEY && !process.env.ORACLE_WALLET) {
 
 // Express app
 const app = express();
+app.set("trust proxy", 1); // Railway sits behind a proxy — needed for real client IPs
 
 // Serve landing.html as the homepage
 app.get("/", (req, res) => {
@@ -40,7 +41,31 @@ app.use(express.static(path.join(__dirname), {
 // ── Faucet ──────────────────────────────────────────────────────────────────
 const FAUCET_AMOUNT = 0.1 * LAMPORTS_PER_SOL; // 0.10 XNT
 const FAUCET_COOLDOWN = 24 * 60 * 60 * 1000;  // 24 hours
+const FAUCET_IP_LIMIT = Number(process.env.FAUCET_IP_LIMIT || 3); // requests per IP per 24h (across wallets)
 const faucetCooldowns = new Map(); // wallet -> timestamp
+const faucetIpLog = new Map();     // ip -> [timestamps]
+
+// Cooldowns persist to disk so a server restart doesn't reset them.
+// On Railway, point FAUCET_STATE_FILE at a mounted volume to survive redeploys too.
+const FAUCET_STATE_FILE = process.env.FAUCET_STATE_FILE || path.join(__dirname, "faucet-state.json");
+try {
+  const saved = JSON.parse(fs.readFileSync(FAUCET_STATE_FILE, "utf8"));
+  for (const [w, ts] of Object.entries(saved.wallets || {})) faucetCooldowns.set(w, ts);
+  for (const [ip, arr] of Object.entries(saved.ips || {})) faucetIpLog.set(ip, arr);
+  console.log(`Faucet state loaded: ${faucetCooldowns.size} wallet cooldowns, ${faucetIpLog.size} IPs`);
+} catch { /* first boot — no state yet */ }
+
+let faucetSaveTimer = null;
+function saveFaucetState() {
+  if (faucetSaveTimer) return; // debounce bursts into one write
+  faucetSaveTimer = setTimeout(() => {
+    faucetSaveTimer = null;
+    const state = { wallets: Object.fromEntries(faucetCooldowns), ips: Object.fromEntries(faucetIpLog) };
+    fs.writeFile(FAUCET_STATE_FILE, JSON.stringify(state), (e) => {
+      if (e) console.error("Faucet state save failed:", e.message);
+    });
+  }, 1000);
+}
 
 // Clean up expired cooldowns every hour
 setInterval(() => {
@@ -48,7 +73,30 @@ setInterval(() => {
   for (const [wallet, ts] of faucetCooldowns) {
     if (now - ts > FAUCET_COOLDOWN) faucetCooldowns.delete(wallet);
   }
+  for (const [ip, arr] of faucetIpLog) {
+    const fresh = arr.filter(ts => now - ts < FAUCET_COOLDOWN);
+    if (fresh.length === 0) faucetIpLog.delete(ip);
+    else faucetIpLog.set(ip, fresh);
+  }
+  saveFaucetState();
 }, 60 * 60 * 1000);
+
+// Optional Cloudflare Turnstile captcha — active only when both env vars are set.
+// Create a (free) Turnstile widget at dash.cloudflare.com, then set
+// TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY on the server.
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || null;
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || null;
+const CAPTCHA_ENABLED = !!(TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY);
+
+async function verifyTurnstile(token, ip) {
+  const resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ secret: TURNSTILE_SECRET_KEY, response: token, remoteip: ip }),
+  });
+  const result = await resp.json();
+  return result.success === true;
+}
 
 let faucetKeypair = null;
 try {
@@ -72,12 +120,23 @@ const faucetConnection = new Connection("https://rpc.testnet.x1.xyz", "confirmed
 
 app.use(express.json());
 
+app.get("/api/faucet-config", (req, res) => {
+  res.json({ captcha: CAPTCHA_ENABLED, siteKey: TURNSTILE_SITE_KEY });
+});
+
 app.post("/api/faucet", async (req, res) => {
   try {
     if (!faucetKeypair) return res.status(503).json({ error: "Faucet wallet not configured" });
 
-    const { wallet } = req.body;
+    const { wallet, captchaToken } = req.body;
     if (!wallet || typeof wallet !== "string") return res.status(400).json({ error: "Missing wallet address" });
+
+    // Captcha (when configured) — blocks headless wallet-cycling scripts
+    if (CAPTCHA_ENABLED) {
+      if (!captchaToken) return res.status(400).json({ error: "Captcha required" });
+      const human = await verifyTurnstile(captchaToken, req.ip).catch(() => false);
+      if (!human) return res.status(403).json({ error: "Captcha verification failed" });
+    }
 
     // Validate pubkey
     let recipient;
@@ -88,7 +147,7 @@ app.post("/api/faucet", async (req, res) => {
       return res.status(400).json({ error: "Invalid wallet address" });
     }
 
-    // Check cooldown
+    // Check wallet cooldown
     const lastRequest = faucetCooldowns.get(wallet);
     if (lastRequest) {
       const remaining = FAUCET_COOLDOWN - (Date.now() - lastRequest);
@@ -96,6 +155,12 @@ app.post("/api/faucet", async (req, res) => {
         const hours = Math.ceil(remaining / (60 * 60 * 1000));
         return res.status(429).json({ error: `Cooldown active. Try again in ~${hours}h.` });
       }
+    }
+
+    // Check per-IP limit — stops one actor cycling fresh wallets
+    const ipHits = (faucetIpLog.get(req.ip) || []).filter(ts => Date.now() - ts < FAUCET_COOLDOWN);
+    if (ipHits.length >= FAUCET_IP_LIMIT) {
+      return res.status(429).json({ error: `IP limit reached (${FAUCET_IP_LIMIT} per 24h). Try again later.` });
     }
 
     // Check faucet balance
@@ -114,6 +179,9 @@ app.post("/api/faucet", async (req, res) => {
     );
     const sig = await faucetConnection.sendTransaction(tx, [faucetKeypair]);
     faucetCooldowns.set(wallet, Date.now());
+    ipHits.push(Date.now());
+    faucetIpLog.set(req.ip, ipHits);
+    saveFaucetState();
 
     console.log(`Faucet: sent 0.1 XNT to ${wallet.slice(0,8)}... tx=${sig.slice(0,16)}...`);
     res.json({ success: true, signature: sig, amount: "0.1 XNT" });

@@ -327,6 +327,12 @@ TELEGRAM_TOKEN=your_bot_token
 TELEGRAM_CHAT=your_chat_id
 ORACLE_ENCRYPTION_KEY=your_256bit_hex_key
 FAUCET_WALLET=./faucet-wallet.json
+
+# Optional faucet hardening
+FAUCET_IP_LIMIT=3                    # requests per IP per 24h (default 3)
+FAUCET_STATE_FILE=./faucet-state.json # cooldown persistence (point at a volume on Railway)
+TURNSTILE_SITE_KEY=...               # set both to require a Cloudflare Turnstile captcha
+TURNSTILE_SECRET_KEY=...
 ```
 
 Generate an encryption key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
