@@ -239,3 +239,49 @@ systemctl restart nginx
 # SSL expired
 certbot renew
 ```
+
+---
+
+## Verifiable build (mainnet requirement)
+
+The deployed binary should be provably built from this repo. CI
+(`.github/workflows/verified-build.yml`) produces the deterministic build
+hash on every push. To deploy verifiably:
+
+```bash
+# 1. Deterministic build (uses the pinned dockerized toolchain)
+solana-verify build --library-name gumball_nft
+
+# 2. Deploy the artifact it produced
+anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet <upgrade-authority.json>
+
+# 3. Confirm on-chain hash == local hash
+solana-verify get-executable-hash target/deploy/gumball_nft.so
+solana-verify get-program-hash -u https://rpc.testnet.x1.xyz AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy
+
+# 4. (optional) Publish the verification so explorers show "verified"
+solana-verify verify-from-repo -u https://rpc.testnet.x1.xyz \
+  --program-id AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy \
+  https://github.com/Lokoweb3/gumball_nft --library-name gumball_nft
+```
+
+## Multisig handover (before mainnet)
+
+Two single keys currently control everything; both must move to a multisig
+(e.g. Squads, if deployed on the target cluster — otherwise any m-of-n
+program-derived authority):
+
+```bash
+# 1. Machine admin + treasury -> multisig (new transfer_authority instruction;
+#    current authority signs once, then ALL admin ops require the multisig)
+#    args: new_authority pubkey, new_treasury pubkey
+
+# 2. Program upgrade authority -> multisig
+solana program set-upgrade-authority AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy \
+  --new-upgrade-authority <MULTISIG_ADDRESS> \
+  -u https://rpc.testnet.x1.xyz -k <current-upgrade-authority.json>
+```
+
+Order matters: verify the multisig can execute a no-op transaction FIRST —
+`transfer_authority` to a wrong/unusable address permanently bricks admin ops,
+and a lost upgrade authority permanently freezes the program code.

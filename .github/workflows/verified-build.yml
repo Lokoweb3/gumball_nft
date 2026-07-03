@@ -1,0 +1,48 @@
+name: verified-build
+
+# Deterministic (verifiable) build of the on-chain program via solana-verify.
+# The printed executable hash must match `solana-verify get-program-hash` for
+# the deployed program — that's the on-chain proof that the deployed binary
+# was built from this repo (see DEPLOY.md "Verifiable build").
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "programs/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Anchor.toml"
+      - ".github/workflows/verified-build.yml"
+  pull_request:
+    paths:
+      - "programs/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Anchor.toml"
+  workflow_dispatch:
+
+jobs:
+  verified-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install solana-verify
+        run: cargo install solana-verify --locked
+
+      - name: Deterministic build (dockerized toolchain)
+        run: solana-verify build --library-name gumball_nft
+
+      - name: Print executable hash
+        run: |
+          echo "## Verified build hash" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          solana-verify get-executable-hash target/deploy/gumball_nft.so | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload program binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gumball_nft-verified
+          path: target/deploy/gumball_nft.so

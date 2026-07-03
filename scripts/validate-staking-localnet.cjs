@@ -260,6 +260,39 @@ async function main() {
   check("final last_seen consistent with pool", stFinal.lastSeen === BigInt(await c.getBalance(nftPool)),
     `pool=${await c.getBalance(nftPool)} last_seen=${stFinal.lastSeen}`);
 
+  // ── TEST 8: transfer_authority — multisig handover path ────────────────────
+  console.log("\nTEST 8 — transfer_authority moves machine admin + treasury and back");
+  const newAdmin = Keypair.generate();
+  function transferAuthIx(signer, newAuthority, newTreasury) {
+    const data = Buffer.concat([disc("transfer_authority"), newAuthority.toBuffer(), newTreasury.toBuffer()]);
+    return new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: signer,     isSigner: true,  isWritable: false },
+        { pubkey: machinePda, isSigner: false, isWritable: true  },
+      ],
+      data,
+    });
+  }
+  await send(c, transferAuthIx(wallet.publicKey, newAdmin.publicKey, newAdmin.publicKey));
+  let mi = await c.getAccountInfo(machinePda);
+  check("authority + treasury moved to new key",
+    new PublicKey(mi.data.subarray(8, 40)).equals(newAdmin.publicKey) &&
+    new PublicKey(mi.data.subarray(40, 72)).equals(newAdmin.publicKey));
+  // Old authority must now be rejected
+  let oldRejected = false;
+  try { await send(c, transferAuthIx(wallet.publicKey, wallet.publicKey, TREASURY)); }
+  catch { oldRejected = true; }
+  check("old authority rejected after transfer", oldRejected);
+  // New authority signs the transfer back (wallet pays the fee)
+  await sendAndConfirmTransaction(c,
+    new Transaction().add(transferAuthIx(newAdmin.publicKey, wallet.publicKey, TREASURY)),
+    [wallet, newAdmin], { commitment: "confirmed" });
+  mi = await c.getAccountInfo(machinePda);
+  check("authority + treasury restored",
+    new PublicKey(mi.data.subarray(8, 40)).equals(wallet.publicKey) &&
+    new PublicKey(mi.data.subarray(40, 72)).equals(TREASURY));
+
   console.log(`\n══ RESULT: ${passed} passed, ${failed} failed ══`);
   process.exit(failed === 0 ? 0 : 1);
 }

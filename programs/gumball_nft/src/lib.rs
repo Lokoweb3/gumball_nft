@@ -848,6 +848,24 @@ pub mod gumball_nft {
         Ok(())
     }
 
+    /// Transfer machine admin rights and treasury to a new key — the mainnet
+    /// path to a multisig (point both at a Squads-style multisig authority).
+    /// Irreversible unless the new authority signs a transfer back.
+    pub fn transfer_authority(
+        ctx: Context<TransferAuthority>,
+        new_authority: Pubkey,
+        new_treasury: Pubkey,
+    ) -> Result<()> {
+        require!(
+            new_authority != Pubkey::default() && new_treasury != Pubkey::default(),
+            GumballError::InvalidAccount
+        );
+        let machine = &mut ctx.accounts.machine;
+        machine.authority = new_authority;
+        machine.treasury  = new_treasury;
+        Ok(())
+    }
+
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let bal = ctx.accounts.treasury.lamports();
         require!(bal >= amount, GumballError::InsufficientFunds);
@@ -2412,6 +2430,14 @@ pub struct BurnMulti<'info> {
     pub rent:                     Sysvar<'info, Rent>,
 }
 
+
+#[derive(Accounts)]
+pub struct TransferAuthority<'info> {
+    #[account(address = machine.authority @ GumballError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(mut, seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+}
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {

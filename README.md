@@ -207,6 +207,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `set_oracle` | Admin | Rotate oracle wallet |
 | `set_mint_price` | Admin | Update base mint price |
 | `withdraw` | Admin | Withdraw treasury funds |
+| `transfer_authority` | Admin | Hand machine admin + treasury to a new key (multisig path) |
 | `migrate_machine` | Admin | Migrate machine account to new struct size |
 | `reset_counts` | Admin | Reset total_minted and total_burned to zero |
 | `submit_commitment` | Oracle | Submit randomness commitment pre-mint |
@@ -510,7 +511,8 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - [x] Phase 3 — early-mint stake bonus (+50% weight at serial #1, linear decay to #10,000)
 - [x] Persistent faucet cooldowns + per-IP limits + optional Turnstile captcha
 - [x] Public Telegram announcement bot (mints, upgrades, sales)
-- [ ] Mainnet readiness — delta re-audit, fresh-deploy checklist (`initialize_xnt_fees` before staking), treasury multisig
+- [x] Mainnet tooling — verifiable-build CI (`solana-verify`), `transfer_authority` instruction + documented multisig handover (DEPLOY.md)
+- [ ] Mainnet execution — delta re-audit, verified deploy, actually move authority + treasury + upgrade key to a multisig
 
 ---
 
