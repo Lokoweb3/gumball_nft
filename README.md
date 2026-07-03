@@ -2,7 +2,7 @@
 
 A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SVG gumball with randomized traits, generated and verified entirely on-chain via a commit-reveal oracle.
 
-**Security Grade: A-** — 5 rounds of audit, all findings resolved.
+**Security Grade: A-** — 5 rounds of core audit plus a dedicated staking/XNT fee-sharing audit and follow-up review round; all findings resolved and validated end-to-end against cloned live state.
 
 ---
 
@@ -80,6 +80,48 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 
 ---
 
+## Staking & XNT Fee Sharing
+
+Two staking streams earn GUM emissions plus a share of protocol XNT fees (`staking.html`):
+
+### NFT Staking
+
+Stake gumballs to earn GUM from the NFT reward vault (0.3% of vault balance per day, distributed pro-rata by rarity weight: 1 / 9 / 47 / 156 / 591 for Common → Legendary).
+
+### LP Staking
+
+Stake GUM LP tokens with a lock tier. Each position mints a tradeable position NFT — whoever holds it controls the position.
+
+| Tier | Lock | Weight Multiplier | Early-Exit Penalty |
+|---|---|---|---|
+| Flexible | none | 1.0× | 0% |
+| Bronze | 30d | 1.5× | 10% |
+| Silver | 90d | 2.0× | 15% |
+| Gold | 180d | 3.0× | 20% |
+| Diamond | 365d | 5.0× | 25% |
+
+Half of any early-exit penalty is burned; half stays in the vault as deferred rewards.
+
+### XNT Fee Sharing
+
+Protocol fees flow automatically into two lamport pools and are distributed pro-rata by stake weight (MasterChef-style accumulator with per-position `XntDebt` snapshots):
+
+| Source | Treasury | NFT Pool | LP Pool |
+|---|---|---|---|
+| Mint revenue | 50% | 40% | 10% |
+| Burn-to-upgrade fee | 50% | 40% | 10% |
+| Marketplace royalty | 50% | 25% | 25% |
+
+Fee-sharing guarantees (hardened in the 2026-07 review round):
+
+- Positions only earn fees deposited **after** they staked — debt is snapshotted at stake-time, and fees deposited while nobody is staked are absorbed so a flash-staker can't capture them
+- If the pool can't cover a claim in full, the unpaid remainder **stays pending** (debt advances only by what was actually paid); a claim that can pay nothing fails loudly instead of silently succeeding
+- Pool PDAs always retain their rent-exempt minimum — they can never be tombstoned
+- `XntDebt` PDAs are closed with rent refunded on unstake / full LP withdrawal — no rent leaks
+- Unattributable lamports (zero-staker deposits, legacy forfeits, rounding dust) are recoverable to treasury via admin `sweep_xnt_pool_*`, gated on the stream having **zero stakers** so no live entitlement can be touched
+
+---
+
 ## Instructions
 
 | Instruction | Caller | Description |
@@ -104,6 +146,15 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | `make_offer` | User | Place bid with XNT escrowed in PDA |
 | `cancel_offer` | Buyer | Cancel bid, XNT returned |
 | `accept_offer` | Seller | Accept bid, NFT transferred (95/5 split) |
+| `initialize_staking` | Admin | Set up stake config + GUM reward vaults (gated on machine.authority) |
+| `initialize_xnt_fees` | Admin | Create the XNT fee pools + accumulator state PDAs |
+| `stake` / `unstake` | User | Stake/unstake a gumball NFT (unstake settles pending XNT + closes XntDebt) |
+| `claim` | User | Claim pending GUM rewards for a staked NFT |
+| `stake_lp` / `unstake_lp` | User | Stake/unstake LP with lock tier (position NFT minted/burned) |
+| `claim_lp` | User | Claim pending GUM rewards for an LP position |
+| `claim_xnt_fees_nft` / `claim_xnt_fees_lp` | User | Claim accumulated XNT fee share |
+| `sweep_xnt_pool_nft` / `sweep_xnt_pool_lp` | Admin | Recover unattributed pool lamports to treasury (only when stream has zero stakers) |
+| `recover_legacy_v1_stake` | User | Recover an NFT staked under the pre-Phase-1 layout |
 
 ---
 
@@ -131,7 +182,25 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | A-9 | Unchecked integer multiply in pricing | High | Fixed (checked_mul) |
 | MED-4 | Inconsistent slot hash entropy in burn_to_upgrade | Medium | Fixed (32-byte hash) |
 
-**Final audit: CLEAN — A- grade, mainnet ready.**
+**Core contract audit: CLEAN — A- grade.**
+
+### Phase 2 staking / XNT fee-sharing audit (2026)
+
+| ID | Issue | Severity | Status |
+|---|---|---|---|
+| CRIT-1 | Pool PDA drainable below rent exemption (tombstone bricks all fee instructions) | Critical | Fixed (rent-min reserve on every payout) |
+| CRIT-2 | Pool rent counted as fee revenue on first accumulator update | Critical | Fixed (last_seen seeded with rent balance) |
+| CRIT-3 | Fresh position could claim the entire historical accumulator | Critical | Fixed (stake-time XntDebt snapshot + first-touch guard) |
+| HIGH-1 | Weight changes diluted fees deposited before the change | High | Fixed (accumulator advances with OLD weight before every weight change) |
+| HIGH-2 | initialize_staking front-runnable — attacker could seize stake authority | High | Fixed (gated on machine.authority) |
+| HIGH-3 | Partial LP unstake left XntDebt drifted vs. the smaller position | High | Fixed (settle + re-snapshot at new weight) |
+| R-1 | Partial payouts silently forfeited the unpaid remainder | High | Fixed (debt advances only by amount paid) |
+| R-2 | Zero-staker / legacy-forfeit lamports permanently stranded in pools | High | Fixed (admin sweep, gated on zero stakers) |
+| R-3 | XntDebt rent leaked forever on every full LP unstake | Medium | Fixed (PDA closed, rent refunded) |
+| R-4 | Claim against an empty pool silently succeeded with no transfer | Medium | Fixed (loud InsufficientFunds) |
+| R-5 | Settle logic copy-pasted 4× with diverging behavior | Medium | Fixed (shared settle_xnt_fees helper) |
+
+All fixes validated with a 21-check end-to-end suite against a local validator seeded with cloned live testnet state (`scripts/validate-staking-localnet.cjs`).
 
 ---
 
@@ -204,7 +273,33 @@ node scripts/initialize.cjs
 
 # Migrate machine account (after Machine struct changes)
 node scripts/initialize.cjs --migrate
+
+# Staking setup — REQUIRED before any stake/unstake on a fresh Program ID
+# (all four staking instructions require the XNT fee PDAs to exist)
+node scripts/init-staking.cjs
+node scripts/init-xnt-fees.cjs
+
+# Admin: recover unattributed XNT pool lamports to treasury (zero stakers only)
+node scripts/sweep-xnt-pool.cjs [nft|lp]
 ```
+
+### Local validation (before deploying staking changes)
+
+Runs 21 end-to-end checks against a local validator seeded with **cloned live
+testnet state** plus the freshly built program — sweep recovery, stake/claim
+math, rent-leak close, flash-stake protection:
+
+```bash
+node scripts/make-localnet-fixtures.cjs          # clone live state -> fixture JSONs
+solana-test-validator --reset \
+  --bpf-program AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy target/deploy/gumball_nft.so \
+  --account <pubkey> <fixture.json> ...          # one pair per fixture file
+RPC=http://127.0.0.1:8899 NFT_MINT=<from fixtures> TREASURY=<from fixtures> \
+  node scripts/validate-staking-localnet.cjs
+```
+
+Note: on Windows, run the validator inside WSL (`solana-test-validator` can't
+unpack its genesis archive on Windows); the node scripts work from either side.
 
 ---
 
@@ -233,6 +328,7 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 - Testnet faucet — get 0.1 XNT per wallet per 24h to test minting
 - Oracle countdown — live timer showing mint request timeout
 - Marketplace — list, buy, sell, make/accept offers with 5% royalty
+- Staking — stake NFTs and LP positions for GUM emissions + XNT fee share (staking.html)
 - Activity feed — live feed of mints, burns, sales with filters
 - Collection analytics — rarity score, portfolio value, completion tracker
 - Leaderboard — top holders, rarity distribution, auto-refreshes every 60s
@@ -326,12 +422,18 @@ Live URL: `https://gumballnft-production.up.railway.app`
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
+| `scripts/init-staking.cjs` | Staking init (stake config + GUM reward vaults) |
+| `scripts/init-xnt-fees.cjs` | XNT fee-sharing init (pools + accumulator state) |
+| `scripts/sweep-xnt-pool.cjs` | Admin sweep of unattributed XNT pool lamports |
+| `scripts/make-localnet-fixtures.cjs` | Clone live state into local-validator fixtures |
+| `scripts/validate-staking-localnet.cjs` | 21-check end-to-end staking/fee validation suite |
 | `server.cjs` | Express server for Railway (frontend + oracle + monitor + faucet API) |
 | `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
 | `marketplace.html` | Marketplace (list, buy, sell, offers) |
 | `activity.html` | Activity feed + collection analytics |
 | `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
+| `staking.html` | NFT + LP staking with XNT fee claims |
 | `verify.html` | Provably fair verification page (auto-verifies v5) |
 | `faucet.html` | Testnet XNT faucet (0.1 XNT per wallet per 24h) |
 | `favicon.svg` | Gumball icon for browser tab |
