@@ -3365,3 +3365,67 @@ pub enum GumballError {
     #[msg("Invalid lock tier — must be 0 (Flexible), 1 (Bronze), 2 (Silver), 3 (Gold), or 4 (Diamond)")] InvalidLockPeriod,
     #[msg("Cannot sweep while stakers are active")]  PoolHasStakers,
 }
+
+// ─── Unit tests (pure math — run with `cargo test`) ─────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mint_price_curve_endpoints_and_monotonic() {
+        assert_eq!(get_mint_price(0), BASE_PRICE);              // 0.01 XNT at mint #1
+        assert_eq!(get_mint_price(MAX_SUPPLY), MAX_PRICE);      // capped at supply
+        assert_eq!(get_mint_price(u64::MAX), MAX_PRICE);        // overflow-safe
+        let mut last = 0u64;
+        for m in (0..=MAX_SUPPLY).step_by(250) {
+            let p = get_mint_price(m);
+            assert!(p >= last, "price must be monotonic at {m}: {p} < {last}");
+            assert!(p >= BASE_PRICE && p <= MAX_PRICE);
+            last = p;
+        }
+        // midpoint: 4^0.5 = 2 → exactly 2× base
+        assert_eq!(get_mint_price(MAX_SUPPLY / 2), BASE_PRICE * 2);
+    }
+
+    #[test]
+    fn stake_weight_bonus_curve() {
+        // serial 1 ≈ +50% (bonus_bps = 5000*(9999)/10000 = 4999)
+        assert_eq!(stake_weight(4, 1), 591 * 14999 / 10000);    // Legendary
+        assert_eq!(stake_weight(2, 100), 70);                    // Rare, serial 100 (validated on-chain)
+        // at/after supply cap: no bonus
+        assert_eq!(stake_weight(4, 10_000), 591);
+        assert_eq!(stake_weight(4, 999_999), 591);
+        assert_eq!(stake_weight(0, 999_999), 1);
+        // monotonic decay: earlier serial never earns less
+        let mut last = u64::MAX;
+        for s in [1u64, 100, 1000, 5000, 9999, 10_000] {
+            let w = stake_weight(4, s);
+            assert!(w <= last);
+            last = w;
+        }
+        // rarity index wraps safely (defensive % 5)
+        assert_eq!(stake_weight(7, 10_000), RARITY_WEIGHT[2]);
+    }
+
+    #[test]
+    fn xnt_accumulator_credits_and_baselines() {
+        let mut s = XntFeeState { stake_type: 0, acc_xnt_per_weight: 0, last_seen_balance: 1000, bump: 255 };
+        // no stakers → nothing credited, last_seen untouched (reserved for absorb)
+        update_xnt_accumulator(&mut s, 5000, 0).unwrap();
+        assert_eq!(s.acc_xnt_per_weight, 0);
+        assert_eq!(s.last_seen_balance, 1000);
+        // stakers present → delta credited per weight, last_seen advances
+        update_xnt_accumulator(&mut s, 5000, 4).unwrap();
+        assert_eq!(s.acc_xnt_per_weight, 4000 * ACC_SCALE / 4);
+        assert_eq!(s.last_seen_balance, 5000);
+        // balance decreased (payout happened) → no negative credit
+        update_xnt_accumulator(&mut s, 4000, 4).unwrap();
+        assert_eq!(s.acc_xnt_per_weight, 4000 * ACC_SCALE / 4);
+        // absorb path: zero-weight backlog folded into last_seen, nothing credited
+        let mut s2 = XntFeeState { stake_type: 1, acc_xnt_per_weight: 7, last_seen_balance: 100, bump: 255 };
+        advance_xnt_for_stake(&mut s2, 9000, 0).unwrap();
+        assert_eq!(s2.acc_xnt_per_weight, 7);
+        assert_eq!(s2.last_seen_balance, 9000);
+    }
+}

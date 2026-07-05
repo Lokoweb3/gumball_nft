@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust unit tests (pricing curve, stake weight, accumulators)
+        run: cargo test --manifest-path programs/gumball_nft/Cargo.toml
+
+  e2e:
+    # Full 25-check suite: local validator seeded with state cloned from the
+    # live X1 testnet + the freshly built program. Needs the X1 RPC to be
+    # reachable (fixture generation), so a rare network flake can fail this job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install JS deps
+        run: npm install --omit=dev
+
+      - name: Build program
+        run: cd programs/gumball_nft && cargo build-sbf
+
+      - name: Create throwaway test wallet
+        run: solana-keygen new --no-bip39-passphrase --silent
+
+      - name: Generate fixtures from live X1 state
+        run: OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
+
+      - name: Run validation suite
+        run: FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh
