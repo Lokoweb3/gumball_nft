@@ -21,20 +21,34 @@ for f in "$FIXTURES"/*.json; do
 done
 echo "Loaded ${#ARGS[@]} validator args from $FIXTURES"
 
+# CI runners can be slow and resource-constrained
+ulimit -n 1000000 2>/dev/null || true
+
 solana-test-validator --reset --quiet --ledger ci-test-ledger \
+  --limit-ledger-size 10000 \
   --bpf-program "$PROGRAM_ID" "$SO" "${ARGS[@]}" &
 VALIDATOR_PID=$!
+dump_log() {
+  echo "── validator.log tail ──"
+  tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
+}
 trap 'kill $VALIDATOR_PID 2>/dev/null || true' EXIT
 
-echo "Waiting for validator RPC..."
-for i in $(seq 1 60); do
+echo "Waiting for validator RPC (up to 5 min)..."
+for i in $(seq 1 150); do
+  if ! kill -0 $VALIDATOR_PID 2>/dev/null; then
+    echo "validator process DIED"; dump_log; exit 1
+  fi
   if solana cluster-version -u "$RPC_URL" >/dev/null 2>&1; then break; fi
-  [ "$i" = 60 ] && { echo "validator never came up"; exit 1; }
+  [ "$i" = 150 ] && { echo "validator never came up"; dump_log; exit 1; }
   sleep 2
 done
-echo "Validator up."
+echo "Validator up after ~$((i*2))s."
 
 NFT_MINT=$(cat "$FIXTURES/nft-mint-pubkey.txt")
 TREASURY=$(node -pe "const{Keypair}=require('@solana/web3.js');Keypair.fromSecretKey(Uint8Array.from(require('./$FIXTURES/treasury-keypair.json'))).publicKey.toBase58()")
 
-RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs
+if ! RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs; then
+  dump_log
+  exit 1
+fi
