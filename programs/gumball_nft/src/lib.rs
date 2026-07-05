@@ -432,6 +432,9 @@ pub mod gumball_nft {
             .map_err(|_| error!(GumballError::InvalidSlotHash))?);
 
         let traits = resolve_traits(seed, machine.total_minted)?;
+        // Seasonal drop: remap flavor/color into the active season's window
+        // (no-op when the season PDA is uninitialized or expired)
+        let traits = apply_season(traits, &ctx.accounts.season_config)?;
 
         let svg_bytes = generate_svg(
             machine.total_minted + 1,
@@ -850,6 +853,32 @@ pub mod gumball_nft {
     pub fn migrate_machine(ctx: Context<MigrateMachine>) -> Result<()> {
         ctx.accounts.machine.total_burned = 0;
         msg!("Machine migrated — total_burned initialized to 0");
+        Ok(())
+    }
+
+    /// Admin: configure a seasonal trait window. While `ends_at` is in the
+    /// future, new mints draw flavor/color from the given sub-ranges of the
+    /// trait arrays (rarity odds untouched). Set ends_at = 0 to end a season
+    /// early. count = 0 leaves that trait unwindowed.
+    pub fn set_season(
+        ctx: Context<SetSeason>,
+        flavor_start: u8, flavor_count: u8,
+        color_start: u8, color_count: u8,
+        ends_at: i64, label: [u8; 12],
+    ) -> Result<()> {
+        require!(
+            (flavor_start as usize).saturating_add(flavor_count as usize) <= FLAVORS.len() &&
+            (color_start as usize).saturating_add(color_count as usize) <= COLORS.len(),
+            GumballError::InvalidAccount
+        );
+        let s = &mut ctx.accounts.season_config;
+        s.flavor_start = flavor_start;
+        s.flavor_count = flavor_count;
+        s.color_start  = color_start;
+        s.color_count  = color_count;
+        s.ends_at      = ends_at;
+        s.label        = label;
+        s.bump         = ctx.bumps.season_config;
         Ok(())
     }
 
@@ -2250,6 +2279,30 @@ fn lcg_next(seed: &mut u64, modulus: u64) -> u64 {
     (*seed >> 33) % modulus
 }
 
+/// Remap flavor/color into the active season window. Lenient by design:
+/// an uninitialized/foreign/expired season account is a no-op, so the mint
+/// path never depends on set_season having been called. The caller's seeds
+/// constraint guarantees the address is THE season PDA — only set_season can
+/// have written data there, so raw offsets are safe without a disc check.
+/// Layout: disc(8) flavor_start(8) flavor_count(9) color_start(10)
+///         color_count(11) ends_at i64 (12..20) label(20..32) bump(32)
+fn apply_season(mut t: Traits, season_info: &AccountInfo) -> Result<Traits> {
+    if season_info.data_len() != 8 + SeasonConfig::LEN || season_info.owner != &crate::ID {
+        return Ok(t);
+    }
+    let data = season_info.try_borrow_data()?;
+    let ends_at = i64::from_le_bytes(
+        data[12..20].try_into().map_err(|_| error!(GumballError::InvalidAccount))?,
+    );
+    if ends_at <= Clock::get()?.unix_timestamp {
+        return Ok(t);
+    }
+    let (fs, fc, cs, cc) = (data[8], data[9], data[10], data[11]);
+    if fc > 0 { t.flavor = fs + (t.flavor % fc); }
+    if cc > 0 { t.color  = cs + (t.color  % cc); }
+    Ok(t)
+}
+
 // ─── Account Structs ──────────────────────────────────────────────────────────
 
 #[derive(Accounts)]
@@ -2378,6 +2431,12 @@ pub struct RevealAndMint<'info> {
     /// PHASE 2: LP staker fee pool — receives 10% of mint revenue
     #[account(mut, seeds = [b"lp_xnt_pool"], bump)]
     pub lp_xnt_pool: Box<Account<'info, XntPool>>,
+    /// CHECK: SeasonConfig PDA — parsed manually in apply_season; an
+    /// UNINITIALIZED account means "no active season", so mints keep working
+    /// even before set_season is ever called (no deploy-order lockout). The
+    /// seeds constraint pins the address, so only set_season can put data here.
+    #[account(seeds = [b"season"], bump)]
+    pub season_config: AccountInfo<'info>,
     pub token_program:            Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program:           Program<'info, System>,
@@ -2497,6 +2556,18 @@ pub struct BurnMulti<'info> {
     pub rent:                     Sysvar<'info, Rent>,
 }
 
+
+#[derive(Accounts)]
+pub struct SetSeason<'info> {
+    #[account(mut, address = machine.authority @ GumballError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    #[account(init_if_needed, payer = authority, space = 8 + SeasonConfig::LEN,
+              seeds = [b"season"], bump)]
+    pub season_config: Account<'info, SeasonConfig>,
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct AttachMetadata<'info> {
@@ -3394,6 +3465,20 @@ pub struct XntFeeState {
 }
 impl XntFeeState { pub const LEN: usize = 1 + 16 + 8 + 1; }
 
+/// Seasonal trait window — while ends_at is in the future, new mints draw
+/// flavor/color from [start, start+count) sub-ranges of the trait arrays.
+#[account]
+pub struct SeasonConfig {
+    pub flavor_start: u8,      //  1
+    pub flavor_count: u8,      //  1 — 0 = flavor unwindowed
+    pub color_start:  u8,      //  1
+    pub color_count:  u8,      //  1 — 0 = color unwindowed
+    pub ends_at:      i64,     //  8 — unix ts; <= now disables
+    pub label:        [u8; 12],// 12 — short ASCII tag, e.g. "WINTER-24"
+    pub bump:         u8,      //  1
+}
+impl SeasonConfig { pub const LEN: usize = 1 + 1 + 1 + 1 + 8 + 12 + 1; }
+
 /// Per-position XNT debt — created lazily on first claim_xnt_fees call.
 /// Sibling PDA to the v2 StakeAccount / LpStakeAccount so we don't have to
 /// migrate existing positions to add a field.
@@ -3495,6 +3580,22 @@ mod tests {
         }
         // rarity index wraps safely (defensive % 5)
         assert_eq!(stake_weight(7, 10_000), RARITY_WEIGHT[2]);
+    }
+
+    #[test]
+    fn season_window_remap_stays_in_bounds() {
+        // The apply_season remap: out = start + (trait % count). For every
+        // valid window accepted by set_season's require!, the result must land
+        // inside [start, start+count) and inside the trait array.
+        for fs in 0..FLAVORS.len() as u8 {
+            for fc in 1..=(FLAVORS.len() as u8 - fs) {
+                for flavor in 0..FLAVORS.len() as u8 {
+                    let out = fs + (flavor % fc);
+                    assert!(out >= fs && out < fs + fc);
+                    assert!((out as usize) < FLAVORS.len());
+                }
+            }
+        }
     }
 
     #[test]

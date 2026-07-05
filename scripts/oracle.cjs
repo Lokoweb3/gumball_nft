@@ -310,6 +310,8 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
   // PHASE 2: NFT/LP fee pools (50/40/10 split of mint revenue)
   const [nftXntPool] = PublicKey.findProgramAddressSync([Buffer.from("nft_xnt_pool")], PROGRAM_ID);
   const [lpXntPool]  = PublicKey.findProgramAddressSync([Buffer.from("lp_xnt_pool")],  PROGRAM_ID);
+  // Seasonal traits: PDA is read leniently on-chain (uninitialized = no season)
+  const [seasonConfig] = PublicKey.findProgramAddressSync([Buffer.from("season")], PROGRAM_ID);
 
   // Data: discriminator (8) + secret (32)
   const data = Buffer.concat([disc("reveal_and_mint"), Buffer.from(secret)]);
@@ -334,6 +336,7 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
       { pubkey: SLOT_HASHES,                isSigner: false, isWritable: false }, // slot_hashes
       { pubkey: nftXntPool,                 isSigner: false, isWritable: true  }, // nft_xnt_pool (PHASE 2)
       { pubkey: lpXntPool,                  isSigner: false, isWritable: true  }, // lp_xnt_pool  (PHASE 2)
+      { pubkey: seasonConfig,               isSigner: false, isWritable: false }, // season_config (seasonal traits)
       { pubkey: TOKEN_PROGRAM_ID,           isSigner: false, isWritable: false },
       { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID,isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId,    isSigner: false, isWritable: false },
