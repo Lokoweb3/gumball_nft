@@ -305,6 +305,63 @@ app.get("/api/leaderboard", (req, res) => {
   res.json(leaderboardCache);
 });
 
+// ── Wallet metadata (attach_metadata URIs point here) ───────────────────────
+// Serves Metaplex-standard JSON for a gumball mint, with the image built from
+// the ON-CHAIN GumballSvg PDA as a data URI — no off-chain artwork storage.
+const NFT_FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
+const NFT_COLORS = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
+const NFT_SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
+const NFT_RARITY = ["Common","Uncommon","Rare","Epic","Legendary"];
+const metadataCache = new Map(); // mint -> json (immutable on-chain data)
+
+app.get("/api/metadata/:mint", async (req, res) => {
+  try {
+    const cached = metadataCache.get(req.params.mint);
+    if (cached) return res.json(cached);
+
+    let mint;
+    try { mint = new PublicKey(req.params.mint); } catch { return res.status(400).json({ error: "bad mint" }); }
+    const [gdPda] = PublicKey.findProgramAddressSync([Buffer.from("gumball"), mint.toBuffer()], GUMBALL_PROGRAM);
+    const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), mint.toBuffer()], GUMBALL_PROGRAM);
+    const [gd, svgAcc] = await Promise.all([
+      faucetConnection.getAccountInfo(gdPda),
+      faucetConnection.getAccountInfo(svgPda),
+    ]);
+    if (!gd || gd.data.length !== 189) return res.status(404).json({ error: "not a gumball" });
+
+    const serial = Number(gd.data.readBigUInt64LE(72));
+    const flavor = gd.data.readUInt8(80), color = gd.data.readUInt8(81);
+    const rarity = gd.data.readUInt8(82), special = gd.data.readUInt8(83);
+
+    let image;
+    if (svgAcc) {
+      const svgLen = svgAcc.data.readUInt32LE(8);
+      const svg = svgAcc.data.subarray(12, 12 + svgLen);
+      image = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+    }
+
+    const json = {
+      name: `Gumball #${serial}`,
+      symbol: "GMBL",
+      description: "Fully on-chain SVG gumball with provably fair traits (commit-reveal oracle) on X1.",
+      image,
+      attributes: [
+        { trait_type: "Flavor", value: NFT_FLAVORS[flavor % NFT_FLAVORS.length] },
+        { trait_type: "Color", value: NFT_COLORS[color % NFT_COLORS.length] },
+        { trait_type: "Rarity", value: NFT_RARITY[rarity % NFT_RARITY.length] },
+        { trait_type: "Special", value: NFT_SPECIALS[special % NFT_SPECIALS.length] },
+        { trait_type: "Serial", value: serial },
+      ],
+      external_url: "https://gumballnft-production.up.railway.app",
+    };
+    if (metadataCache.size > 20000) metadataCache.clear(); // crude cap
+    metadataCache.set(req.params.mint, json);
+    res.json(json);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Price History ───────────────────────────────────────────────────────────
 const PRICE_FILE = path.join(__dirname, "price-history.json");
 const PRICE_INTERVAL = 30_000; // Record every 30 seconds
