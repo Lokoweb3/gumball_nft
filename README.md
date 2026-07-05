@@ -223,6 +223,11 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `make_offer` | User | Place bid with XNT escrowed in PDA |
 | `cancel_offer` | Buyer | Cancel bid, XNT returned |
 | `accept_offer` | Seller | Accept bid, NFT transferred (95/5 split) |
+| `create_auction` | User | Start an English auction (1h–7d, NFT escrowed) |
+| `bid` | User | Bid (min +5% raise, previous bidder auto-refunded, anti-snipe extension) |
+| `settle_auction` | Anyone | Crank an ended auction — NFT to winner, 95/5 split, royalty to pools |
+| `set_season` | Admin | Configure a seasonal flavor/color window for new mints |
+| `attach_metadata` | Anyone | Attach Metaplex metadata so a gumball shows in wallet galleries |
 | `initialize_staking` | Admin | Set up stake config + GUM reward vaults (gated on machine.authority) |
 | `initialize_xnt_fees` | Admin | Create the XNT fee pools + accumulator state PDAs |
 | `stake` / `unstake` | User | Stake/unstake a gumball NFT (unstake settles pending XNT + closes XntDebt) |
@@ -547,6 +552,11 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - [x] Phase 3 — early-mint stake bonus (+50% weight at serial #1, linear decay to #10,000)
 - [x] Persistent faucet cooldowns + per-IP limits + optional Turnstile captcha
 - [x] Public Telegram announcement bot (mints, upgrades, sales)
+- [x] CI — Rust unit tests + full e2e validation suite on every push; oracle RPC failover + heartbeat monitoring
+- [x] Indexer API — `/api/activity` (event feed) and `/api/leaderboard` (cached holder rankings) served by the Express server
+- [x] Wallet-visible gumballs — permissionless `attach_metadata` + `/api/metadata/<mint>` serving the on-chain SVG (backfill: `scripts/attach-metadata.cjs`)
+- [x] Seasonal trait drops — `set_season` windows flavor/color for new mints (`scripts/set-season.cjs`)
+- [x] English auctions (contract) — create/bid/settle with anti-snipe and pool-routed royalties; marketplace UI pending
 - [x] Mainnet tooling — verifiable-build CI (`solana-verify`), `transfer_authority` instruction + documented multisig handover (DEPLOY.md)
 - [ ] Mainnet execution — delta re-audit, verified deploy, actually move authority + treasury + upgrade key to a multisig
 

@@ -737,3 +737,35 @@ PDAs to exist.
 Phase 1); closes the faucet wallet-cycling loophole and restart-reset bug; turns the
 already-emitted on-chain events into free community visibility.
 
+---
+
+### [2026-07-05] Infra + feature batch: CI, shared JS, indexer, metadata, seasons, auctions
+
+**Files:** `lib.rs`, `js/gumball-common.js` (new), `index/marketplace/activity/staking.html`,
+`server.cjs`, `scripts/lib/gumball-events.cjs` (new), `scripts/announcer.cjs`, `scripts/oracle.cjs`,
+`scripts/monitor.cjs`, `scripts/attach-metadata.cjs` (new), `scripts/set-season.cjs` (new),
+`scripts/ci-e2e.sh` (new), `.github/workflows/tests.yml` (new)
+
+**What:**
+- **CI:** cargo unit tests (price curve, stake_weight, XNT accumulator) + e2e job running
+  the 25-check suite on a validator seeded from live X1 state
+- **Oracle resilience:** RPC_URLS failover, heartbeat file, monitor wedge alert
+- **Shared frontend JS:** `js/gumball-common.js` — single copy of constants/trait arrays/
+  helpers. FIXED a live bug: staking.html had drifted FLAVORS/COLORS and mislabeled traits
+- **Indexer API:** server polls events into `/api/activity`; `/api/leaderboard` caches
+  holder rankings (60s). Shared decoder in `scripts/lib/gumball-events.cjs`
+- **Wallet metadata:** permissionless `attach_metadata` (Metaplex CPI signed by
+  machine_authority), `/api/metadata/<mint>` serves on-chain SVG as data URI,
+  backfill script enumerates mints by mint-authority memcmp
+- **Seasonal traits:** `SeasonConfig` PDA + `set_season`; reveal_and_mint reads the PDA
+  leniently (uninitialized = no season — no deploy-order trap). Oracle passes 1 new account
+- **Auctions (contract):** `create_auction`/`bid`/`settle_auction` — bid escrow in the
+  Auction PDA, 5% min raise, outbid auto-refund, 5-min anti-snipe, permissionless settle
+  with buy_gumball-identical royalty routing. Marketplace UI NOT yet built
+- New errors 6022-6024 (AuctionEnded/AuctionNotEnded/BidTooLow); events
+  AuctionCreatedEvent/AuctionBidEvent; settle emits GumballSoldEvent
+
+**Deploy notes:** oracle.cjs and the program must deploy together (reveal gained the
+season_config account). After deploy: `node scripts/attach-metadata.cjs` backfills wallet
+metadata for all existing gumballs (~0.0056 XNT each, payer-funded).
+
