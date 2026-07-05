@@ -239,20 +239,10 @@ header{
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="js/gumball-common.js"></script>
 <script>
-const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } = solanaWeb3;
-const PROGRAM_ID  = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
-const MACHINE_PDA = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY");
-const RPC         = "https://rpc.testnet.x1.xyz";
-const connection  = new Connection(RPC, { commitment: "confirmed", confirmTransactionInitialTimeout: 60000 });
-
-const TOKEN_PID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOC_PID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-const RENT_PID  = new PublicKey("SysvarRent111111111111111111111111111111111");
-
-const FLAVORS  = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
-const COLORS   = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
-const RARITY   = ["Common","Uncommon","Rare","Epic","Legendary"];
+// Shared constants + helpers come from js/gumball-common.js
+const RENT_PID  = RENT_SYSVAR_PID; // legacy local alias
 const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
 
 const LISTING_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
@@ -268,20 +258,8 @@ let myCollection = [];
 let _listingMint = null;
 let _offerMint = null;
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── HELPERS (getAta/disc/strToU8 from gumball-common.js) ────────────────────
 
-function getAta(mint, owner) {
-  const [ata] = PublicKey.findProgramAddressSync([owner.toBytes(), TOKEN_PID.toBytes(), mint.toBytes()], ASSOC_PID);
-  return ata;
-}
-
-async function disc(name) {
-  const enc = new TextEncoder().encode("global:" + name);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return new Uint8Array(buf).slice(0, 8);
-}
-
-function strToU8(s) { return new TextEncoder().encode(s); }
 function concatU8(...arrays) {
   const total = arrays.reduce((s, a) => s + a.length, 0);
   const out = new Uint8Array(total); let off = 0;
