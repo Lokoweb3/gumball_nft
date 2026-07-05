@@ -474,6 +474,42 @@ Offer        seeds: [b"offer", mint, buyer]   — 89 bytes (marketplace offer)
 
 SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 189 bytes each, well within limits.
 
+### Staking Accounts
+
+```
+StakeConfig     seeds: [b"stake_config_v2"]                    — 233 bytes (authority, vaults, totals, GUM accumulators)
+StakeAccount    seeds: [b"stake_v2", nft_mint]                 — 114 bytes (owner, weight incl. Phase 3 bonus, reward_debt)
+LpStakeAccount  seeds: [b"lp_stake_v2", position_mint]         — 140 bytes (amount, lock tier/until, weight, reward_debt)
+XntPool         seeds: [b"nft_xnt_pool"] / [b"lp_xnt_pool"]    —   9 bytes (lamport-holding fee pool)
+XntFeeState     seeds: [b"xnt_fee_state_nft"] / [.._lp"]       —  34 bytes (acc_xnt_per_weight, last_seen_balance)
+XntDebt         seeds: [b"xnt_debt_nft", nft_mint]             —  25 bytes (per-position fee debt; closed on unstake)
+                       [b"xnt_debt_lp", position_mint]
+```
+
+### Error Codes
+
+For debugging `custom program error: 0x...` — code = 6000 + index (hex 0x1770 + index):
+
+| Code | Error | | Code | Error |
+|---|---|---|---|---|
+| 6000 | MachineInactive | | 6011 | UseMultiBurn |
+| 6001 | SoldOut | | 6012 | AlreadyFulfilled |
+| 6002 | InvalidQuantity | | 6013 | CommitmentAlreadyUsed |
+| 6003 | InvalidPrice | | 6014 | InvalidCommitment |
+| 6004 | InvalidTreasury | | 6015 | InvalidSlotHash |
+| 6005 | Unauthorized | | 6016 | InvalidAccount |
+| 6006 | MathOverflow | | 6017 | RequestExpired |
+| 6007 | InsufficientFunds | | 6018 | OfferExpired |
+| 6008 | AlreadyLegendary | | 6019 | GumSupplyExhausted |
+| 6009 | RarityMismatch | | 6020 | InvalidLockPeriod |
+| 6010 | WrongBurnCount | | 6021 | PoolHasStakers |
+
+### Events
+
+Emitted via Anchor `emit!` (base64 in `Program data:` logs; discriminator = `sha256("event:<Name>")[0..8]`) — this is what `scripts/announcer.cjs` and any indexer consume:
+
+`MachineInitializedEvent` `OracleUpdatedEvent` `CommitmentSubmittedEvent` `MintRequestedEvent` `MintRefundedEvent` `GumballMintedEvent` `GumballUpgradedEvent` `GumballListedEvent` `GumballDelistedEvent` `GumballSoldEvent` `OfferMadeEvent` `OfferCancelledEvent` `NftStakedEvent` `NftUnstakedEvent` `RewardsClaimedEvent` `LpStakedEvent` `LpUnstakedEvent` `LpRewardsClaimedEvent` `XntFeeClaimedEvent` `XntFeeDistributedEvent`
+
 ---
 
 ## Deployment
