@@ -192,6 +192,119 @@ app.post("/api/faucet", async (req, res) => {
   }
 });
 
+// ── Event Indexer + Leaderboard API ─────────────────────────────────────────
+// Polls program transactions, decodes events (mints/upgrades/sales/listings)
+// into a persistent rolling log, and caches a holder leaderboard aggregated
+// from GumballData accounts — so frontend pages hit one HTTP endpoint instead
+// of scanning the chain client-side on every load.
+const { eventsFromLogs } = require("./scripts/lib/gumball-events.cjs");
+const GUMBALL_PROGRAM = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
+const GUMBALL_MACHINE = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY");
+const INDEXER_FILE = process.env.INDEXER_STATE_FILE || path.join(__dirname, "indexer-state.json");
+const INDEX_POLL_MS = 20_000;
+const MAX_EVENTS = 1000;
+
+let indexer = { lastSig: null, events: [] };
+try { indexer = JSON.parse(fs.readFileSync(INDEXER_FILE, "utf8")); } catch { /* first boot */ }
+
+let indexerSaveTimer = null;
+function saveIndexer() {
+  if (indexerSaveTimer) return;
+  indexerSaveTimer = setTimeout(() => {
+    indexerSaveTimer = null;
+    fs.writeFile(INDEXER_FILE, JSON.stringify(indexer), (e) => {
+      if (e) console.error("Indexer save failed:", e.message);
+    });
+  }, 1000);
+}
+
+async function indexPoll() {
+  try {
+    const sigs = await faucetConnection.getSignaturesForAddress(
+      GUMBALL_PROGRAM, { limit: 50, until: indexer.lastSig || undefined }, "confirmed",
+    );
+    if (sigs.length === 0) return;
+    if (!indexer.lastSig) {
+      // First run: set the high-water mark, don't backfill (RPC history is shallow)
+      indexer.lastSig = sigs[0].signature;
+      saveIndexer();
+      return;
+    }
+    for (const s of sigs.reverse()) { // oldest -> newest
+      if (s.err) continue;
+      const tx = await faucetConnection.getTransaction(s.signature, {
+        commitment: "confirmed", maxSupportedTransactionVersion: 0,
+      });
+      for (const ev of eventsFromLogs(tx?.meta?.logMessages)) {
+        indexer.events.unshift({ ...ev, sig: s.signature, ts: (tx?.blockTime || 0) * 1000 });
+      }
+    }
+    indexer.lastSig = sigs[sigs.length - 1].signature;
+    if (indexer.events.length > MAX_EVENTS) indexer.events.length = MAX_EVENTS;
+    saveIndexer();
+  } catch (e) {
+    console.error("Indexer poll error:", e.message);
+  }
+}
+setInterval(indexPoll, INDEX_POLL_MS);
+indexPoll();
+
+app.get("/api/activity", (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, MAX_EVENTS);
+  const type = req.query.type; // optional: mint | upgrade | sale | list
+  const events = type ? indexer.events.filter(e => e.type === type) : indexer.events;
+  res.json({ events: events.slice(0, limit), lastSig: indexer.lastSig });
+});
+
+// Leaderboard cache — refreshed every 60s from on-chain state
+const RARITY_SCORES = [1, 4, 10, 40, 100];
+let leaderboardCache = null;
+
+async function refreshLeaderboard() {
+  try {
+    const [accounts, machineInfo] = await Promise.all([
+      faucetConnection.getProgramAccounts(GUMBALL_PROGRAM, { filters: [{ dataSize: 189 }] }),
+      faucetConnection.getAccountInfo(GUMBALL_MACHINE),
+    ]);
+    const holders = new Map(); // owner -> { count, score, rarities[5] }
+    const rarities = [0, 0, 0, 0, 0];
+    let circulating = 0;
+    for (const { account } of accounts) {
+      const d = account.data;
+      const owner = new PublicKey(d.subarray(8, 40)).toBase58();
+      if (owner === "11111111111111111111111111111111") continue; // legacy zeroed zombie
+      const rarity = d.readUInt8(82) % 5;
+      circulating++;
+      rarities[rarity]++;
+      const h = holders.get(owner) || { owner, count: 0, score: 0, rarities: [0, 0, 0, 0, 0] };
+      h.count++;
+      h.score += RARITY_SCORES[rarity];
+      h.rarities[rarity]++;
+      holders.set(owner, h);
+    }
+    // Machine: disc(8) auth(32) treas(32) oracle(32) price(8) total_minted(8) max(8) active(1) bump(1) total_burned(8)
+    const md = machineInfo.data;
+    leaderboardCache = {
+      updatedAt: Date.now(),
+      totalMinted: Number(md.readBigUInt64LE(112)),
+      maxSupply: Number(md.readBigUInt64LE(120)),
+      totalBurned: Number(md.readBigUInt64LE(130)),
+      circulating,
+      rarities,
+      holders: [...holders.values()].sort((a, b) => b.score - a.score).slice(0, 100),
+    };
+  } catch (e) {
+    console.error("Leaderboard refresh failed:", e.message);
+  }
+}
+setInterval(refreshLeaderboard, 60_000);
+refreshLeaderboard();
+
+app.get("/api/leaderboard", (req, res) => {
+  if (!leaderboardCache) return res.status(503).json({ error: "warming up" });
+  res.json(leaderboardCache);
+});
+
 // ── Price History ───────────────────────────────────────────────────────────
 const PRICE_FILE = path.join(__dirname, "price-history.json");
 const PRICE_INTERVAL = 30_000; // Record every 30 seconds

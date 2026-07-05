@@ -28,3 +28,4 @@ price-history.json
 localnet-fixtures/
 faucet-state.json
 announcer-state.json
+indexer-state.json

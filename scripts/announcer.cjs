@@ -16,7 +16,7 @@
 // restarts don't re-announce or skip events.
 
 const { Connection, PublicKey } = require("@solana/web3.js");
-const crypto = require("crypto");
+const { eventsFromLogs } = require("./lib/gumball-events.cjs");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
@@ -39,14 +39,6 @@ const RARITY_EMOJI = ["⚪", "🟢", "🔵", "🟣", "🟡"];
 const FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Sour Apple","Bubblegum","Orange Cream","Lemon Drop","Cotton Candy","Root Beer","Strawberry","Mint","Peach","Black Licorice","Mango","Raspberry","Pineapple","Coconut","Cinnamon","Mystery"];
 
 const connection = new Connection(RPC, "confirmed");
-
-// Anchor event discriminator: sha256("event:<Name>")[0..8]
-function eventDisc(name) {
-  return crypto.createHash("sha256").update(`event:${name}`).digest().subarray(0, 8);
-}
-const DISC_MINTED   = eventDisc("GumballMintedEvent");
-const DISC_UPGRADED = eventDisc("GumballUpgradedEvent");
-const DISC_SOLD     = eventDisc("GumballSoldEvent");
 
 function short(pk) { return pk.slice(0, 4) + ".." + pk.slice(-4); }
 function xnt(lamports) { return (Number(lamports) / 1e9).toFixed(lamports < 1_000_000_000n ? 4 : 2); }
@@ -74,54 +66,21 @@ function sendTelegram(text) {
   req.end();
 }
 
-// ── Event decoding (borsh layouts match the #[event] structs in lib.rs) ─────
-function decodeMinted(d) {
-  // minter(32) serial(u64) mint(32) flavor(u8) color(u8) rarity(u8) special(u8) total_minted(u64)
-  return {
-    minter: new PublicKey(d.subarray(0, 32)).toBase58(),
-    serial: d.readBigUInt64LE(32),
-    mint: new PublicKey(d.subarray(40, 72)).toBase58(),
-    flavor: d.readUInt8(72),
-    rarity: d.readUInt8(74),
-    totalMinted: d.readBigUInt64LE(76),
-  };
-}
-function decodeUpgraded(d) {
-  // burner(32) burned_rarity(u8) burned_count(u8) new_serial(u64) new_rarity(u8) new_mint(32) flavor color special
-  return {
-    burner: new PublicKey(d.subarray(0, 32)).toBase58(),
-    burnedRarity: d.readUInt8(32),
-    burnedCount: d.readUInt8(33),
-    newSerial: d.readBigUInt64LE(34),
-    newRarity: d.readUInt8(42),
-  };
-}
-function decodeSold(d) {
-  // seller(32) buyer(32) nft_mint(32) price(u64) royalty(u64)
-  return {
-    seller: new PublicKey(d.subarray(0, 32)).toBase58(),
-    buyer: new PublicKey(d.subarray(32, 64)).toBase58(),
-    price: d.readBigUInt64LE(96),
-  };
-}
-
-function formatEvent(disc, data, sig) {
+// ── Formatting (decoding lives in lib/gumball-events.cjs) ───────────────────
+function formatEvent(e, sig) {
   const link = `<a href="${EXPLORER}/tx/${sig}">tx</a>`;
-  if (disc.equals(DISC_MINTED)) {
-    const e = decodeMinted(data);
+  if (e.type === "mint") {
     const r = e.rarity % 5;
     const hype = r >= 4 ? "🚨 LEGENDARY PULL! 🚨\n" : r === 3 ? "🔥 Epic pull!\n" : "";
     return `${hype}🎉 Gumball <b>#${e.serial}</b> minted — ${RARITY_EMOJI[r]} <b>${RARITY[r]}</b> ${FLAVORS[e.flavor % FLAVORS.length]}\nby ${short(e.minter)} · ${e.totalMinted}/10000 minted · ${link}`;
   }
-  if (disc.equals(DISC_UPGRADED)) {
-    const e = decodeUpgraded(data);
+  if (e.type === "upgrade") {
     return `⬆️ ${short(e.burner)} burned ${e.burnedCount}× ${RARITY[e.burnedRarity % 5]} → ${RARITY_EMOJI[e.newRarity % 5]} <b>${RARITY[e.newRarity % 5]} #${e.newSerial}</b> · ${link}`;
   }
-  if (disc.equals(DISC_SOLD)) {
-    const e = decodeSold(data);
+  if (e.type === "sale") {
     return `💰 Gumball sold for <b>${xnt(e.price)} XNT</b>\n${short(e.seller)} → ${short(e.buyer)} · ${link}`;
   }
-  return null;
+  return null; // "list" and others: not announced
 }
 
 // ── Polling loop ─────────────────────────────────────────────────────────────
@@ -156,12 +115,8 @@ async function poll() {
       const tx = await connection.getTransaction(s.signature, {
         commitment: "confirmed", maxSupportedTransactionVersion: 0,
       });
-      const logs = tx?.meta?.logMessages || [];
-      for (const log of logs) {
-        if (!log.startsWith("Program data: ")) continue;
-        const raw = Buffer.from(log.slice("Program data: ".length), "base64");
-        if (raw.length < 8) continue;
-        const msg = formatEvent(raw.subarray(0, 8), raw.subarray(8), s.signature);
+      for (const ev of eventsFromLogs(tx?.meta?.logMessages)) {
+        const msg = formatEvent(ev, s.signature);
         if (msg) {
           console.log("Announcing:", msg.split("\n")[0]);
           sendTelegram(msg);
