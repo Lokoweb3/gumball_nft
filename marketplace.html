@@ -197,6 +197,7 @@ header{
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('listings')">ALL LISTINGS</button>
+    <button class="tab" onclick="switchTab('auctions')">AUCTIONS</button>
     <button class="tab" onclick="switchTab('my-listed')">MY LISTINGS</button>
     <button class="tab" onclick="switchTab('my-collection')">MY COLLECTION</button>
     <button class="tab" onclick="switchTab('my-offers')">MY OFFERS</button>
@@ -247,11 +248,13 @@ const RARITY_COLORS = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
 
 const LISTING_SIZE = 8 + 32 + 32 + 8 + 8 + 1; // 89
 const OFFER_SIZE   = 8 + 32 + 32 + 8 + 8 + 8 + 1; // 97 (added expires_at)
+const AUCTION_SIZE = 8 + 32 + 32 + 8 + 8 + 8 + 32 + 1 + 1; // 130
 const GD_V5       = 8 + 32 + 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1 + 32 + 32 + 32; // 189
 
 let walletPubkey = null;
 let currentTab = 'listings';
 let allListings = [];
+let allAuctions = [];
 let allOffers = [];
 let incomingOffers = [];
 let myCollection = [];
@@ -308,6 +311,20 @@ function parseListing(data) {
   };
 }
 
+function parseAuction(data) {
+  const dv = new DataView(data.buffer, data.byteOffset);
+  return {
+    seller:        new PublicKey(data.slice(8, 40)).toBase58(),
+    nftMint:       new PublicKey(data.slice(40, 72)).toBase58(),
+    startPrice:    Number(dv.getBigUint64(72, true)),
+    endsAt:        Number(dv.getBigInt64(80, true)),
+    highestBid:    Number(dv.getBigUint64(88, true)),
+    highestBidder: new PublicKey(data.slice(96, 128)).toBase58(),
+    settled:       data[128] === 1,
+    bump:          data[129],
+  };
+}
+
 function parseOffer(data) {
   const dv = new DataView(data.buffer, data.byteOffset);
   return {
@@ -359,7 +376,7 @@ async function connectWallet() {
 // ── DATA LOADING ─────────────────────────────────────────────────────────────
 
 async function loadAll() {
-  await Promise.all([loadListings(), loadMyCollection(), loadOffers()]);
+  await Promise.all([loadListings(), loadAuctions(), loadMyCollection(), loadOffers()]);
   updateStats();
   render();
 }
@@ -385,6 +402,29 @@ async function loadListings() {
     }
     allListings.sort((a, b) => a.price - b.price);
   } catch(e) { console.error("loadListings:", e); }
+}
+
+async function loadAuctions() {
+  try {
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: AUCTION_SIZE }],
+    });
+    allAuctions = [];
+    for (const { pubkey, account } of accounts) {
+      const auction = parseAuction(account.data);
+      if (auction.settled) continue;
+      const mintPubkey = new PublicKey(auction.nftMint);
+      const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID);
+      try {
+        const gbInfo = await connection.getAccountInfo(gumballPda);
+        if (gbInfo) {
+          const gb = parseGumball(gbInfo.data);
+          allAuctions.push({ ...auction, ...gb, auctionPda: pubkey.toBase58(), mintPubkey });
+        }
+      } catch(e) {}
+    }
+    allAuctions.sort((a, b) => a.endsAt - b.endsAt); // ending soonest first
+  } catch(e) { console.error("loadAuctions:", e); }
 }
 
 async function loadMyCollection() {
@@ -464,6 +504,7 @@ function render() {
   }
 
   if (currentTab === 'listings') renderListings(content);
+  else if (currentTab === 'auctions') renderAuctions(content);
   else if (currentTab === 'my-listed') renderMyListings(content);
   else if (currentTab === 'my-collection') renderMyCollection(content);
   else if (currentTab === 'my-offers') renderMyOffers(content);
@@ -552,6 +593,56 @@ function listingCard(l, isMine) {
     </div>`;
 }
 
+function renderAuctions(el) {
+  if (allAuctions.length === 0) {
+    el.innerHTML = '<div class="empty-msg">NO LIVE AUCTIONS — START ONE FROM "MY COLLECTION"</div>';
+    return;
+  }
+  el.innerHTML = `<div class="grid">${allAuctions.map(a => auctionCard(a)).join('')}</div>`;
+  loadSvgs();
+}
+
+function auctionCard(a) {
+  const rarName = RARITY[a.rarity] || "Common";
+  const rarColor = RARITY_COLORS[a.rarity] || "#aaaacc";
+  const flavorName = FLAVORS[a.flavor] || "Mystery";
+  const mintKey = a.mintPubkey ? a.mintPubkey.toBase58() : '';
+  const now = Math.floor(Date.now() / 1000);
+  const ended = now >= a.endsAt;
+  const isMine = walletPubkey && a.seller === walletPubkey.toBase58();
+  const amLeading = walletPubkey && a.highestBidder === walletPubkey.toBase58() && a.highestBid > 0;
+
+  const currentXNT = a.highestBid > 0 ? (a.highestBid / 1e9).toFixed(4) : null;
+  const minNext = a.highestBid > 0
+    ? a.highestBid + Math.max(Math.floor(a.highestBid / 20), 1)
+    : a.startPrice;
+  const remaining = a.endsAt - now;
+  const timeLeft = ended ? "ENDED" :
+    remaining > 86400 ? `${Math.floor(remaining/86400)}d ${Math.floor((remaining%86400)/3600)}h left` :
+    remaining > 3600  ? `${Math.floor(remaining/3600)}h ${Math.floor((remaining%3600)/60)}m left` :
+                        `${Math.floor(remaining/60)}m left`;
+
+  let action;
+  if (ended) {
+    action = `<button class="card-btn buy" onclick="settleAuctionUi('${mintKey}')" ${!walletPubkey?'disabled':''}>SETTLE${a.highestBid===0?' (RETURN TO SELLER)':''}</button>`;
+  } else if (isMine) {
+    action = `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">YOUR AUCTION — settle available after it ends</div>`;
+  } else {
+    action = `<button class="card-btn buy" onclick="bidOnAuction('${mintKey}')" ${!walletPubkey?'disabled':''}>${amLeading ? 'RAISE (YOU LEAD)' : 'PLACE BID'}</button>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="card-svg" id="svg-a-${a.serial}" data-mint="${mintKey}"></div>
+      <div class="card-serial">#${String(a.serial).padStart(4,'0')}</div>
+      <div class="card-name">${flavorName}</div>
+      <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
+      <div class="card-price">${currentXNT ? currentXNT + " XNT" : "NO BIDS · start " + (a.startPrice/1e9).toFixed(4)}</div>
+      <div class="card-seller">${timeLeft} · min next ${(minNext/1e9).toFixed(4)} XNT</div>
+      ${action}
+    </div>`;
+}
+
 function collectionCard(g) {
   const rarName = RARITY[g.rarity] || "Common";
   const rarColor = RARITY_COLORS[g.rarity] || "#aaaacc";
@@ -564,7 +655,8 @@ function collectionCard(g) {
       <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
-      ${mintKey ? `<button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>` : `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">MINT KEY NOT FOUND — REFRESH</div>`}
+      ${mintKey ? `<button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>
+      <button class="card-btn" onclick="createAuctionUi('${mintKey}')" style="margin-top:6px;">START AUCTION</button>` : `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">MINT KEY NOT FOUND — REFRESH</div>`}
     </div>`;
 }
 
@@ -693,6 +785,159 @@ async function confirmList() {
     console.error("list error:", e);
     toast("LIST FAILED: " + (e.message || "").slice(0, 60), "error");
   }
+}
+
+// ── AUCTION ACTIONS ──────────────────────────────────────────────────────────
+
+async function createAuctionUi(mintKeyStr) {
+  if (!walletPubkey) return;
+  const priceXNT = parseFloat(prompt("Start price (XNT):", "0.05"));
+  if (!priceXNT || priceXNT <= 0) { toast("INVALID START PRICE", "error"); return; }
+  const hours = parseFloat(prompt("Duration in hours (1 - 168):", "24"));
+  if (!hours || hours < 1 || hours > 168) { toast("DURATION MUST BE 1-168 HOURS", "error"); return; }
+
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(mintKeyStr);
+    const [auctionPda] = PublicKey.findProgramAddressSync([strToU8("auction"), mintKey.toBytes()], PROGRAM_ID);
+    const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+    const escrowAta = getAta(mintKey, escrowAuth);
+    const sellerAta = getAta(mintKey, walletPubkey);
+
+    const discBytes = await disc("create_auction");
+    const data = concatU8(discBytes,
+      u8FromNum(Math.floor(priceXNT * 1e9), 8),
+      u8FromNum(Math.floor(hours * 3600), 8));
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // seller
+        { pubkey: mintKey,             isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: sellerAta,           isSigner: false, isWritable: true  }, // seller_ata
+        { pubkey: escrowAuth,          isSigner: false, isWritable: false }, // escrow_authority
+        { pubkey: escrowAta,           isSigner: false, isWritable: true  }, // escrow_ata
+        { pubkey: auctionPda,          isSigner: false, isWritable: true  }, // auction
+        { pubkey: gumballPda,          isSigner: false, isWritable: false }, // gumball_data
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+    await signAndSend(provider, ix);
+    toast(`AUCTION STARTED — ${hours}h, start ${priceXNT} XNT`, "success");
+    await loadAll();
+  } catch(e) {
+    console.error("createAuction error:", e);
+    toast("AUCTION FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function bidOnAuction(mintKeyStr) {
+  if (!walletPubkey) return;
+  const a = allAuctions.find(x => x.nftMint === mintKeyStr);
+  if (!a) { toast("AUCTION NOT FOUND — REFRESH", "error"); return; }
+  const minNext = a.highestBid > 0
+    ? a.highestBid + Math.max(Math.floor(a.highestBid / 20), 1)
+    : a.startPrice;
+  const bidXNT = parseFloat(prompt(`Your bid (min ${(minNext/1e9).toFixed(4)} XNT):`, (minNext/1e9).toFixed(4)));
+  if (!bidXNT || Math.floor(bidXNT * 1e9) < minNext) { toast("BID BELOW MINIMUM", "error"); return; }
+
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(mintKeyStr);
+    const [auctionPda] = PublicKey.findProgramAddressSync([strToU8("auction"), mintKey.toBytes()], PROGRAM_ID);
+    // Refund target: the current leader (any account is fine when no bids yet)
+    const prevBidder = a.highestBid > 0 ? new PublicKey(a.highestBidder) : walletPubkey;
+
+    const discBytes = await disc("bid");
+    const data = concatU8(discBytes, u8FromNum(Math.floor(bidXNT * 1e9), 8));
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // bidder
+        { pubkey: auctionPda,          isSigner: false, isWritable: true  }, // auction
+        { pubkey: prevBidder,          isSigner: false, isWritable: true  }, // prev_bidder
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+    await signAndSend(provider, ix);
+    toast(`BID PLACED: ${bidXNT} XNT`, "success");
+    await loadAll();
+  } catch(e) {
+    console.error("bid error:", e);
+    toast("BID FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+async function settleAuctionUi(mintKeyStr) {
+  if (!walletPubkey) return;
+  const a = allAuctions.find(x => x.nftMint === mintKeyStr);
+  if (!a) { toast("AUCTION NOT FOUND — REFRESH", "error"); return; }
+
+  try {
+    const provider = getProvider();
+    const mintKey = new PublicKey(mintKeyStr);
+    const [auctionPda] = PublicKey.findProgramAddressSync([strToU8("auction"), mintKey.toBytes()], PROGRAM_ID);
+    const [escrowAuth] = PublicKey.findProgramAddressSync([strToU8("escrow"), mintKey.toBytes()], PROGRAM_ID);
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+    const [nftXntPool] = PublicKey.findProgramAddressSync([strToU8("nft_xnt_pool")], PROGRAM_ID);
+    const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
+    const escrowAta = getAta(mintKey, escrowAuth);
+    // No bids -> NFT returns to the seller; otherwise it goes to the winner
+    const winner = a.highestBid > 0 ? new PublicKey(a.highestBidder) : new PublicKey(a.seller);
+    const winnerAta = getAta(mintKey, winner);
+    const seller = new PublicKey(a.seller);
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    const treasury = new PublicKey(machineInfo.data.slice(40, 72));
+
+    const discBytes = await disc("settle_auction");
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // payer (anyone)
+        { pubkey: auctionPda,          isSigner: false, isWritable: true  }, // auction
+        { pubkey: seller,              isSigner: false, isWritable: true  }, // seller
+        { pubkey: winner,              isSigner: false, isWritable: true  }, // winner
+        { pubkey: mintKey,             isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: escrowAuth,          isSigner: false, isWritable: false }, // escrow_authority
+        { pubkey: escrowAta,           isSigner: false, isWritable: true  }, // escrow_ata
+        { pubkey: winnerAta,           isSigner: false, isWritable: true  }, // winner_ata
+        { pubkey: gumballPda,          isSigner: false, isWritable: true  }, // gumball_data
+        { pubkey: MACHINE_PDA,         isSigner: false, isWritable: false }, // machine
+        { pubkey: treasury,            isSigner: false, isWritable: true  }, // treasury
+        { pubkey: nftXntPool,          isSigner: false, isWritable: true  }, // nft_xnt_pool
+        { pubkey: lpXntPool,           isSigner: false, isWritable: true  }, // lp_xnt_pool
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+        { pubkey: ASSOC_PID,           isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: RENT_PID,            isSigner: false, isWritable: false },
+      ],
+      data: discBytes,
+    });
+    await signAndSend(provider, ix);
+    toast(a.highestBid > 0 ? "AUCTION SETTLED — NFT TO WINNER" : "AUCTION CLOSED — NFT RETURNED", "success");
+    await loadAll();
+  } catch(e) {
+    console.error("settle error:", e);
+    toast("SETTLE FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
+}
+
+// Shared sign+send used by the auction actions (same flow as confirmList)
+async function signAndSend(provider, ix) {
+  const tx = new Transaction().add(ix);
+  tx.feePayer = walletPubkey;
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  const signed = await provider.signTransaction(tx);
+  const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+  await connection.confirmTransaction(sig, "confirmed");
+  return sig;
 }
 
 async function delistGumball(mintKeyStr) {

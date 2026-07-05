@@ -130,6 +130,7 @@ Burns are blocked once `total_minted >= max_supply` — no new serial numbers ca
 | | |
 |---|---|
 | **Earn** | Stake gumball NFTs or GUM/XNT LP — vaults emit 0.3% of their balance per day, pro-rata by stake weight |
+| **Burn** | `reroll_cosmetics` burns a flat 25 GUM to re-randomize a gumball's flavor/color/special — the demand sink that closes the emissions loop |
 | **Swap** | `staking.html` has a built-in GUM ⇄ XNT swap routed through the XDEX CP-AMM pool on X1 |
 | **Provide liquidity** | LP tokens from the XDEX GUM/XNT pool can be staked with lock tiers for boosted weight + XNT fee share |
 
@@ -227,6 +228,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `bid` | User | Bid (min +5% raise, previous bidder auto-refunded, anti-snipe extension) |
 | `settle_auction` | Anyone | Crank an ended auction — NFT to winner, 95/5 split, royalty to pools |
 | `set_season` | Admin | Configure a seasonal flavor/color window for new mints |
+| `reroll_cosmetics` | Holder | Burn 25 GUM to re-randomize flavor/color/special (rarity untouched) |
 | `attach_metadata` | Anyone | Attach Metaplex metadata so a gumball shows in wallet galleries |
 | `initialize_staking` | Admin | Set up stake config + GUM reward vaults (gated on machine.authority) |
 | `initialize_xnt_fees` | Admin | Create the XNT fee pools + accumulator state PDAs |
@@ -556,7 +558,8 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - [x] Indexer API — `/api/activity` (event feed) and `/api/leaderboard` (cached holder rankings) served by the Express server
 - [x] Wallet-visible gumballs — permissionless `attach_metadata` + `/api/metadata/<mint>` serving the on-chain SVG (backfill: `scripts/attach-metadata.cjs`)
 - [x] Seasonal trait drops — `set_season` windows flavor/color for new mints (`scripts/set-season.cjs`)
-- [x] English auctions (contract) — create/bid/settle with anti-snipe and pool-routed royalties; marketplace UI pending
+- [x] English auctions — create/bid/settle with anti-snipe and pool-routed royalties, AUCTIONS tab in the marketplace
+- [x] GUM sink — `reroll_cosmetics` burns 25 GUM to re-randomize a gumball's looks (🎲 button in the collection modal)
 - [x] Mainnet tooling — verifiable-build CI (`solana-verify`), `transfer_authority` instruction + documented multisig handover (DEPLOY.md)
 - [ ] Mainnet execution — delta re-audit, verified deploy, actually move authority + treasury + upgrade key to a multisig
 

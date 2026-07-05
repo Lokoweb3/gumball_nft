@@ -635,6 +635,7 @@ svg#gm{width:100%;}
   <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
     <button onclick="copyOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--teal);color:var(--teal);cursor:pointer;">📋 COPY SVG</button>
     <button onclick="downloadOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--purple);color:var(--purple);cursor:pointer;">⬇ DOWNLOAD</button>
+    <button onclick="rerollCosmetics()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--pink,#ff44aa);color:var(--pink,#ff44aa);cursor:pointer;">🎲 RE-ROLL LOOKS (25 GUM)</button>
     <button onclick="viewSvgSource()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--gray);color:var(--gray);cursor:pointer;">{ } SOURCE</button>
   </div>
   <div id="modalTraits" style="font-size:0.56rem;color:var(--gray);text-align:center;line-height:2;"></div>
@@ -1439,6 +1440,61 @@ async function fetchGumballSvg(mintPubkey) {
     }
   } catch(e) {}
   return null;
+}
+
+// ── GUM SINK: cosmetic re-roll ───────────────────────────────────────────────
+// Burns 25 GUM to re-randomize flavor/color/special (rarity untouched).
+const GUM_MINT_PK = new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1");
+async function rerollCosmetics() {
+  const g = _modalGumball;
+  if (!walletPubkey || !g || !g.mintPubkey) { toast("OPEN A GUMBALL FIRST", "error"); return; }
+  if (!confirm(`Burn 25 GUM to re-roll #${g.serial}'s flavor/color/special?\nRarity stays ${g.rarName}. This cannot be undone.`)) return;
+  try {
+    const provider = getProvider();
+    const mintKey = g.mintPubkey;
+    const [gumballPda]  = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
+    const [svgPda]      = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
+    const [stakeConfig] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
+    const [seasonPda]   = PublicKey.findProgramAddressSync([strToU8("season")], PROGRAM_ID);
+    const ownerNftAta = getAta(mintKey, walletPubkey);
+    const ownerGumAta = getAta(GUM_MINT_PK, walletPubkey);
+    const userSeed = crypto.getRandomValues(new Uint8Array(32));
+
+    const discBytes = await disc("reroll_cosmetics");
+    const data = new Uint8Array(40);
+    data.set(discBytes, 0); data.set(userSeed, 8);
+
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey,        isSigner: true,  isWritable: true  }, // owner
+        { pubkey: mintKey,             isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: ownerNftAta,         isSigner: false, isWritable: false }, // owner_nft_ata
+        { pubkey: gumballPda,          isSigner: false, isWritable: true  }, // gumball_data
+        { pubkey: svgPda,              isSigner: false, isWritable: true  }, // gumball_svg
+        { pubkey: stakeConfig,         isSigner: false, isWritable: false }, // stake_config
+        { pubkey: GUM_MINT_PK,         isSigner: false, isWritable: true  }, // gum_mint (burn)
+        { pubkey: ownerGumAta,         isSigner: false, isWritable: true  }, // owner_gum_ata
+        { pubkey: SLOT_HASHES_PID,     isSigner: false, isWritable: false }, // slot_hashes
+        { pubkey: seasonPda,           isSigner: false, isWritable: false }, // season_config
+        { pubkey: TOKEN_PID,           isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+    const tx = new Transaction().add(ix);
+    tx.feePayer = walletPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    const signed = await provider.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+    await connection.confirmTransaction(sig, "confirmed");
+    toast("RE-ROLLED! Refreshing...", "success");
+    document.getElementById("svgModal").style.display = "none";
+    fetchWalletGumballs(); // re-render with the new traits + SVG
+  } catch(e) {
+    console.error("reroll error:", e);
+    toast("RE-ROLL FAILED: " + (e.message || "").slice(0, 60), "error");
+  }
 }
 
 // ── SVG MODAL ─────────────────────────────────────────────────────────────────

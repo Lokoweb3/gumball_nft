@@ -769,3 +769,25 @@ already-emitted on-chain events into free community visibility.
 season_config account). After deploy: `node scripts/attach-metadata.cjs` backfills wallet
 metadata for all existing gumballs (~0.0056 XNT each, payer-funded).
 
+---
+
+### [2026-07-05] Auction UI + GUM sink (reroll_cosmetics)
+
+**Files:** `lib.rs`, `marketplace.html`, `index.html`
+
+**What:**
+- **Auction UI:** AUCTIONS tab in marketplace.html — scans Auction PDAs (dataSize 130),
+  cards show current bid / min next (+5%) / countdown, PLACE BID and permissionless
+  SETTLE actions; START AUCTION button on My Collection cards (prompt-based price +
+  duration). Refund target (prev bidder) read from the auction account client-side.
+- **GUM sink:** `reroll_cosmetics` burns a flat 25 GUM (REROLL_COST_GUM) to
+  re-randomize flavor/color/special — rarity NEVER changes. Entropy = slot hash +
+  caller seed (same anti-grinding model as burns); respects active season windows;
+  regenerates the on-chain SVG in place; syncs gumball_data.owner from the proven
+  ATA holding. 🎲 RE-ROLL button in index.html's gumball modal.
+- CosmeticsRerolledEvent added. Suite re-run: 25/25 after rebuild.
+
+**Why:** Auctions complete the marketplace (price discovery for rare pulls); the
+re-roll is GUM's first demand sink — emissions now have a burn counterweight, and
+cosmetics get replay value without touching rarity fairness.
+

@@ -41,6 +41,11 @@ const ROYALTY_BPS: u64 = 500; // 5% royalty to treasury on marketplace sales
 // when GUM is priced near the 1,000 XNT mainnet bootstrap point.
 const RARITY_WEIGHT: [u64; 5] = [1, 9, 47, 156, 591];
 
+// GUM sink: flat fee burned per cosmetic re-roll (6-decimal GUM units).
+// ~1 day of Uncommon-tier staking emissions — cheap enough to use, real
+// enough to matter at volume.
+const REROLL_COST_GUM: u64 = 25_000_000; // 25 GUM
+
 // Base URI for wallet metadata (attach_metadata) — the API serves the
 // on-chain SVG as a data-URI image. Mutable metadata + PDA update authority
 // mean this can be repointed if the host ever changes.
@@ -1232,6 +1237,68 @@ pub mod gumball_nft {
         emit!(GumballSoldEvent {
             seller: ctx.accounts.seller.key(), buyer: ctx.accounts.offer.buyer,
             nft_mint: ctx.accounts.offer.nft_mint, price: amount, royalty,
+        });
+        Ok(())
+    }
+
+    // ── GUM SINK ─────────────────────────────────────────────────────────────
+
+    /// Burn a flat GUM fee to re-randomize a gumball's COSMETICS (flavor,
+    /// color, special) — rarity never changes. Entropy is the slot hash mixed
+    /// with a caller-supplied seed (prevents validator grinding, same model as
+    /// burns). Respects any active season window; the on-chain SVG regenerates.
+    /// This is GUM's demand sink: supply is fixed, burned GUM is gone forever.
+    pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> Result<()> {
+        anchor_spl::token::burn(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint:      ctx.accounts.gum_mint.to_account_info(),
+                    from:      ctx.accounts.owner_gum_ata.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            REROLL_COST_GUM,
+        )?;
+
+        let serial = ctx.accounts.gumball_data.serial;
+        let rarity = ctx.accounts.gumball_data.rarity; // NEVER rerolled
+
+        let clock = Clock::get()?;
+        let slot_hash_data = &ctx.accounts.slot_hashes.data.borrow();
+        let hash_bytes: [u8; 32] = slot_hash_data[16..48].try_into()
+            .map_err(|_| error!(GumballError::InvalidSlotHash))?;
+        let seed_hash = hashv(&[
+            &hash_bytes,
+            &user_seed,
+            &clock.unix_timestamp.to_le_bytes(),
+            &serial.to_le_bytes(),
+        ]);
+        let mut seed = u64::from_le_bytes(seed_hash.to_bytes()[..8].try_into()
+            .map_err(|_| error!(GumballError::InvalidSlotHash))?);
+
+        let flavor  = lcg_next(&mut seed, FLAVORS.len()  as u64) as u8;
+        let color   = lcg_next(&mut seed, COLORS.len()   as u64) as u8;
+        let special = lcg_next(&mut seed, SPECIALS.len() as u64) as u8;
+        let t = apply_season(
+            Traits { flavor, color, rarity, special },
+            &ctx.accounts.season_config,
+        )?;
+
+        let svg_bytes = generate_svg(serial, t.flavor, t.color, rarity, t.special);
+        let gd = &mut ctx.accounts.gumball_data;
+        gd.flavor  = t.flavor;
+        gd.color   = t.color;
+        gd.special = t.special;
+        // The ATA constraint proved the caller holds the token — sync the
+        // tracked owner too (same effect as update_owner)
+        gd.owner   = ctx.accounts.owner.key();
+        ctx.accounts.gumball_svg.svg = svg_bytes;
+
+        emit!(CosmeticsRerolledEvent {
+            owner: ctx.accounts.owner.key(),
+            nft_mint: ctx.accounts.nft_mint.key(),
+            flavor: t.flavor, color: t.color, special: t.special,
         });
         Ok(())
     }
@@ -2719,6 +2786,38 @@ pub struct BurnMulti<'info> {
 
 
 #[derive(Accounts)]
+pub struct RerollCosmetics<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub nft_mint: Account<'info, Mint>,
+    /// Caller must actually HOLD the NFT (stronger than the tracked owner
+    /// field, and staked/escrowed gumballs can't be rerolled)
+    #[account(
+        associated_token::mint = nft_mint,
+        associated_token::authority = owner,
+        constraint = owner_nft_ata.amount == 1 @ GumballError::Unauthorized,
+    )]
+    pub owner_nft_ata: Account<'info, TokenAccount>,
+    #[account(mut, seeds = [b"gumball", nft_mint.key().as_ref()], bump = gumball_data.bump)]
+    pub gumball_data: Account<'info, GumballData>,
+    #[account(mut, seeds = [b"svg", nft_mint.key().as_ref()], bump)]
+    pub gumball_svg: Account<'info, GumballSvg>,
+    #[account(seeds = [b"stake_config_v2"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(mut, constraint = gum_mint.key() == stake_config.gum_mint @ GumballError::InvalidAccount)]
+    pub gum_mint: Account<'info, Mint>,
+    #[account(mut, associated_token::mint = gum_mint, associated_token::authority = owner)]
+    pub owner_gum_ata: Account<'info, TokenAccount>,
+    /// CHECK: slot hashes sysvar
+    #[account(address = sysvar::slot_hashes::id())]
+    pub slot_hashes: AccountInfo<'info>,
+    /// CHECK: SeasonConfig PDA — parsed leniently (uninitialized = no season)
+    #[account(seeds = [b"season"], bump)]
+    pub season_config: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct CreateAuction<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
@@ -3790,6 +3889,7 @@ impl XntDebt { pub const LEN: usize = 16 + 1; }
 #[event] pub struct LpRewardsClaimedEvent { pub staker: Pubkey, pub amount: u64 }
 #[event] pub struct XntFeeClaimedEvent    { pub claimer: Pubkey, pub stake_type: u8, pub amount: u64 }
 #[event] pub struct AuctionCreatedEvent   { pub seller: Pubkey, pub nft_mint: Pubkey, pub start_price: u64, pub ends_at: i64 }
+#[event] pub struct CosmeticsRerolledEvent { pub owner: Pubkey, pub nft_mint: Pubkey, pub flavor: u8, pub color: u8, pub special: u8 }
 #[event] pub struct AuctionBidEvent       { pub bidder: Pubkey, pub nft_mint: Pubkey, pub amount: u64, pub ends_at: i64 }
 #[event] pub struct XntFeeDistributedEvent { pub source: u8, pub treasury: u64, pub nft_pool: u64, pub lp_pool: u64 }
 
