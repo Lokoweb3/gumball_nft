@@ -29,3 +29,4 @@ localnet-fixtures/
 faucet-state.json
 announcer-state.json
 indexer-state.json
+oracle-wallet.json
