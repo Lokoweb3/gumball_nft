@@ -321,8 +321,30 @@ async function pollTelegramCommands() {
 
 // ─── MAIN LOOP ───────────────────────────────────────────────────────────────
 
+// Wedge detection: PM2 can say "online" while the oracle's loop is stuck on a
+// hung await. The oracle touches logs/oracle-heartbeat.json every cycle; if it
+// goes stale for 3+ minutes while the process is up, alert.
+let heartbeatAlerted = false;
+async function monitorHeartbeat() {
+  const hbPath = require("path").join(__dirname, "..", "logs", "oracle-heartbeat.json");
+  try {
+    const hb = JSON.parse(require("fs").readFileSync(hbPath, "utf8"));
+    const ageMs = Date.now() - hb.ts;
+    if (ageMs > 3 * 60_000) {
+      if (!heartbeatAlerted) {
+        heartbeatAlerted = true;
+        sendTelegram(`🫀 <b>ORACLE WEDGED?</b>\nProcess is up but heartbeat is ${Math.round(ageMs / 1000)}s stale (rpc: ${hb.rpc || "?"}).\nConsider /restart.`);
+      }
+    } else if (heartbeatAlerted) {
+      heartbeatAlerted = false;
+      sendTelegram("🫀 Oracle heartbeat recovered.");
+    }
+  } catch { /* heartbeat file missing — old oracle build or first boot */ }
+}
+
 async function runChecks() {
   await monitorOracleProcess();
+  await monitorHeartbeat();
   await monitorPendingRequests();
   await monitorBalance();
   await pollTelegramCommands();

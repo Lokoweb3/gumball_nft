@@ -30,6 +30,12 @@ const fs     = require("fs");
 const PROGRAM_ID  = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const MACHINE_PDA = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY");
 const RPC         = process.env.RPC_URL || "https://rpc.testnet.x1.xyz";
+// Failover: comma-separated list (primary first). After 3 consecutive polling
+// errors the oracle rotates to the next endpoint.
+const RPC_URLS    = (process.env.RPC_URLS || RPC).split(",").map(s => s.trim()).filter(Boolean);
+// Heartbeat: touched every loop iteration; the monitor alerts if it goes stale
+// while PM2 still reports the process online (catches "alive but wedged").
+const HEARTBEAT_FILE = require("path").join(__dirname, "..", "logs", "oracle-heartbeat.json");
 const POLL_MS     = 2000;
 const MAX_AGE_S   = 270; // slightly less than MINT_TIMEOUT (300s)
 
@@ -356,7 +362,10 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
 // ── MAIN LOOP ─────────────────────────────────────────────────────────────────
 
 async function main() {
-  const connection = new Connection(RPC, "confirmed");
+  let rpcIdx = 0;
+  let errStreak = 0;
+  let connection = new Connection(RPC_URLS[rpcIdx], "confirmed");
+  try { fs.mkdirSync(require("path").join(__dirname, "..", "logs"), { recursive: true }); } catch {}
 
   console.log("\n🎰 Gumball Commit-Reveal Oracle");
   console.log("─".repeat(50));
@@ -506,10 +515,22 @@ async function main() {
       if (!mintedAny) {
         process.stdout.write(".");
       }
+      errStreak = 0;
 
     } catch(e) {
       console.error(`\nPolling error: ${e.message}`);
+      errStreak++;
+      if (errStreak >= 3 && RPC_URLS.length > 1) {
+        rpcIdx = (rpcIdx + 1) % RPC_URLS.length;
+        connection = new Connection(RPC_URLS[rpcIdx], "confirmed");
+        console.error(`RPC failover after ${errStreak} consecutive errors -> ${RPC_URLS[rpcIdx]}`);
+        errStreak = 0;
+      }
     }
+
+    // Heartbeat — loop completed (successfully or not, the process is alive
+    // and cycling; a wedged await leaves this file stale)
+    fs.writeFile(HEARTBEAT_FILE, JSON.stringify({ ts: Date.now(), rpc: RPC_URLS[rpcIdx] }), () => {});
 
     await new Promise(r => setTimeout(r, POLL_MS));
   }
