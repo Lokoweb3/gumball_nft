@@ -209,6 +209,8 @@ No migration needed unless Machine struct changed.
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
+| `scripts/validate-marketplace-litesvm.cjs` | Marketplace + auction suite (LiteSVM, in-process, no validator) |
+| `scripts/validate-staking-localnet.cjs` | Staking + XNT fee suite (needs solana-test-validator) |
 | `server.cjs` | Express server for Railway deployment + faucet API |
 | `public/landing.html` | Project homepage with live mint counter |
 | `public/index.html` | Main frontend (mint + collection + burns) |
@@ -263,7 +265,27 @@ anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet ~/
 
 # Migrate machine (after Machine struct changes only)
 node scripts/initialize.cjs --migrate
+
+# Tests
+cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit (incl. generate_svg golden)
+node scripts/make-localnet-fixtures.cjs                      # once — clones live X1 state
+npm run test:marketplace                                     # marketplace + auctions (LiteSVM, ~15s)
+FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # staking + XNT fees (validator)
 ```
+
+### Testing notes
+
+`validate-marketplace-litesvm.cjs` runs each scenario in its **own child
+process**. LiteSVM 0.7 aborts with `std::bad_alloc` shortly after a failed
+program invocation — the error is returned correctly first, so results are
+trustworthy, but the process dies. Consequences for anyone extending the suite:
+
+- a scenario may contain **at most one deliberately failing transaction**, and
+  it must be the last thing that scenario does
+- the parent retries a scenario that dies before reporting (`SCENARIO_ATTEMPTS`,
+  default 4); assertions are never flaky, only the abort is
+- `generate_svg` output is pinned by `generate_svg_golden_output` — if it fails,
+  the rendered artwork changed. Do not re-bake the hashes unless that was intended.
 
 ---
 

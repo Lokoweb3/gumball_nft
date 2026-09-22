@@ -15,6 +15,7 @@
 const {
   Connection, PublicKey, Transaction, TransactionInstruction,
   Keypair, sendAndConfirmTransaction, SystemProgram, SYSVAR_RENT_PUBKEY,
+  ComputeBudgetProgram,
 } = require("@solana/web3.js");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -146,8 +147,20 @@ function sweepIx(which) {
   });
 }
 
+// Several tests deliberately re-send an IDENTICAL instruction (e.g. claiming
+// again with nothing pending). Same instruction + same signer + a blockhash
+// that has not rolled over produces a byte-identical transaction, which the
+// cluster de-duplicates: no second execution, no second fee — and assertions of
+// the form `after === before - fee` then fail by exactly the fee, reporting a
+// bug that does not exist. A per-send nonce in a compute-budget instruction
+// keeps every transaction unique. 400k only RAISES the default 200k limit, so
+// it cannot change whether an instruction succeeds.
+let sendNonce = 0;
 async function send(c, ix) {
-  return sendAndConfirmTransaction(c, new Transaction().add(ix), [wallet], { commitment: "confirmed" });
+  const tx = new Transaction()
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 + (sendNonce++) }))
+    .add(ix);
+  return sendAndConfirmTransaction(c, tx, [wallet], { commitment: "confirmed" });
 }
 
 async function main() {
