@@ -284,6 +284,9 @@ trustworthy, but the process dies. Consequences for anyone extending the suite:
   it must be the last thing that scenario does
 - the parent retries a scenario that dies before reporting (`SCENARIO_ATTEMPTS`,
   default 4); assertions are never flaky, only the abort is
+- the abort is far more frequent on small machines: stable at 39/39 locally, but
+  8 of 10 scenarios died on a 2-CPU GitHub runner. CI therefore runs it
+  **non-blocking** until it moves to LiteSVM 1.x (@solana/kit) or solana-bankrun
 - `generate_svg` output is pinned by `generate_svg_golden_output` — if it fails,
   the rendered artwork changed. Do not re-bake the hashes unless that was intended.
 
