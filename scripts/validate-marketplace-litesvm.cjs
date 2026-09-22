@@ -28,7 +28,9 @@
 //   node scripts/make-localnet-fixtures.cjs        # once, clones live X1 state
 //   node scripts/validate-marketplace-litesvm.cjs
 //
-// Requires target/deploy/gumball_nft.so (anchor build).
+// Requires a CURRENT target/deploy/gumball_nft.so (anchor build / cargo
+// build-sbf). The slippage scenarios assert on specific Anchor error codes, so
+// a stale binary fails them loudly rather than passing for the wrong reason.
 const { LiteSVM } = require("litesvm");
 const {
   PublicKey, Keypair, Transaction, TransactionInstruction, SystemProgram,
@@ -72,6 +74,8 @@ const gumballData     = pda([Buffer.from("gumball"), NFT_MINT.toBuffer()]);
 const escrowAuthority = pda([Buffer.from("escrow"),  NFT_MINT.toBuffer()]);
 const escrowAta       = ata(NFT_MINT, escrowAuthority);
 const listing         = pda([Buffer.from("listing"), NFT_MINT.toBuffer()]);
+const offerPda = (buyerPk) =>
+  pda([Buffer.from("offer"), NFT_MINT.toBuffer(), buyerPk.toBuffer()]);
 const auction         = pda([Buffer.from("auction"), NFT_MINT.toBuffer()]);
 const nftXntPool      = pda([Buffer.from("nft_xnt_pool")]);
 const lpXntPool       = pda([Buffer.from("lp_xnt_pool")]);
@@ -187,15 +191,45 @@ const delistIx = (e) => new TransactionInstruction({
   ],
 });
 
-const buyIx = (e, who) => new TransactionInstruction({
+// maxPrice defaults to the listed price — i.e. an honest buyer paying what
+// they were shown. Pass a lower value to simulate a seller raising the price
+// after the buyer committed.
+const buyIx = (e, who, maxPrice = PRICE) => new TransactionInstruction({
   programId: PROGRAM_ID,
-  data: disc("buy_gumball"),
+  data: Buffer.concat([disc("buy_gumball"), u64(maxPrice)]),
   keys: [
     meta(who.publicKey, true, true), meta(e.seller.publicKey, false, true),
     meta(machinePda, false, false), meta(e.treasury, false, true),
     meta(NFT_MINT, false, false), meta(listing, false, true),
     meta(escrowAuthority, false, false), meta(escrowAta, false, true),
     meta(ata(NFT_MINT, who.publicKey), false, true), meta(gumballData, false, true),
+    meta(nftXntPool, false, true), meta(lpXntPool, false, true),
+    meta(TOKEN_PID, false, false), meta(ASSOC_PID, false, false),
+    meta(SystemProgram.programId, false, false), meta(RENT_PID, false, false),
+  ],
+});
+
+const makeOfferIx = (e, who, amount, expireSecs) => new TransactionInstruction({
+  programId: PROGRAM_ID,
+  data: Buffer.concat([disc("make_offer"), u64(amount), i64(expireSecs)]),
+  keys: [
+    meta(who.publicKey, true, true), meta(NFT_MINT, false, false),
+    meta(offerPda(who.publicKey), false, true),
+    meta(SystemProgram.programId, false, false),
+  ],
+});
+
+// minAmount defaults to the offer amount — an honest seller accepting what they
+// were shown. A higher value simulates the buyer shrinking the offer first.
+const acceptOfferIx = (e, buyerKp, amount, minAmount = amount) => new TransactionInstruction({
+  programId: PROGRAM_ID,
+  data: Buffer.concat([disc("accept_offer"), u64(minAmount)]),
+  keys: [
+    meta(e.seller.publicKey, true, true), meta(buyerKp.publicKey, false, true),
+    meta(machinePda, false, false), meta(e.treasury, false, true),
+    meta(NFT_MINT, false, false), meta(offerPda(buyerKp.publicKey), false, true),
+    meta(e.sellerAta, false, true), meta(ata(NFT_MINT, buyerKp.publicKey), false, true),
+    meta(gumballData, false, true),
     meta(nftXntPool, false, true), meta(lpXntPool, false, true),
     meta(TOKEN_PID, false, false), meta(ASSOC_PID, false, false),
     meta(SystemProgram.programId, false, false), meta(RENT_PID, false, false),
@@ -239,6 +273,22 @@ const settleIx = (e, payer, winner) => new TransactionInstruction({
     meta(SystemProgram.programId, false, false), meta(RENT_PID, false, false),
   ],
 });
+
+// Anchor custom error codes (6000 + variant index in GumballError)
+const ERR = { PriceAboveMax: 6025, AmountBelowMin: 6026 };
+
+// Run `fn`, expecting it to fail with a SPECIFIC program error. Asserting on
+// the code matters here: against a program built before these arguments
+// existed, the instruction also fails — but on argument deserialization, not on
+// the guard. Only the code distinguishes "the guard worked" from "this binary
+// predates the guard".
+function expectErr(label, code, fn) {
+  let msg = null;
+  try { fn(); } catch (e) { msg = String(e.message); }
+  if (msg === null) return check(label, false, "transaction unexpectedly succeeded");
+  const hit = msg.includes(`Custom(${code})`) || msg.includes(`custom program error: 0x${code.toString(16)}`);
+  check(label, hit, hit ? `error ${code}` : `wrong failure: ${msg.slice(0, 140)}`);
+}
 
 const PRICE = 2_000_000_000n; // 2 XNT
 const splitOf = (amount) => {
@@ -430,6 +480,71 @@ function testAuctionWrongWinnerRejected() {
   check("NFT still escrowed", e.tokenAmount(escrowAta) === 1n);
 }
 
+function testBuySlippageGuard() {
+  console.log("\nTEST 11 — H1: buy_gumball rejects a price above the buyer's max");
+  const e = newEnv();
+  // The real-world vector is delist + relist at a higher price: the Listing PDA
+  // is derived from the mint alone, so it is recreated at the SAME address and
+  // an in-flight buy still resolves against it. That close+reinit sequence trips
+  // the LiteSVM abort documented above, so the guard is exercised directly —
+  // list high, then buy with the max_price the victim would have been shown.
+  const SHOWN = PRICE;
+  const RAISED = PRICE * 100n;
+  e.send(listIx(e, RAISED), [e.seller]);
+  const buyerBefore = e.bal(e.buyer.publicKey);
+  const treasBefore = e.bal(e.treasury);
+  expectErr("buy above max_price rejected (PriceAboveMax)", ERR.PriceAboveMax,
+    () => e.send(buyIx(e, e.buyer, SHOWN), [e.buyer]));
+  // The buyer still pays the transaction fee; what must not move is the price.
+  const spent = buyerBefore - e.bal(e.buyer.publicKey);
+  check("buyer was not charged the listing price", spent < 1_000_000n, `spent=${spent} lamports`);
+  check("no royalty reached the treasury", e.bal(e.treasury) === treasBefore);
+  check("NFT still escrowed", e.tokenAmount(escrowAta) === 1n);
+}
+
+function testOfferAcceptPays() {
+  console.log("\nTEST 12 — make_offer escrows and accept_offer pays out");
+  const e = newEnv();
+  const AMOUNT = 1_500_000_000n;
+  e.send(makeOfferIx(e, e.buyer, AMOUNT, 3600), [e.buyer], "make_offer");
+  check("Offer PDA created", e.exists(offerPda(e.buyer.publicKey)));
+  check("offer escrowed the XNT",
+    e.bal(offerPda(e.buyer.publicKey)) >= AMOUNT, `escrow=${e.bal(offerPda(e.buyer.publicKey))}`);
+
+  const s = splitOf(AMOUNT);
+  const sellerPre = e.bal(e.seller.publicKey);
+  const treasPre  = e.bal(e.treasury);
+  const nftPre    = e.bal(nftXntPool);
+  const lpPre     = e.bal(lpXntPool);
+  e.send(acceptOfferIx(e, e.buyer, AMOUNT), [e.seller], "accept_offer");
+  check("seller received the offer minus royalty",
+    e.bal(e.seller.publicKey) - sellerPre >= s.toSeller,
+    `+${e.bal(e.seller.publicKey) - sellerPre} >= ${s.toSeller}`);
+  check("offer royalty split matches buy_gumball routing",
+    (e.bal(e.treasury) - treasPre) === s.toTreasury
+      && (e.bal(nftXntPool) - nftPre) === s.toNft
+      && (e.bal(lpXntPool) - lpPre) === s.toLp,
+    `treasury+${e.bal(e.treasury) - treasPre} nft+${e.bal(nftXntPool) - nftPre} lp+${e.bal(lpXntPool) - lpPre}`);
+  check("buyer received the NFT", e.tokenAmount(ata(NFT_MINT, e.buyer.publicKey)) === 1n);
+  check("gumball_data.owner synced to the buyer",
+    new PublicKey(e.dataOf(gumballData).subarray(8, 40)).equals(e.buyer.publicKey));
+}
+
+function testOfferSlippageGuard() {
+  console.log("\nTEST 13 — H1: accept_offer rejects an amount below the seller's min");
+  const e = newEnv();
+  const SHRUNK = 1_000_000n;      // what the buyer actually left on chain
+  const SHOWN  = 1_500_000_000n;  // what the seller was shown
+  e.send(makeOfferIx(e, e.buyer, SHRUNK, 3600), [e.buyer]);
+  const sellerBefore = e.bal(e.seller.publicKey);
+  expectErr("accept below min_amount rejected (AmountBelowMin)", ERR.AmountBelowMin,
+    () => e.send(acceptOfferIx(e, e.buyer, SHRUNK, SHOWN), [e.seller]));
+  check("seller still holds the NFT", e.tokenAmount(e.sellerAta) === 1n);
+  // Seller pays only the transaction fee; the shrunken offer is not credited.
+  const gained = e.bal(e.seller.publicKey) - sellerBefore;
+  check("seller was not paid the shrunken amount", gained <= 0n, `delta=${gained}`);
+}
+
 const SCENARIOS = {
   list:             testListEscrow,
   delist:           testDelistReturns,
@@ -441,6 +556,9 @@ const SCENARIOS = {
   "auction-early":    testAuctionEarlySettle,
   "auction-nobids":   testAuctionNoBidsReturnsNft,
   "auction-auth":     testAuctionWrongWinnerRejected,
+  "buy-slippage":     testBuySlippageGuard,
+  "offer-accept":     testOfferAcceptPays,
+  "offer-slippage":   testOfferSlippageGuard,
 };
 
 function runChildScenario(name) {

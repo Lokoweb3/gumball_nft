@@ -547,7 +547,7 @@ function incomingOfferRow(o) {
         <div class="offer-buyer">FROM: ${buyerShort} ON ${serial}</div>
         <div class="offer-amount">${amountXNT} XNT ${expiry ? '· ' + expiry : ''}</div>
       </div>
-      ${isExpired ? '<span style="font-family:\'Press Start 2P\',cursive;font-size:0.35rem;color:var(--red);">EXPIRED</span>' : `<button class="offer-btn" onclick="acceptOffer('${o.nftMint}', '${o.buyer}')" style="border-color:var(--gold);color:var(--gold);">ACCEPT</button>`}
+      ${isExpired ? '<span style="font-family:\'Press Start 2P\',cursive;font-size:0.35rem;color:var(--red);">EXPIRED</span>' : `<button class="offer-btn" onclick="acceptOffer('${o.nftMint}', '${o.buyer}', ${o.amount})" style="border-color:var(--gold);color:var(--gold);">ACCEPT</button>`}
     </div>`;
 }
 
@@ -1008,6 +1008,11 @@ async function buyGumball(mintKeyStr) {
     const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
 
     const discBytes = await disc("buy_gumball");
+    // max_price = the price this buyer was actually shown. The Listing PDA is
+    // derived from the mint alone, so a seller can delist and relist higher at
+    // the same address while this transaction is in flight; binding the shown
+    // price makes the program reject that instead of silently overpaying.
+    const data = concatU8(discBytes, u8FromNum(listing.price, 8));
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
@@ -1028,7 +1033,7 @@ async function buyGumball(mintKeyStr) {
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         { pubkey: RENT_PID,            isSigner: false, isWritable: false },
       ],
-      data: discBytes,
+      data,
     });
 
     const tx = new Transaction().add(ix);
@@ -1125,7 +1130,7 @@ async function cancelOffer(nftMintStr) {
   }
 }
 
-async function acceptOffer(nftMintStr, buyerStr) {
+async function acceptOffer(nftMintStr, buyerStr, minAmountLamports) {
   if (!walletPubkey) return;
   try {
     const provider = getProvider();
@@ -1144,6 +1149,10 @@ async function acceptOffer(nftMintStr, buyerStr) {
     const [lpXntPool]  = PublicKey.findProgramAddressSync([strToU8("lp_xnt_pool")],  PROGRAM_ID);
 
     const discBytes = await disc("accept_offer");
+    // min_amount = the offer amount this seller was shown; mirror of the
+    // buy_gumball guard (the Offer PDA is keyed by mint+buyer, so the buyer can
+    // cancel and re-make a smaller offer at the same address).
+    const data = concatU8(discBytes, u8FromNum(Number(minAmountLamports), 8));
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
@@ -1163,7 +1172,7 @@ async function acceptOffer(nftMintStr, buyerStr) {
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
         { pubkey: RENT_PID,            isSigner: false, isWritable: false }, // rent
       ],
-      data: discBytes,
+      data,
     });
 
     const tx = new Transaction().add(ix);

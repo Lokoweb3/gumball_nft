@@ -1075,9 +1075,17 @@ pub mod gumball_nft {
         Ok(())
     }
 
-    /// Buy a listed gumball at the listed price. 1% royalty to treasury.
-    pub fn buy_gumball(ctx: Context<BuyGumball>) -> Result<()> {
+    /// Buy a listed gumball. `max_price` is the most the buyer is willing to
+    /// pay, in lamports — pass the price that was displayed to them.
+    ///
+    /// Without it this instruction was front-runnable. The Listing PDA address
+    /// is derived from the mint alone, so a seller who sees a buy in flight can
+    /// delist and relist at any price: the PDA is recreated at the SAME
+    /// address, the victim's instruction still resolves, and it settles at the
+    /// new price. Binding the caller's expectation is the fix.
+    pub fn buy_gumball(ctx: Context<BuyGumball>, max_price: u64) -> Result<()> {
         let price = ctx.accounts.listing.price;
+        require!(price <= max_price, GumballError::PriceAboveMax);
         let royalty = price.checked_mul(ROYALTY_BPS).ok_or(GumballError::MathOverflow)? / 10_000;
         let seller_amount = price.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
 
@@ -1197,16 +1205,41 @@ pub mod gumball_nft {
         Ok(())
     }
 
-    /// Accept an offer — seller receives XNT (minus 1% royalty), buyer gets NFT.
-    pub fn accept_offer(ctx: Context<AcceptOffer>) -> Result<()> {
+    /// Accept an offer — seller receives XNT (minus royalty), buyer gets NFT.
+    /// `min_amount` is the least the seller is willing to accept, in lamports —
+    /// pass the amount that was displayed to them.
+    ///
+    /// Mirror of the buy_gumball case: the Offer PDA is keyed by (mint, buyer),
+    /// so a buyer can cancel and re-make a smaller offer at the same address
+    /// under a pending accept_offer.
+    pub fn accept_offer(ctx: Context<AcceptOffer>, min_amount: u64) -> Result<()> {
         // Check offer hasn't expired
         let now = Clock::get()?.unix_timestamp;
         if ctx.accounts.offer.expires_at > 0 {
             require!(now <= ctx.accounts.offer.expires_at, GumballError::OfferExpired);
         }
         let amount = ctx.accounts.offer.amount;
+        require!(amount >= min_amount, GumballError::AmountBelowMin);
         let royalty = amount.checked_mul(ROYALTY_BPS).ok_or(GumballError::MathOverflow)? / 10_000;
         let seller_amount = amount.checked_sub(royalty).ok_or(GumballError::MathOverflow)?;
+
+        // Move the NFT FIRST. This CPI used to run after the block below had
+        // already zeroed the Offer PDA's lamports and data; draining an account
+        // by hand and then invoking a CPI in the same instruction trips the
+        // runtime's lamport-balance check, and accept_offer failed with
+        // UnbalancedInstruction every time — the offer flow could never
+        // complete. Doing the CPI while all accounts are still intact fixes it.
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from:      ctx.accounts.seller_ata.to_account_info(),
+                    to:        ctx.accounts.buyer_ata.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            1,
+        )?;
 
         let offer_info = ctx.accounts.offer.to_account_info();
 
@@ -1234,19 +1267,6 @@ pub mod gumball_nft {
         **offer_info.try_borrow_mut_lamports()? = 0;
         **ctx.accounts.buyer.try_borrow_mut_lamports()? += remaining;
         offer_info.try_borrow_mut_data()?.fill(0);
-
-        // Transfer NFT from seller to buyer
-        anchor_spl::token::transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                anchor_spl::token::Transfer {
-                    from:      ctx.accounts.seller_ata.to_account_info(),
-                    to:        ctx.accounts.buyer_ata.to_account_info(),
-                    authority: ctx.accounts.seller.to_account_info(),
-                },
-            ),
-            1,
-        )?;
 
         // Update gumball owner
         ctx.accounts.gumball_data.owner = ctx.accounts.buyer.key();
@@ -3927,6 +3947,8 @@ pub enum GumballError {
     #[msg("Auction has ended")]                      AuctionEnded,
     #[msg("Auction has not ended yet")]              AuctionNotEnded,
     #[msg("Bid below minimum (start price or +5% raise)")] BidTooLow,
+    #[msg("Listing price is higher than the maximum the buyer accepted")] PriceAboveMax,
+    #[msg("Offer amount is lower than the minimum the seller accepted")]  AmountBelowMin,
 }
 
 // ─── Unit tests (pure math — run with `cargo test`) ─────────────────────────
