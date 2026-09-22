@@ -52,7 +52,9 @@ server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
 
-    root $APP_DIR;
+    # Web root is $APP_DIR/public ONLY. Pointing this at $APP_DIR would
+    # publish oracle-secrets.json, *-wallet.json and .env over HTTP.
+    root $APP_DIR/public;
     index index.html;
 
     # Serve frontend files
@@ -65,6 +67,11 @@ server {
         expires 7d;
         add_header Cache-Control "public, immutable";
     }
+
+    # Belt and braces: never serve dotfiles or key material even if a
+    # stray file lands in the web root.
+    location ~ /\. { deny all; }
+    location ~* \.(json|pem|key|cjs)$ { deny all; }
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN";

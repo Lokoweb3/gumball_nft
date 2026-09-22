@@ -30,3 +30,10 @@ faucet-state.json
 announcer-state.json
 indexer-state.json
 oracle-wallet.json
+
+# SSH / TLS private keys — never commit (an OpenSSH key was committed as `yes`)
+yes
+yes.pub
+id_rsa*
+id_ed25519*
+*.key

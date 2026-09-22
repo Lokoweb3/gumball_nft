@@ -29,13 +29,20 @@ if (process.env.ORACLE_WALLET_KEY && !process.env.ORACLE_WALLET) {
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a proxy — needed for real client IPs
 
+// Static web root. This MUST stay a dedicated directory — serving __dirname
+// publishes every file next to server.cjs, which meant oracle-secrets.json,
+// *-wallet.json and the runtime state files were downloadable over HTTP.
+// Only dotfiles are excluded by default, so `.env` was the one thing safe.
+const PUBLIC_DIR = path.join(__dirname, "public");
+
 // Serve landing.html as the homepage
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "landing.html"));
+  res.sendFile(path.join(PUBLIC_DIR, "landing.html"));
 });
 
-app.use(express.static(path.join(__dirname), {
+app.use(express.static(PUBLIC_DIR, {
   extensions: ["html"],
+  dotfiles: "deny",
 }));
 
 // ── Faucet ──────────────────────────────────────────────────────────────────

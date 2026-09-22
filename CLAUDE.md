@@ -191,10 +191,13 @@ No migration needed unless Machine struct changed.
 
 ### Adding a new frontend page
 
-1. Copy header/footer structure from `index.html`
-2. Add nav link to all pages (`index.html`, `leaderboard.html`, `verify.html`, `faucet.html`)
-3. Use same constants: `PROGRAM_ID_STR`, `MACHINE_PDA_STR`, `RPC`, `EXPLORER`
-4. Use same trait arrays: `FLAVORS`, `COLORS`, `RARITY`, `SPECIALS`, `BALL_COLORS`
+1. Create it in `public/` — that directory is the ONLY thing served over HTTP.
+   Never move a page back to the repo root (see "What NOT to do").
+2. Copy header/footer structure from `public/index.html`
+3. Add nav link to all pages (`public/index.html`, `public/leaderboard.html`,
+   `public/verify.html`, `public/faucet.html`)
+4. Use same constants: `PROGRAM_ID_STR`, `MACHINE_PDA_STR`, `RPC`, `EXPLORER`
+5. Use same trait arrays: `FLAVORS`, `COLORS`, `RARITY`, `SPECIALS`, `BALL_COLORS`
 
 ---
 
@@ -207,14 +210,14 @@ No migration needed unless Machine struct changed.
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
 | `scripts/initialize.cjs` | Machine init / migration script |
 | `server.cjs` | Express server for Railway deployment + faucet API |
-| `landing.html` | Project homepage with live mint counter |
-| `index.html` | Main frontend (mint + collection + burns) |
-| `marketplace.html` | Marketplace (list, buy, sell, offers, 5% royalty) |
-| `activity.html` | Activity feed + collection analytics |
-| `leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
-| `verify.html` | Provably fair verification page (auto-verifies v5 gumballs) |
-| `faucet.html` | Testnet XNT faucet (0.1 XNT per wallet per 24h) |
-| `favicon.svg` | SVG gumball icon for browser tabs |
+| `public/landing.html` | Project homepage with live mint counter |
+| `public/index.html` | Main frontend (mint + collection + burns) |
+| `public/marketplace.html` | Marketplace (list, buy, sell, offers, 5% royalty) |
+| `public/activity.html` | Activity feed + collection analytics |
+| `public/leaderboard.html` | Leaderboard (top holders, rarity breakdown) |
+| `public/verify.html` | Provably fair verification page (auto-verifies v5 gumballs) |
+| `public/faucet.html` | Testnet XNT faucet (0.1 XNT per wallet per 24h) |
+| `public/favicon.svg` | SVG gumball icon for browser tabs |
 | `ecosystem.config.cjs` | PM2 config for oracle + monitor |
 | `.env` | Secrets (Telegram token, encryption key, faucet wallet) — gitignored |
 | `faucet-wallet.json` | Faucet wallet keypair — gitignored |
@@ -235,6 +238,11 @@ No migration needed unless Machine struct changed.
 - **Never use `exec()`** in monitor/scripts for shell commands — use `execFile()` with array args
 - **Never use `.unwrap()`** on raw account data slices — use `.map_err()` with `InvalidAccount`
 - **Never hardcode** wallet paths — use `os.homedir()` or env vars
+- **Never serve the repo root** over HTTP. `server.cjs` serves `public/` and nginx
+  roots at `$APP_DIR/public`. Serving `__dirname` publishes `oracle-secrets.json`,
+  `*-wallet.json` and every runtime state file — this was a live leak on production
+- **Never commit private keys** under an innocuous filename — an OpenSSH key was
+  committed as `yes` and sat in the public repo
 
 ---
 
@@ -247,7 +255,7 @@ node scripts/oracle.cjs
 pm2 start ecosystem.config.cjs && pm2 save
 
 # Serve frontend (HTTPS required for wallet)
-npx serve . -p 3001 --ssl-cert localhost.pem --ssl-key localhost-key.pem
+npx serve public -p 3001 --ssl-cert localhost.pem --ssl-key localhost-key.pem
 
 # Build and deploy
 anchor build
