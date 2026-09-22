@@ -236,7 +236,11 @@ async function main() {
   const sig4 = await send(c, claimXntIx());
   const fee4 = BigInt((await c.getTransaction(sig4, { commitment: "confirmed" })).meta.fee);
   const balAfter4 = BigInt(await c.getBalance(wallet.publicKey));
-  check("no lamports moved", balAfter4 === balBefore4 - fee4, "Ok() with zero pending");
+  const moved4 = balAfter4 - (balBefore4 - fee4); // >0 means the claim paid something
+  const pool4 = BigInt(await c.getBalance(nftPool));
+  const st4 = await xntStateOf(c, nftState);
+  check("no lamports moved", moved4 === 0n,
+    `moved=${moved4} fee=${fee4} pool=${pool4} last_seen=${st4.lastSeen} acc=${st4.acc}`);
 
   // ── TEST 5: sweep while staked is rejected ─────────────────────────────────
   console.log("\nTEST 5 — sweep while staked must fail (PoolHasStakers)");
@@ -266,7 +270,11 @@ async function main() {
   const sig7 = await send(c, claimXntIx());
   const fee7 = BigInt((await c.getTransaction(sig7, { commitment: "confirmed" })).meta.fee);
   const balAfter7 = BigInt(await c.getBalance(wallet.publicKey));
-  check("flash-stake cannot capture zero-staker backlog", balAfter7 === balBefore7 - fee7, "claim paid 0");
+  const moved7 = balAfter7 - (balBefore7 - fee7);
+  const pool7 = BigInt(await c.getBalance(nftPool));
+  const st7 = await xntStateOf(c, nftState);
+  check("flash-stake cannot capture zero-staker backlog", moved7 === 0n,
+    `moved=${moved7} fee=${fee7} pool=${pool7} last_seen=${st7.lastSeen} acc=${st7.acc}`);
   await send(c, unstakeIx());
   check("second unstake clean", (await c.getAccountInfo(stakeAccount)) === null && (await c.getAccountInfo(xntDebt)) === null);
   const stFinal = await xntStateOf(c, nftState);
