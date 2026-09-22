@@ -978,21 +978,27 @@ pub mod gumball_nft {
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-        let bal = ctx.accounts.treasury.lamports();
-        require!(bal >= amount, GumballError::InsufficientFunds);
-        anchor_lang::system_program::transfer(
-            CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::Transfer {
-                    from: ctx.accounts.treasury.to_account_info(),
-                    to:   ctx.accounts.authority.to_account_info(),
-                },
-            ),
-            amount,
-        )?;
-        Ok(())
-    }
+    // `withdraw` was removed. It CPI'd system_program::transfer with the
+    // treasury as the source, but the treasury is an ordinary system-owned
+    // wallet and was never a Signer here — a program cannot debit an account it
+    // does not own. It only ever appeared to work because treasury ==
+    // authority, and the authority signs; in that case it is also redundant,
+    // since the authority can simply spend from its own wallet.
+    //
+    // The trap it set: the documented mainnet path (transfer_authority -> point
+    // treasury at a multisig) is exactly what breaks it, so it would have failed
+    // the first time it actually mattered.
+    //
+    // Nothing is stranded by the removal. Protocol revenue is paid straight to
+    // the treasury wallet by the payer's own CPI (buy_gumball, accept_offer,
+    // settle_auction, reveal_and_mint); the program never custodies it. The
+    // lamports the program DOES custody have their own exits:
+    // sweep_xnt_pool_nft / sweep_xnt_pool_lp for the fee pools, refund_mint for
+    // an unfulfilled MintRequest, and settle_auction for bid escrow.
+    //
+    // If protocol-owned revenue custody is ever wanted, the correct design is a
+    // program-owned treasury PDA that every fee sink pays into and that an
+    // authority-gated instruction withdraws from — not this.
 
     /// H2 FIX: Sync gumball owner to current SPL token holder.
     /// Anyone can call this — it just reads the ATA balance and updates the field.
@@ -2971,18 +2977,6 @@ pub struct TransferAuthority<'info> {
     pub authority: Signer<'info>,
     #[account(mut, seeds = [b"machine"], bump = machine.bump)]
     pub machine: Account<'info, Machine>,
-}
-
-#[derive(Accounts)]
-pub struct Withdraw<'info> {
-    #[account(mut, constraint = authority.key() == machine.authority @ GumballError::Unauthorized)]
-    pub authority: Signer<'info>,
-    #[account(seeds = [b"machine"], bump = machine.bump)]
-    pub machine: Account<'info, Machine>,
-    /// CHECK: treasury
-    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
-    pub treasury: AccountInfo<'info>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

@@ -8,7 +8,12 @@ const fs = require("fs");
 // ── Config ──────────────────────────────────────────────────────────────────
 const XDEX_PID      = new PublicKey("7EEuq61z9VKdkUzj7G36xGd7ncyz8KBtUwAWVjypYQHf");
 const AMM_CONFIG     = new PublicKey(process.env.AMM_CONFIG || "3FzzbxwpdJKxRW1yNT7UPYmna17SwC9PRmskMa8A2BuY"); // default: index 1
-const GUM_MINT       = new PublicKey(process.env.GUM_MINT || "47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+// The live GUM mint is whatever stake_config.gum_mint points at — verified at
+// startup below. This default previously pointed at 47wsxrZy..., a stale mint
+// from an earlier iteration that still has a live mint authority. Seeding a
+// pool against it would have created a market for the wrong token.
+const GUM_MINT       = new PublicKey(process.env.GUM_MINT || "2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1");
+const GUMBALL_PID    = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const WSOL_MINT      = new PublicKey("So11111111111111111111111111111111111111112");
 const TOKEN_PID      = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOC_PID      = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -36,8 +41,31 @@ function getAta(mint, owner) {
   return ata;
 }
 
+// Refuse to seed a pool for anything other than the mint the deployed staking
+// program actually pays rewards in. This is real liquidity — a wrong mint here
+// is unrecoverable, so it is worth one RPC call.
+async function assertLiveGumMint(connection) {
+  const [stakeConfig] = PublicKey.findProgramAddressSync(
+    [Buffer.from("stake_config_v2")], GUMBALL_PID);
+  const info = await connection.getAccountInfo(stakeConfig);
+  if (!info) throw new Error(`stake_config not found at ${stakeConfig.toBase58()} — is staking initialized?`);
+  const live = new PublicKey(info.data.subarray(40, 72)); // authority(32) after 8-byte disc
+  if (!live.equals(GUM_MINT)) {
+    throw new Error(
+      `GUM mint mismatch — refusing to create a pool.\n` +
+      `  configured : ${GUM_MINT.toBase58()}\n` +
+      `  stake_config.gum_mint: ${live.toBase58()}\n` +
+      `  Set GUM_MINT=${live.toBase58()} if this is intentional.`);
+  }
+  const mint = await connection.getParsedAccountInfo(GUM_MINT);
+  const auth = mint.value?.data?.parsed?.info?.mintAuthority ?? null;
+  console.log(`GUM mint ${GUM_MINT.toBase58()} verified against stake_config` +
+              ` (mintAuthority: ${auth === null ? "revoked — fixed supply" : auth})`);
+}
+
 async function main() {
   const connection = new Connection(RPC, "confirmed");
+  await assertLiveGumMint(connection);
   console.log("Wallet:", wallet.publicKey.toBase58());
   console.log("Balance:", (await connection.getBalance(wallet.publicKey)) / 1e9, "XNT");
 

@@ -222,7 +222,8 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] `burn_multi` — owner and rarity validated manually from raw data
 - [x] `refund_mint` — only after MINT_TIMEOUT, only unfulfilled requests
 - [x] `reset_counts` — admin only, zeros total_minted and total_burned
-- [x] `withdraw` — only admin/authority
+- [x] `withdraw` — REMOVED (could not work: CPI-debited a system-owned
+      treasury that never signed; see the note in lib.rs where it used to live)
 - [x] `set_oracle` — only admin/authority
 - [x] **Review:** `burn_multi` remaining_accounts validated via PDA seed check + owner + rarity
 - [x] **Review:** `update_owner` safe — reads ATA balance, only syncs to actual token holder
@@ -248,7 +249,10 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [ ] Decide burn ratios (currently 5/3/2/2)
 - [x] Upgrade fee = current mint price (deployed)
 - [x] Payment division fix — last mint sweeps remaining lamports
-- [ ] Treasury withdrawal access control review
+- [x] Treasury withdrawal access control review — revenue is paid directly to
+      the treasury wallet by the payer; the program never custodies it, so there
+      is nothing to withdraw. Program-held lamports exit via sweep_xnt_pool_*,
+      refund_mint and settle_auction.
 
 ### Operational
 - [ ] Upgrade authority is currently the oracle wallet — separate before mainnet

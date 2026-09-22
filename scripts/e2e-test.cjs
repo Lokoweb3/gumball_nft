@@ -90,9 +90,9 @@ async function testGumMintExists() {
 }
 
 async function testPoolExists() {
-  const sortedMints = WSOL.toBuffer().compare(new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G").toBuffer()) < 0
-    ? [WSOL, new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G")]
-    : [new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G"), WSOL];
+  const sortedMints = WSOL.toBuffer().compare(new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1").toBuffer()) < 0
+    ? [WSOL, new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1")]
+    : [new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1"), WSOL];
   const [pool] = PublicKey.findProgramAddressSync(
     [Buffer.from("pool"), AMM_CONFIG.toBuffer(), sortedMints[0].toBuffer(), sortedMints[1].toBuffer()],
     XDEX_PID
@@ -287,7 +287,7 @@ async function testStakeAndClaim() {
 }
 
 // ── XDEX helpers ────────────────────────────────────────────────────────────
-const GUM_MINT = new PublicKey("47wsxrZymUoKp5ALEMWsWbaN2F5MFzn6kKedWEsLV82G");
+const GUM_MINT = new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1");
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const sortedMints = WSOL.toBuffer().compare(GUM_MINT.toBuffer()) < 0 ? [WSOL, GUM_MINT] : [GUM_MINT, WSOL];

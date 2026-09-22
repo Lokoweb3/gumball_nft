@@ -240,6 +240,13 @@ No migration needed unless Machine struct changed.
 - **Never use `exec()`** in monitor/scripts for shell commands — use `execFile()` with array args
 - **Never use `.unwrap()`** on raw account data slices — use `.map_err()` with `InvalidAccount`
 - **Never hardcode** wallet paths — use `os.homedir()` or env vars
+- **Never hardcode the GUM mint** — the live one is `stake_config.gum_mint`
+  (`2Kjd…`, mint authority revoked, supply fixed). An earlier mint (`47ws…`)
+  still exists with a LIVE mint authority; `create-pool.cjs` used to default to
+  it and now refuses to run unless the configured mint matches `stake_config`
+- **Never add an instruction that debits a system-owned account** the program
+  does not own. `withdraw` did this to the treasury and only appeared to work
+  while treasury == authority (see the note in `lib.rs`)
 - **Never serve the repo root** over HTTP. `server.cjs` serves `public/` and nginx
   roots at `$APP_DIR/public`. Serving `__dirname` publishes `oracle-secrets.json`,
   `*-wallet.json` and every runtime state file — this was a live leak on production
