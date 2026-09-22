@@ -6,11 +6,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: these workflows only read the repo. Declaring it here stops
+# a compromised action or dependency from pushing code or tampering with
+# releases using the default GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Rust unit tests (pricing curve, stake weight, accumulators)
         run: cargo test --manifest-path programs/gumball_nft/Cargo.toml
 
@@ -20,7 +26,7 @@ jobs:
     # reachable (fixture generation), so a rare network flake can fail this job.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Solana CLI
         run: |

@@ -22,11 +22,17 @@ on:
       - "Anchor.toml"
   workflow_dispatch:
 
+# Least privilege: these workflows only read the repo. Declaring it here stops
+# a compromised action or dependency from pushing code or tampering with
+# releases using the default GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   verified-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install solana-verify
         run: cargo install solana-verify --locked
@@ -42,7 +48,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload program binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gumball_nft-verified
           path: target/deploy/gumball_nft.so
