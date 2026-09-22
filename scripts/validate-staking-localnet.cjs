@@ -59,6 +59,24 @@ function check(name, cond, detail = "") {
   else      { failed++; console.log(`  ❌ ${name}${detail ? " — " + detail : ""}`); }
 }
 
+// Per-transaction balance deltas straight from the ledger. The pool delta is
+// what actually matters for these assertions: "did this claim move fee-pool
+// lamports?" A wallet-side comparison via two getBalance calls also picks up
+// rent refunds and anything else in the transaction, which is what made the
+// old TEST 4 / TEST 7 assertions read as failures.
+async function poolDelta(c, sig, poolPk) {
+  const tx = await c.getTransaction(sig, { commitment: "confirmed" });
+  const keys = tx.transaction.message.staticAccountKeys
+    ?? tx.transaction.message.accountKeys;
+  const idx = keys.findIndex((k) => k.toBase58() === poolPk.toBase58());
+  const { preBalances, postBalances, fee } = tx.meta;
+  return {
+    pool: idx < 0 ? 0n : BigInt(postBalances[idx]) - BigInt(preBalances[idx]),
+    wallet: BigInt(postBalances[0]) - BigInt(preBalances[0]),
+    fee: BigInt(fee),
+  };
+}
+
 async function xntStateOf(c, pk) {
   const info = await c.getAccountInfo(pk);
   return { acc: readU128LE(info.data, 9), lastSeen: info.data.readBigUInt64LE(25) };
@@ -232,15 +250,14 @@ async function main() {
 
   // ── TEST 4: claim again with nothing pending succeeds, no transfer ─────────
   console.log("\nTEST 4 — claim with nothing pending");
-  const balBefore4 = BigInt(await c.getBalance(wallet.publicKey));
   const sig4 = await send(c, claimXntIx());
-  const fee4 = BigInt((await c.getTransaction(sig4, { commitment: "confirmed" })).meta.fee);
-  const balAfter4 = BigInt(await c.getBalance(wallet.publicKey));
-  const moved4 = balAfter4 - (balBefore4 - fee4); // >0 means the claim paid something
-  const pool4 = BigInt(await c.getBalance(nftPool));
+  // Assert on the transaction's OWN pre/post balances rather than two separate
+  // getBalance calls: that is the ledger's record of this instruction alone,
+  // with no interference from anything else that touched the wallet.
+  const m4 = await poolDelta(c, sig4, nftPool);
   const st4 = await xntStateOf(c, nftState);
-  check("no lamports moved", moved4 === 0n,
-    `moved=${moved4} fee=${fee4} pool=${pool4} last_seen=${st4.lastSeen} acc=${st4.acc}`);
+  check("no lamports left the fee pool", m4.pool === 0n,
+    `pool delta=${m4.pool} wallet delta=${m4.wallet} fee=${m4.fee} last_seen=${st4.lastSeen}`);
 
   // ── TEST 5: sweep while staked is rejected ─────────────────────────────────
   console.log("\nTEST 5 — sweep while staked must fail (PoolHasStakers)");
@@ -266,15 +283,11 @@ async function main() {
   await send(c, SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: nftPool, lamports: 5_000_000 }));
   await send(c, stakeIx()); // re-stake: init_if_needed re-creates xnt_debt after close
   check("re-stake after close works (init_if_needed)", (await c.getAccountInfo(xntDebt)) !== null);
-  const balBefore7 = BigInt(await c.getBalance(wallet.publicKey));
   const sig7 = await send(c, claimXntIx());
-  const fee7 = BigInt((await c.getTransaction(sig7, { commitment: "confirmed" })).meta.fee);
-  const balAfter7 = BigInt(await c.getBalance(wallet.publicKey));
-  const moved7 = balAfter7 - (balBefore7 - fee7);
-  const pool7 = BigInt(await c.getBalance(nftPool));
+  const m7 = await poolDelta(c, sig7, nftPool);
   const st7 = await xntStateOf(c, nftState);
-  check("flash-stake cannot capture zero-staker backlog", moved7 === 0n,
-    `moved=${moved7} fee=${fee7} pool=${pool7} last_seen=${st7.lastSeen} acc=${st7.acc}`);
+  check("flash-stake cannot capture the zero-staker backlog", m7.pool === 0n,
+    `pool delta=${m7.pool} wallet delta=${m7.wallet} fee=${m7.fee} last_seen=${st7.lastSeen}`);
   await send(c, unstakeIx());
   check("second unstake clean", (await c.getAccountInfo(stakeAccount)) === null && (await c.getAccountInfo(xntDebt)) === null);
   const stFinal = await xntStateOf(c, nftState);
