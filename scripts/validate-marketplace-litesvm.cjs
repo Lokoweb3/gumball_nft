@@ -516,10 +516,17 @@ function testOfferAcceptPays() {
   const treasPre  = e.bal(e.treasury);
   const nftPre    = e.bal(nftXntPool);
   const lpPre     = e.bal(lpXntPool);
-  e.send(acceptOfferIx(e, e.buyer, AMOUNT), [e.seller], "accept_offer");
-  check("seller received the offer minus royalty",
-    e.bal(e.seller.publicKey) - sellerPre >= s.toSeller,
-    `+${e.bal(e.seller.publicKey) - sellerPre} >= ${s.toSeller}`);
+  const res = e.send(acceptOfferIx(e, e.buyer, AMOUNT), [e.seller], "accept_offer");
+  // Exact accounting. The seller signs (pays the 5000-lamport fee) AND funds
+  // the buyer's ATA: AcceptOffer declares buyer_ata `init_if_needed, payer =
+  // seller`. So seller delta == toSeller - buyerAtaRent - fee, to the lamport.
+  // (Contrast buy_gumball, where the buyer pays for their own ATA.)
+  const buyerAtaRent = e.bal(ata(NFT_MINT, e.buyer.publicKey));
+  const sellerDelta  = e.bal(e.seller.publicKey) - sellerPre;
+  const fee = 5000n;
+  check("seller received offer minus royalty, minus the buyer-ATA rent it funded, minus fee",
+    sellerDelta === s.toSeller - buyerAtaRent - fee,
+    `delta=${sellerDelta} == ${s.toSeller} - ${buyerAtaRent} - ${fee}`);
   check("offer royalty split matches buy_gumball routing",
     (e.bal(e.treasury) - treasPre) === s.toTreasury
       && (e.bal(nftXntPool) - nftPre) === s.toNft
