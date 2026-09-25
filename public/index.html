@@ -1337,7 +1337,7 @@ function showLastMinted(g) {
   const ball=document.getElementById("lmBall");
   if (g.svgStr) {
     ball.style.background="none";ball.style.boxShadow="none";
-    ball.innerHTML=`<div style="width:72px;height:72px;border-radius:50%;overflow:hidden;margin:0 auto;">${g.svgStr}</div>`;
+    ball.innerHTML=`<div style="width:72px;height:72px;border-radius:50%;overflow:hidden;margin:0 auto;">${svgImgHtml(g.svgStr, 72, { clip: true })}</div>`;
   } else {
     ball.innerHTML="";
     ball.style.background=ballGrad(g.ballColor);
@@ -1373,20 +1373,10 @@ function renderCollCard(g) {
   const rarColor = RARITY_COLORS[g.rarity] || "#aaaacc";
 
   if (g.svgStr) {
-    const uid = `g${g.serial}`;
-    // Extract inner content from the SVG tag, then wrap in our own controlled SVG
-    const innerContent = g.svgStr
-      .replace(/id="b"/g,              `id="b_${uid}"`)
-      .replace(/fill="url\(#b\)"/g,    `fill="url(#b_${uid})"`)
-      .replace(/id="hl"/g,             `id="hl_${uid}"`)
-      .replace(/stroke="url\(#hl\)"/g, `stroke="url(#hl_${uid})"`)
-      .replace(/fill="url\(#hl\)"/g,   `fill="url(#hl_${uid})"`)
-      .replace(/<svg[^>]*>/,           '')   // strip opening svg tag
-      .replace(/<\/svg>/,              '');  // strip closing svg tag
-    // Render in a 60x60 circle, viewBox 0 0 300 248 clips off the text bar at bottom
+    // 60x60 round thumbnail; clip hides the text bar at the bottom of the artwork
     card.innerHTML = `
       <div style="width:60px;height:60px;border-radius:50%;overflow:hidden;flex-shrink:0;margin:0 auto 8px;">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" width="60" height="60">${innerContent}</svg>
+        ${svgImgHtml(g.svgStr, 60, { clip: true })}
       </div>
       <div class="coll-serial">#${String(g.serial).padStart(4,"0")}</div>
       <div class="coll-flavor">${g.flavorName}</div>
@@ -1566,9 +1556,7 @@ function openSvgModal(g) {
 
   const svgDiv = document.getElementById("modalSvg");
   if (g.svgStr) {
-    svgDiv.innerHTML = g.svgStr;
-    const svg = svgDiv.querySelector("svg");
-    if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
+    svgDiv.innerHTML = svgImgHtml(g.svgStr, 280);
   } else if (g.mintPubkey) {
     // Fetch SVG from separate GumballSvg PDA
     svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">LOADING SVG...</span></div>`;
@@ -1576,9 +1564,7 @@ function openSvgModal(g) {
       if (svgStr) {
         g.svgStr = svgStr; // cache it
         _currentSvg = svgStr; // enable copy/download/source
-        svgDiv.innerHTML = svgStr;
-        const svg = svgDiv.querySelector("svg");
-        if (svg) { svg.style.width="280px"; svg.style.height="280px"; }
+        svgDiv.innerHTML = svgImgHtml(svgStr, 280);
         // Also update the collection card
         const cards = document.querySelectorAll('.coll-card');
         cards.forEach(card => {
@@ -1586,11 +1572,7 @@ function openSvgModal(g) {
           if (serialEl && serialEl.textContent === `#${String(g.serial).padStart(4,'0')}`) {
             const ballDiv = card.querySelector('div[style*="border-radius:50%"]');
             if (ballDiv) {
-              const uid = `g${g.serial}`;
-              let sanitized = svgStr.replace(/id="b"/g, `id="b_${uid}"`).replace(/fill="url\(#b\)"/g, `fill="url(#b_${uid})"`).replace(/<svg[^>]*>/, '').replace(/<\/svg>/, '');
-              sanitized = sanitized.replace(/\bon\w+\s*=/gi, 'data-blocked=').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-              const innerContent = sanitized;
-              ballDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 248" width="60" height="60">${innerContent}</svg>`;
+              ballDiv.innerHTML = svgImgHtml(svgStr, 60, { clip: true });
             }
           }
         });

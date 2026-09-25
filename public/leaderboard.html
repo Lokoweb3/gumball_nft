@@ -580,7 +580,8 @@ async function openSvgModal(g) {
       if (svgLen > 0 && svgLen <= 1400) {
         const svgStr = new TextDecoder().decode(info.data.slice(svgOff+4, svgOff+4+svgLen));
         currentSvg = svgStr;
-        svgDiv.innerHTML = svgStr;
+        // <img> data URI rather than innerHTML — nothing inside the SVG can execute
+        svgDiv.innerHTML = `<img src="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}" width="280" height="280" alt="" style="display:block">`;
         const svg = svgDiv.querySelector("svg");
         if (svg) { svg.style.width="300px"; svg.style.height="300px"; }
       } else {

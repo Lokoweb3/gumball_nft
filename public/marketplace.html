@@ -690,17 +690,10 @@ async function loadSvgs() {
         const dv = new DataView(info.data.buffer, info.data.byteOffset);
         const svgLen = dv.getUint32(8, true);
         if (svgLen > 0 && svgLen <= 1400) {
-          let svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
-          // Make gradient IDs unique to avoid collisions across cards
-          const uid = mintStr.slice(0, 8);
-          svgStr = svgStr.replace(/id="b"/g, `id="b_${uid}"`);
-          svgStr = svgStr.replace(/url\(#b\)/g, `url(#b_${uid})`);
-          svgStr = svgStr.replace(/id="hl"/g, `id="hl_${uid}"`);
-          svgStr = svgStr.replace(/url\(#hl\)/g, `url(#hl_${uid})`);
-          // Sanitize: strip event handlers to prevent XSS
-          svgStr = svgStr.replace(/\bon\w+\s*=/gi, 'data-blocked=');
-          svgStr = svgStr.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-          el.innerHTML = svgStr;
+          const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+          // <img> data URI: nothing inside the SVG can execute, and gradient ids
+          // can't collide across cards (each image is its own document)
+          el.innerHTML = svgImgHtml(svgStr, "100%");
         }
       }
     } catch(e) {}

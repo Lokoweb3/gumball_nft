@@ -52,3 +52,19 @@ function getAta(mint, owner) {
   );
   return ata;
 }
+
+// Render an on-chain SVG as an <img> data URI instead of injecting it with
+// innerHTML. Scripts and event handlers never execute inside an <img>, so a
+// future contract change (or a compromised upgrade key) cannot turn the
+// artwork into XSS against every visitor's wallet session. Each <img> is also
+// its own document, so gradient ids can no longer collide across cards — the
+// per-card id-rewriting this replaces is unnecessary.
+//   clip: true hides the text bar at the bottom of the 300x300 artwork (the
+//   old rewrap-with-viewBox trick), for round thumbnails.
+function svgImgHtml(svgStr, size, { clip = false, style = "" } = {}) {
+  let s = String(svgStr);
+  if (clip) s = s.replace(/viewBox="0 0 300 300"/, 'viewBox="0 0 300 248"');
+  const src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(s)));
+  const dim = typeof size === "number" ? `width="${size}" height="${size}"` : `width="${size}" height="${size}"`;
+  return `<img src="${src}" ${dim} alt="" draggable="false" style="display:block;${style}">`;
+}
