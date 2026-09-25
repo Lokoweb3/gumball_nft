@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { fork } = require("child_process");
 const { Connection, Keypair, SystemProgram, Transaction, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+const { applySecurity, negativeGet, negativeSet } = require("./server-security.cjs");
 
 const PORT = process.env.PORT || 3000;
 
@@ -28,6 +29,9 @@ if (process.env.ORACLE_WALLET_KEY && !process.env.ORACLE_WALLET) {
 // Express app
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a proxy — needed for real client IPs
+// Security headers (helmet + CSP) and per-IP rate limits. Must come before the
+// static handler and every route so they apply to all of them.
+applySecurity(app);
 
 // Static web root. This MUST stay a dedicated directory — serving __dirname
 // publishes every file next to server.cjs, which meant oracle-secrets.json,
@@ -325,16 +329,22 @@ app.get("/api/metadata/:mint", async (req, res) => {
   try {
     const cached = metadataCache.get(req.params.mint);
     if (cached) return res.json(cached);
+    // Negative memo: a miss used to cost two RPC calls every single time.
+    if (negativeGet(req.params.mint)) return res.status(404).json({ error: "not a gumball" });
 
     let mint;
-    try { mint = new PublicKey(req.params.mint); } catch { return res.status(400).json({ error: "bad mint" }); }
+    try { mint = new PublicKey(req.params.mint); }
+    catch { negativeSet(req.params.mint); return res.status(400).json({ error: "bad mint" }); }
     const [gdPda] = PublicKey.findProgramAddressSync([Buffer.from("gumball"), mint.toBuffer()], GUMBALL_PROGRAM);
     const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), mint.toBuffer()], GUMBALL_PROGRAM);
     const [gd, svgAcc] = await Promise.all([
       faucetConnection.getAccountInfo(gdPda),
       faucetConnection.getAccountInfo(svgPda),
     ]);
-    if (!gd || gd.data.length !== 189) return res.status(404).json({ error: "not a gumball" });
+    if (!gd || gd.data.length !== 189) {
+      negativeSet(req.params.mint);
+      return res.status(404).json({ error: "not a gumball" });
+    }
 
     const serial = Number(gd.data.readBigUInt64LE(72));
     const flavor = gd.data.readUInt8(80), color = gd.data.readUInt8(81);
