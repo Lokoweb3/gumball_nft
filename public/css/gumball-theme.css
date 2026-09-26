@@ -1,0 +1,50 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Gumball theme — the ONE source of truth for the site's palette.
+
+   Every page links this file. Before it existed each page carried its own
+   inline :root, and they had drifted: leaderboard.html was on a different
+   scheme (--bg, --c0..c4, its own greys and reds), marketplace/index declared
+   a --gold2 that nothing used, and index.html overrides --border/--panel with
+   translucent variants for its glass look.
+
+   Rules:
+   - Page-specific tokens (index's glass/glow, leaderboard's rarity aliases)
+     live in that page's own :root AFTER this link, so they layer on top.
+   - Never re-declare one of the shared tokens inline; change it here.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* surfaces */
+  --black:   #0a0a0f;
+  --panel:   #0f0f1a;
+  --panel2:  #141424;
+  --border:  #2a2a4a;
+
+  /* text */
+  --white:   #e8e8f8;
+  --gray:    #6666aa;
+
+  /* brand accents */
+  --gold:    #ffcc00;
+  --teal:    #00ffcc;
+  --purple:  #cc44ff;
+  --blue:    #44aaff;
+  --green:   #44ff88;
+  --red:     #ff2244;
+  --pink:    #ff44aa;   /* GUM sink / re-roll accent — matches the SVG holographic stop */
+
+  /* rarity ladder — Common → Legendary. Pages that previously used
+     --c0..--c4 map onto these; keep the ladder here so a rarity colour
+     change is one edit. */
+  --rarity-common:    #aaaacc;
+  --rarity-uncommon:  var(--green);
+  --rarity-rare:      var(--blue);
+  --rarity-epic:      #cc88ff;
+  --rarity-legendary: var(--gold);
+
+  color-scheme: dark;
+}
+
+/* Base — every page already sets these the same way inline; declaring them
+   once here means a page that forgets still renders on-brand. */
+html { background: var(--black); }
+body { background: var(--black); color: var(--white); }

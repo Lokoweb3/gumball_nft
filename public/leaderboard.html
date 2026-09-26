@@ -7,21 +7,17 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="js/solana-web3-1.87.6.min.js"></script>
+  <link rel="stylesheet" href="css/gumball-theme.css">
 <style>
-:root {
-  --bg:      #0a0a0f;
-  --panel:   #0f0f1a;
-  --border:  #1a1a2e;
-  --white:   #e8e8ff;
-  --gray:    #666688;
-  --teal:    #00ffcc;
-  --purple:  #c844ff;
-  --gold:    #ffcc00;
-  --green:   #44ff88;
-  --blue:    #44aaff;
-  --red:     #ff4466;
-  --c0: #aaaacc; --c1: #44ff88; --c2: #44aaff; --c3: #cc88ff; --c4: #ffcc00;
-}
+    :root {
+      /* leaderboard-only aliases onto the shared rarity ladder */
+      --bg: var(--black);
+      --c0: var(--rarity-common);
+      --c1: var(--rarity-uncommon);
+      --c2: var(--rarity-rare);
+      --c3: var(--rarity-epic);
+      --c4: var(--rarity-legendary);
+    }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   background: var(--bg);

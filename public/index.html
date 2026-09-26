@@ -7,17 +7,18 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="js/solana-web3-1.87.6.min.js"></script>
+  <link rel="stylesheet" href="css/gumball-theme.css">
 <style>
-:root {
-  --black:#0a0a0f; --panel:rgba(15,15,26,0.8); --panel2:#141424; --border:rgba(42,42,74,0.6);
-  --red:#ff2244; --gold:#ffcc00; --gold2:#ffee88; --teal:#00ffcc;
-  --purple:#cc44ff; --white:#e8e8f8; --gray:#6666aa;
-  --glow-teal:0 0 20px rgba(0,255,204,0.15);
-  --glow-gold:0 0 20px rgba(255,204,0,0.15);
-  --glow-purple:0 0 20px rgba(204,68,255,0.15);
-  --glass:rgba(15,15,26,0.6);
-  --glass-border:rgba(255,255,255,0.06);
-}
+    :root {
+      /* index-only: glass look layered over the shared theme */
+      --border: rgba(42,42,74,0.6);
+      --panel:  rgba(15,15,26,0.8);
+      --glass:        rgba(15,15,26,0.6);
+      --glass-border: rgba(255,255,255,0.06);
+      --glow-teal:   0 0 20px rgba(0,255,204,0.15);
+      --glow-purple: 0 0 20px rgba(204,68,255,0.15);
+      --glow-gold:   0 0 20px rgba(255,204,0,0.15);
+    }
 *{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 html,body{min-height:100vh;background:var(--black);color:var(--white);overflow-x:hidden;}
