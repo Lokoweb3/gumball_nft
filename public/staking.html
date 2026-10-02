@@ -139,6 +139,7 @@ header{
 .toast.info{background:rgba(255,204,0,0.1);border:1px solid var(--gold);color:var(--gold);}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -152,13 +153,13 @@ header{
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="wallet-btn" id="walletBtn" data-click="connectWallet">[ CONNECT WALLET ]</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html">MINT</a>
   <a href="marketplace.html">MARKET</a>
   <a href="staking.html" class="active">STAKE</a>
@@ -166,7 +167,7 @@ header{
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
   <a href="faucet.html">FAUCET</a>
-  <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+  <button class="wallet-btn" data-click="menuConnectWallet">[ CONNECT WALLET ]</button>
 </div>
 
 <div class="wrap">
@@ -232,15 +233,15 @@ header{
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div class="analytics-title" style="margin:0;">// GUM / XNT PRICE</div>
       <div style="display:flex;gap:6px;">
-        <button class="max-btn" onclick="setChartRange('1m')" id="chartBtn1m">1M</button>
-        <button class="max-btn" onclick="setChartRange('5m')" id="chartBtn5m">5M</button>
-        <button class="max-btn" onclick="setChartRange('15m')" id="chartBtn15m">15M</button>
-        <button class="max-btn" onclick="setChartRange('30m')" id="chartBtn30m">30M</button>
-        <button class="max-btn" onclick="setChartRange('1h')" id="chartBtn1h" style="border-color:var(--teal);color:var(--teal);">1H</button>
-        <button class="max-btn" onclick="setChartRange('4h')" id="chartBtn4h">4H</button>
-        <button class="max-btn" onclick="setChartRange('12h')" id="chartBtn12h">12H</button>
-        <button class="max-btn" onclick="setChartRange('1d')" id="chartBtn1d">1D</button>
-        <button class="max-btn" onclick="setChartRange('7d')" id="chartBtn7d">7D</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["1m"]' id="chartBtn1m">1M</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["5m"]' id="chartBtn5m">5M</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["15m"]' id="chartBtn15m">15M</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["30m"]' id="chartBtn30m">30M</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["1h"]' id="chartBtn1h" style="border-color:var(--teal);color:var(--teal);">1H</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["4h"]' id="chartBtn4h">4H</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["12h"]' id="chartBtn12h">12H</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["1d"]' id="chartBtn1d">1D</button>
+        <button class="max-btn" data-click="setChartRange" data-args='["7d"]' id="chartBtn7d">7D</button>
       </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
@@ -270,9 +271,9 @@ header{
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);">
     <div style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:var(--teal);letter-spacing:2px;">// YOUR STAKED GUMBALLS</div>
     <div style="display:flex;gap:6px;">
-      <button class="card-btn claim" id="claimAllBtn" onclick="claimAll()" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
-      <button class="card-btn claim" id="claimAllXntBtn" onclick="claimAllXntFeesNft()" style="width:auto;padding:8px 16px;display:none;">CLAIM XNT FEES (NFT)</button>
-      <button class="card-btn unstake" id="unstakeAllBtn" onclick="unstakeAll()" style="width:auto;padding:8px 16px;display:none;">UNSTAKE ALL</button>
+      <button class="card-btn claim" id="claimAllBtn" data-click="claimAll" style="width:auto;padding:8px 16px;display:none;">CLAIM ALL GUM</button>
+      <button class="card-btn claim" id="claimAllXntBtn" data-click="claimAllXntFeesNft" style="width:auto;padding:8px 16px;display:none;">CLAIM XNT FEES (NFT)</button>
+      <button class="card-btn unstake" id="unstakeAllBtn" data-click="unstakeAll" style="width:auto;padding:8px 16px;display:none;">UNSTAKE ALL</button>
     </div>
   </div>
   <div id="stakedGrid" class="grid">
@@ -292,15 +293,15 @@ header{
       <div class="swap-field">
         <div class="swap-label">FROM</div>
         <div class="swap-input-row">
-          <input type="number" id="swapInput" placeholder="0.00" min="0" step="0.01" oninput="updateSwapEstimate()" />
-          <button class="max-btn" onclick="setSwapMax()">MAX</button>
-          <button class="swap-token-btn" id="swapFromToken" onclick="flipSwap()">GUM</button>
+          <input type="number" id="swapInput" placeholder="0.00" min="0" step="0.01" data-input="updateSwapEstimate" />
+          <button class="max-btn" data-click="setSwapMax">MAX</button>
+          <button class="swap-token-btn" id="swapFromToken" data-click="flipSwap">GUM</button>
         </div>
         <div class="swap-balance" id="swapFromBalance">Balance: —</div>
       </div>
     </div>
     <div style="text-align:center;margin:8px 0;">
-      <button onclick="flipSwap()" style="background:none;border:1px solid var(--border);color:var(--teal);padding:6px 12px;cursor:pointer;font-size:1rem;border-radius:50%;">&#8645;</button>
+      <button data-click="flipSwap" style="background:none;border:1px solid var(--border);color:var(--teal);padding:6px 12px;cursor:pointer;font-size:1rem;border-radius:50%;">&#8645;</button>
     </div>
     <div class="swap-row">
       <div class="swap-field">
@@ -316,22 +317,22 @@ header{
       <div id="swapRate">Rate: —</div>
       <div id="swapFee">Fee: 0.28%</div>
     </div>
-    <button class="swap-btn" id="swapBtn" onclick="executeSwap()" disabled>CONNECT WALLET</button>
+    <button class="swap-btn" id="swapBtn" data-click="executeSwap" disabled>CONNECT WALLET</button>
   </div>
 
   <!-- Liquidity -->
   <div class="section-title" style="margin-top:32px;">// ADD / REMOVE LIQUIDITY</div>
   <div class="swap-box">
     <div class="liq-tabs">
-      <button class="liq-tab active" id="tabAdd" onclick="setLiqTab('add')">ADD</button>
-      <button class="liq-tab" id="tabRemove" onclick="setLiqTab('remove')">REMOVE</button>
+      <button class="liq-tab active" id="tabAdd" data-click="setLiqTab" data-args='["add"]'>ADD</button>
+      <button class="liq-tab" id="tabRemove" data-click="setLiqTab" data-args='["remove"]'>REMOVE</button>
     </div>
     <div id="liqAddPanel">
       <div class="swap-field" style="margin-bottom:10px;">
         <div class="swap-label">GUM AMOUNT</div>
         <div class="swap-input-row">
-          <input type="number" id="liqGumInput" placeholder="0.00" min="0" step="1" oninput="updateLiqEstimate()" />
-          <button class="max-btn" onclick="setLiqGumMax()">MAX</button>
+          <input type="number" id="liqGumInput" placeholder="0.00" min="0" step="1" data-input="updateLiqEstimate" />
+          <button class="max-btn" data-click="setLiqGumMax">MAX</button>
           <span class="swap-token-label">GUM</span>
         </div>
       </div>
@@ -342,19 +343,19 @@ header{
           <span class="swap-token-label">XNT</span>
         </div>
       </div>
-      <button class="swap-btn" id="addLiqBtn" onclick="addLiquidity()" disabled style="margin-top:12px;">ADD LIQUIDITY</button>
+      <button class="swap-btn" id="addLiqBtn" data-click="addLiquidity" disabled style="margin-top:12px;">ADD LIQUIDITY</button>
     </div>
     <div id="liqRemovePanel" style="display:none;">
       <div class="swap-field">
         <div class="swap-label">LP TOKENS TO REMOVE</div>
         <div class="swap-input-row">
           <input type="number" id="liqLpInput" placeholder="0.00" min="0" step="0.01" />
-          <button class="max-btn" onclick="setLpMax()">MAX</button>
+          <button class="max-btn" data-click="setLpMax">MAX</button>
           <span class="swap-token-label">LP</span>
         </div>
         <div class="swap-balance" id="lpBalance">LP Balance: —</div>
       </div>
-      <button class="swap-btn" id="removeLiqBtn" onclick="removeLiquidity()" disabled style="margin-top:12px;">REMOVE LIQUIDITY</button>
+      <button class="swap-btn" id="removeLiqBtn" data-click="removeLiquidity" disabled style="margin-top:12px;">REMOVE LIQUIDITY</button>
     </div>
     <div class="swap-info" id="poolInfo" style="margin-top:12px;">
       <div id="poolReserves">Pool: — GUM / — XNT</div>
@@ -374,7 +375,7 @@ header{
       <div class="swap-label">CREATE NEW POSITION</div>
       <div class="swap-input-row">
         <input type="number" id="lpStakeInput" placeholder="0.00" min="0" step="any" />
-        <button class="max-btn" onclick="setLpStakeMax()">MAX</button>
+        <button class="max-btn" data-click="setLpStakeMax">MAX</button>
         <span class="swap-token-label">LP</span>
       </div>
       <div class="swap-balance" id="availableLpBalance">Available: —</div>
@@ -384,27 +385,27 @@ header{
     <div class="swap-field" style="margin-bottom:12px;">
       <div class="swap-label">LOCK PERIOD</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;">
-        <button class="lock-tier" id="lock0" onclick="setLockTier(0)" data-active="true">
+        <button class="lock-tier" id="lock0" data-click="setLockTier" data-args='[0]' data-active="true">
           <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">FLEX</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1x</div>
           <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">0% pen</div>
         </button>
-        <button class="lock-tier" id="lock1" onclick="setLockTier(1)">
+        <button class="lock-tier" id="lock1" data-click="setLockTier" data-args='[1]'>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">30D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">1.5x</div>
           <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">10% pen</div>
         </button>
-        <button class="lock-tier" id="lock2" onclick="setLockTier(2)">
+        <button class="lock-tier" id="lock2" data-click="setLockTier" data-args='[2]'>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">90D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">2x</div>
           <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">15% pen</div>
         </button>
-        <button class="lock-tier" id="lock3" onclick="setLockTier(3)">
+        <button class="lock-tier" id="lock3" data-click="setLockTier" data-args='[3]'>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">180D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">3x</div>
           <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">20% pen</div>
         </button>
-        <button class="lock-tier" id="lock4" onclick="setLockTier(4)">
+        <button class="lock-tier" id="lock4" data-click="setLockTier" data-args='[4]'>
           <div style="font-family:'Press Start 2P',cursive;font-size:0.38rem;">365D</div>
           <div style="font-size:0.32rem;color:var(--gold);margin-top:2px;">5x</div>
           <div style="font-size:0.28rem;color:var(--gray);margin-top:2px;">25% pen</div>
@@ -412,7 +413,7 @@ header{
       </div>
     </div>
 
-    <button class="swap-btn" id="stakeLpBtn" onclick="stakeLpTokens()" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT (FLEXIBLE)</button>
+    <button class="swap-btn" id="stakeLpBtn" data-click="stakeLpTokens" disabled style="margin-bottom:16px;">STAKE LP → MINT POSITION NFT (FLEXIBLE)</button>
 
     <!-- Active positions -->
     <div class="swap-label" style="margin-bottom:8px;">YOUR POSITIONS</div>
@@ -645,8 +646,8 @@ function renderStaked() {
         <span class="card-rarity" style="color:${RARITY_COLORS[g.rarity]};border:1px solid ${RARITY_COLORS[g.rarity]};background:${RARITY_COLORS[g.rarity]}22;">${g.rarName}</span>
         <div class="card-reward" data-mint="${g.nftMint.toBase58()}">${pending.toFixed(2)} GUM</div>
         <div class="card-rate">${rate} GUM/day</div>
-        <button class="card-btn claim" onclick="claimRewards('${g.nftMint.toBase58()}')" style="margin-bottom:6px;">CLAIM GUM</button>
-        <button class="card-btn unstake" onclick="unstakeNft('${g.nftMint.toBase58()}')">UNSTAKE</button>
+        <button class="card-btn claim" data-click="claimRewards" data-args="${actArgs(g.nftMint.toBase58())}" style="margin-bottom:6px;">CLAIM GUM</button>
+        <button class="card-btn unstake" data-click="unstakeNft" data-args="${actArgs(g.nftMint.toBase58())}">UNSTAKE</button>
       </div>`;
   }).join('');
 }
@@ -670,7 +671,7 @@ function renderUnstaked() {
         <div class="card-name">${g.flavorName}</div>
         <span class="card-rarity" style="color:${RARITY_COLORS[g.rarity]};border:1px solid ${RARITY_COLORS[g.rarity]};background:${RARITY_COLORS[g.rarity]}22;">${g.rarName}</span>
         <div class="card-rate">${rate} GUM/day</div>
-        <button class="card-btn" onclick="stakeNft('${g.nftMint.toBase58()}')">STAKE</button>
+        <button class="card-btn" data-click="stakeNft" data-args="${actArgs(g.nftMint.toBase58())}">STAKE</button>
       </div>`;
   }).join('');
 }
@@ -1818,6 +1819,15 @@ async function loadLpStakeState() {
   } catch(e) { console.error('loadLpStakeState:', e); }
 }
 
+// LP unstake-percentage slider (id us<i>) and its label (ul<i>).
+GumballActions.define("lpPctSlide", (el, ev, i) => {
+  document.getElementById('ul' + i).textContent = el.value + '%';
+});
+GumballActions.define("lpPctSet", (el, ev, i, pct) => {
+  document.getElementById('us' + i).value = pct;
+  document.getElementById('ul' + i).textContent = pct + '%';
+});
+
 function renderLpPositions() {
   const el = document.getElementById('lpPositionsGrid');
   if (!el) return;
@@ -1859,19 +1869,19 @@ function renderLpPositions() {
           </div>
         </div>
         <div style="margin-top:10px;display:flex;gap:6px;align-items:center;">
-          <input type="range" id="us${i}" min="1" max="100" value="100" oninput="document.getElementById('ul${i}').textContent=this.value+'%'" style="flex:1;accent-color:var(--red);" />
+          <input type="range" id="us${i}" min="1" max="100" value="100" data-input="lpPctSlide" data-args="${actArgs(i)}" style="flex:1;accent-color:var(--red);" />
           <span id="ul${i}" style="font-family:'Press Start 2P',cursive;font-size:0.3rem;color:var(--red);min-width:35px;">100%</span>
         </div>
         <div style="display:flex;gap:6px;margin-top:8px;">
-          <button class="max-btn" onclick="document.getElementById('us${i}').value=25;document.getElementById('ul${i}').textContent='25%'">25%</button>
-          <button class="max-btn" onclick="document.getElementById('us${i}').value=50;document.getElementById('ul${i}').textContent='50%'">50%</button>
-          <button class="max-btn" onclick="document.getElementById('us${i}').value=75;document.getElementById('ul${i}').textContent='75%'">75%</button>
-          <button class="max-btn" onclick="document.getElementById('us${i}').value=100;document.getElementById('ul${i}').textContent='100%'">100%</button>
+          <button class="max-btn" data-click="lpPctSet" data-args="${actArgs(i, 25)}">25%</button>
+          <button class="max-btn" data-click="lpPctSet" data-args="${actArgs(i, 50)}">50%</button>
+          <button class="max-btn" data-click="lpPctSet" data-args="${actArgs(i, 75)}">75%</button>
+          <button class="max-btn" data-click="lpPctSet" data-args="${actArgs(i, 100)}">100%</button>
         </div>
         ${isLocked ? `<div style="font-size:0.35rem;color:var(--red);margin-top:8px;">⚠ Early unstake: ${(penaltyBpsForMult(p.multiplier)/100).toFixed(0)}% penalty + forfeit pending GUM</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px;">
-          <button class="card-btn claim" onclick="claimLpPosition(${i})" style="flex:1;padding:6px;">CLAIM GUM</button>
-          <button class="card-btn unstake" onclick="unstakeLpPosition(${i})" style="flex:1;padding:6px;${isLocked ? 'border-color:var(--red);' : ''}">${isLocked ? 'UNSTAKE EARLY' : 'UNSTAKE'}</button>
+          <button class="card-btn claim" data-click="claimLpPosition" data-args="${actArgs(i)}" style="flex:1;padding:6px;">CLAIM GUM</button>
+          <button class="card-btn unstake" data-click="unstakeLpPosition" data-args="${actArgs(i)}" style="flex:1;padding:6px;${isLocked ? 'border-color:var(--red);' : ''}">${isLocked ? 'UNSTAKE EARLY' : 'UNSTAKE'}</button>
         </div>
       </div>`;
   }).join('');

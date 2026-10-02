@@ -233,6 +233,7 @@ body{
   .nav-links{display:none;}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -467,8 +468,8 @@ body{
 
   <!-- Wallet tabs -->
   <div style="display:flex;gap:8px;margin:20px 0 24px;">
-    <button onclick="showWalletGuide('x1')" id="tabX1" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:10px 18px;border:1px solid var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);cursor:pointer;letter-spacing:1px;border-radius:4px;">X1 WALLET</button>
-    <button onclick="showWalletGuide('backpack')" id="tabBP" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:10px 18px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;letter-spacing:1px;border-radius:4px;">BACKPACK</button>
+    <button data-click="showWalletGuide" data-args='["x1"]' id="tabX1" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:10px 18px;border:1px solid var(--teal);background:rgba(0,255,204,0.08);color:var(--teal);cursor:pointer;letter-spacing:1px;border-radius:4px;">X1 WALLET</button>
+    <button data-click="showWalletGuide" data-args='["backpack"]' id="tabBP" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:10px 18px;border:1px solid var(--border);background:transparent;color:var(--gray);cursor:pointer;letter-spacing:1px;border-radius:4px;">BACKPACK</button>
   </div>
 
   <!-- X1 Wallet Guide -->
@@ -573,7 +574,7 @@ body{
   <h2>FREQUENTLY ASKED</h2>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       What blockchain is this on?
       <span class="faq-toggle">+</span>
     </div>
@@ -581,7 +582,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       What does "100% on-chain" mean?
       <span class="faq-toggle">+</span>
     </div>
@@ -589,7 +590,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       How do I verify my gumball is fair?
       <span class="faq-toggle">+</span>
     </div>
@@ -597,7 +598,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       What happens if the oracle goes down?
       <span class="faq-toggle">+</span>
     </div>
@@ -605,7 +606,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       Can I sell my gumball?
       <span class="faq-toggle">+</span>
     </div>
@@ -613,7 +614,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       How does burn-to-upgrade work?
       <span class="faq-toggle">+</span>
     </div>
@@ -621,7 +622,7 @@ body{
   </div>
 
   <div class="faq-item">
-    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+    <div class="faq-q" data-click="toggleParentOpen">
       Is the smart contract audited?
       <span class="faq-toggle">+</span>
     </div>

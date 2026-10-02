@@ -423,6 +423,7 @@ svg#gm{width:100%;}
   100%{transform:translateY(100vh) rotate(720deg);opacity:0;}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -439,13 +440,13 @@ svg#gm{width:100%;}
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="wallet-btn" id="walletBtn" data-click="connectWallet">[ CONNECT WALLET ]</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html" class="active">MINT</a>
   <a href="marketplace.html">MARKET</a>
   <a href="staking.html">STAKE</a>
@@ -453,7 +454,7 @@ svg#gm{width:100%;}
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
   <a href="faucet.html">FAUCET</a>
-  <button class="wallet-btn" id="walletBtnMobile" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+  <button class="wallet-btn" id="walletBtnMobile" data-click="menuConnectWallet">[ CONNECT WALLET ]</button>
 </div>
 
 <div id="liveTicker" style="width:100%;max-width:980px;overflow:hidden;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(15,15,26,0.6);backdrop-filter:blur(8px);padding:8px 14px;display:none;border-radius:8px;">
@@ -582,13 +583,13 @@ svg#gm{width:100%;}
       <div class="qty-row">
         <span class="qty-lbl">QUANTITY</span>
         <div class="qty-ctrl">
-          <button class="qty-btn" onclick="changeQty(-1)">−</button>
+          <button class="qty-btn" data-click="changeQty" data-args='[-1]'>−</button>
           <div class="qty-val" id="qtyVal">1</div>
-          <button class="qty-btn" onclick="changeQty(1)">+</button>
+          <button class="qty-btn" data-click="changeQty" data-args='[1]'>+</button>
         </div>
       </div>
       <div class="total-cost">TOTAL: <span id="totalCost">0.0100 XNT</span></div>
-      <button class="mint-btn" id="mintBtn" onclick="mintGumball()" disabled>► CONNECT WALLET FIRST ◄</button>
+      <button class="mint-btn" id="mintBtn" data-click="mintGumball" disabled>► CONNECT WALLET FIRST ◄</button>
       <div class="trait-preview" id="traitPreview">
         <div style="font-size:0.52rem;color:var(--gray);letter-spacing:2px;margin-bottom:8px;">LAST MINT TRAITS</div>
         <div class="trait-row"><span class="trait-key">FLAVOR</span><span id="tFlavor">—</span></div>
@@ -617,12 +618,12 @@ svg#gm{width:100%;}
   <div class="coll-header">
     <div class="coll-title">// YOUR COLLECTION</div>
     <div class="coll-controls">
-      <button class="filter-btn active" onclick="filterCollection('all', this)">ALL</button>
-      <button class="filter-btn" onclick="filterCollection('common', this)">COMMON</button>
-      <button class="filter-btn" onclick="filterCollection('uncommon', this)">UNCOMMON</button>
-      <button class="filter-btn" onclick="filterCollection('rare', this)">RARE</button>
-      <button class="filter-btn" onclick="filterCollection('epic', this)">EPIC</button>
-      <button class="filter-btn" onclick="filterCollection('legendary', this)">★ LEG</button>
+      <button class="filter-btn active" data-click="filterCollection" data-args='["all"]' data-pass-el>ALL</button>
+      <button class="filter-btn" data-click="filterCollection" data-args='["common"]' data-pass-el>COMMON</button>
+      <button class="filter-btn" data-click="filterCollection" data-args='["uncommon"]' data-pass-el>UNCOMMON</button>
+      <button class="filter-btn" data-click="filterCollection" data-args='["rare"]' data-pass-el>RARE</button>
+      <button class="filter-btn" data-click="filterCollection" data-args='["epic"]' data-pass-el>EPIC</button>
+      <button class="filter-btn" data-click="filterCollection" data-args='["legendary"]' data-pass-el>★ LEG</button>
     </div>
     <div class="coll-count" id="collCount">0 gumballs</div>
   </div>
@@ -634,10 +635,10 @@ svg#gm{width:100%;}
   <div style="font-family:'Press Start 2P',cursive;font-size:0.6rem;color:var(--teal);letter-spacing:2px;" id="modalTitle">// GUMBALL #0000</div>
   <div id="modalSvg" style="width:280px;height:280px;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(0,255,204,0.2);"></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-    <button onclick="copyOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--teal);color:var(--teal);cursor:pointer;">📋 COPY SVG</button>
-    <button onclick="downloadOnChainSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--purple);color:var(--purple);cursor:pointer;">⬇ DOWNLOAD</button>
-    <button onclick="rerollCosmetics()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--pink,#ff44aa);color:var(--pink,#ff44aa);cursor:pointer;">🎲 RE-ROLL LOOKS (25 GUM)</button>
-    <button onclick="viewSvgSource()" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--gray);color:var(--gray);cursor:pointer;">{ } SOURCE</button>
+    <button data-click="copyOnChainSvg" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--teal);color:var(--teal);cursor:pointer;">📋 COPY SVG</button>
+    <button data-click="downloadOnChainSvg" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--purple);color:var(--purple);cursor:pointer;">⬇ DOWNLOAD</button>
+    <button data-click="rerollCosmetics" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--pink,#ff44aa);color:var(--pink,#ff44aa);cursor:pointer;">🎲 RE-ROLL LOOKS (25 GUM)</button>
+    <button data-click="viewSvgSource" style="font-family:'Press Start 2P',cursive;font-size:0.4rem;padding:6px 10px;background:var(--panel);border:1px solid var(--gray);color:var(--gray);cursor:pointer;">{ } SOURCE</button>
   </div>
   <div id="modalTraits" style="font-size:0.56rem;color:var(--gray);text-align:center;line-height:2;"></div>
 
@@ -658,7 +659,7 @@ svg#gm{width:100%;}
     </div>
   </div>
 
-  <button onclick="document.getElementById('svgModal').style.display='none'" style="font-family:'Press Start 2P',cursive;font-size:0.48rem;padding:9px 18px;background:var(--panel);border:1px solid var(--border);color:var(--white);cursor:pointer;">[ CLOSE ]</button>
+  <button data-click="hide" data-args='["svgModal"]' style="font-family:'Press Start 2P',cursive;font-size:0.48rem;padding:9px 18px;background:var(--panel);border:1px solid var(--border);color:var(--white);cursor:pointer;">[ CLOSE ]</button>
 </div>
 
 <!-- Upgrade Section -->
@@ -670,13 +671,13 @@ svg#gm{width:100%;}
   <div class="upgrade-grid" id="upgradeGrid"></div>
   <div class="status-msg" id="upgradeStatus" style="margin-top:14px;display:none;"></div>
   <div style="margin-top:16px;text-align:center;display:none;" id="refundWrap">
-    <button onclick="refundExpiredMint()" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:rgba(255,34,68,0.1);border:1px solid var(--red);color:var(--red);cursor:pointer;letter-spacing:1px;" id="refundBtn">
+    <button data-click="refundExpiredMint" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:rgba(255,34,68,0.1);border:1px solid var(--red);color:var(--red);cursor:pointer;letter-spacing:1px;" id="refundBtn">
       💸 CLAIM MINT REFUND
     </button>
     <div style="font-size:0.44rem;color:var(--gray);margin-top:6px;" id="refundInfo"></div>
   </div>
   <div style="margin-top:16px;text-align:center;display:none;" id="reclaimWrap">
-    <button onclick="reclaimBurned()" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:transparent;border:1px solid var(--gray);color:var(--gray);cursor:pointer;letter-spacing:1px;" id="reclaimBtn">
+    <button data-click="reclaimBurned" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:transparent;border:1px solid var(--gray);color:var(--gray);cursor:pointer;letter-spacing:1px;" id="reclaimBtn">
       ♻ RECLAIM BURN RENT
     </button>
     <div style="font-size:0.44rem;color:var(--gray);margin-top:6px;" id="reclaimInfo"></div>
@@ -1637,7 +1638,7 @@ function renderUpgradeCards() {
       </div>
       <div class="upgrade-progress">YOU HAVE: <span>${have} ${u.from}</span></div>
       <div class="upgrade-fee" style="font-size:0.4rem;color:var(--gold);margin:4px 0;">FEE: ${getMintPrice(currentMinted).toFixed(4)} XNT</div>
-      <button class="upgrade-btn" ${canUpgrade?'':'disabled'} onclick="burnToUpgrade(${u.fromIdx}, ${u.toIdx}, ${u.burnsNeeded})">
+      <button class="upgrade-btn" ${canUpgrade?'':'disabled'} data-click="burnToUpgrade" data-args="${actArgs(u.fromIdx, u.toIdx, u.burnsNeeded)}">
         ${canUpgrade ? `🔥 BURN ${u.burnsNeeded} + FEE` : `NEED ${Math.max(0, u.burnsNeeded - have)} MORE`}
       </button>
     `;

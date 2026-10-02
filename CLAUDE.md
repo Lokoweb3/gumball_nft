@@ -250,6 +250,10 @@ No migration needed unless Machine struct changed.
 - **Never serve the repo root** over HTTP. `server.cjs` serves `public/` and nginx
   roots at `$APP_DIR/public`. Serving `__dirname` publishes `oracle-secrets.json`,
   `*-wallet.json` and every runtime state file — this was a live leak on production
+- **Never use inline event handlers** (`onclick=`, `oninput=`, …) in pages or
+  generated HTML. The CSP sets `script-src-attr 'none'`, so they silently do
+  nothing. Use `data-click="fn" data-args='[...]'` (see `public/js/actions.js`;
+  in templates `data-args="${actArgs(a, b)}"`) or `addEventListener`
 - **Never commit private keys** under an innocuous filename — an OpenSSH key was
   committed as `yes` and sat in the public repo
 

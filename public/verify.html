@@ -133,6 +133,7 @@ header{
   .search-btn{width:100%;}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -146,11 +147,11 @@ header{
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link active">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html">MINT</a>
   <a href="marketplace.html">MARKET</a>
   <a href="staking.html">STAKE</a>
@@ -189,7 +190,7 @@ header{
     <div class="search-desc">Enter a gumball serial number or its on-chain PDA address to verify its provable fairness.</div>
     <div class="search-row">
       <input type="text" class="search-input" id="searchInput" placeholder="Serial number (e.g. 42) or PDA address..." />
-      <button class="search-btn" id="searchBtn" onclick="verify()">🔍 VERIFY</button>
+      <button class="search-btn" id="searchBtn" data-click="verify">🔍 VERIFY</button>
     </div>
     <div class="error-msg" id="errorMsg"></div>
   </div>
@@ -557,7 +558,7 @@ async function verify() {
               <div class="step-desc">Paste the oracle secret (hex) to independently re-derive this gumball's traits. The contract computed traits from <strong>sha256(secret + slot_hash + user_seed + mint_index)</strong>.</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
                 <input type="text" id="secretInput" placeholder="Oracle secret (64 hex chars)..." style="flex:1;min-width:200px;padding:8px 10px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:'Space Mono',monospace;font-size:0.5rem;outline:none;" />
-                <button onclick="verifyHash()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:8px 12px;background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;">VERIFY</button>
+                <button data-click="verifyHash" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:8px 12px;background:var(--teal);color:#000;border:none;cursor:pointer;letter-spacing:1px;">VERIFY</button>
               </div>
               <div id="hashResult" style="margin-top:10px;display:none;"></div>
             </div>
@@ -573,7 +574,7 @@ async function verify() {
         <div style="font-family:'Press Start 2P',cursive;font-size:0.42rem;color:var(--gray);letter-spacing:1px;margin-bottom:10px;">SHARE THIS VERIFICATION</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input id="shareUrl" value="${shareUrl}" readonly style="flex:1;min-width:200px;padding:7px 10px;background:var(--black);border:1px solid var(--border);color:var(--teal);font-family:'Space Mono',monospace;font-size:0.42rem;outline:none;" />
-          <button onclick="copyShare()" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:7px 12px;background:transparent;border:1px solid var(--teal);color:var(--teal);cursor:pointer;" id="copyShareBtn">📋 COPY</button>
+          <button data-click="copyShare" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:7px 12px;background:transparent;border:1px solid var(--teal);color:var(--teal);cursor:pointer;" id="copyShareBtn">📋 COPY</button>
         </div>
       </div>
     `);

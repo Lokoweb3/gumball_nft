@@ -116,6 +116,7 @@ header{
   .analytics-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -129,12 +130,12 @@ header{
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="wallet-btn" id="walletBtn" data-click="connectWallet">[ CONNECT WALLET ]</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html">MINT</a>
   <a href="marketplace.html">MARKET</a>
   <a href="staking.html">STAKE</a>
@@ -142,7 +143,7 @@ header{
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
   <a href="faucet.html">FAUCET</a>
-  <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+  <button class="wallet-btn" data-click="menuConnectWallet">[ CONNECT WALLET ]</button>
 </div>
 
 <div class="wrap">
@@ -159,11 +160,11 @@ header{
   <div class="section">
     <div class="section-title">// LIVE ACTIVITY FEED</div>
     <div class="filters">
-      <button class="filter-btn active" onclick="setFilter('all')">ALL</button>
-      <button class="filter-btn" onclick="setFilter('mint')">MINTS</button>
-      <button class="filter-btn" onclick="setFilter('burn')">BURNS</button>
-      <button class="filter-btn" onclick="setFilter('sale')">SALES</button>
-      <button class="filter-btn" onclick="setFilter('list')">LISTINGS</button>
+      <button class="filter-btn active" data-click="setFilter" data-args='["all"]'>ALL</button>
+      <button class="filter-btn" data-click="setFilter" data-args='["mint"]'>MINTS</button>
+      <button class="filter-btn" data-click="setFilter" data-args='["burn"]'>BURNS</button>
+      <button class="filter-btn" data-click="setFilter" data-args='["sale"]'>SALES</button>
+      <button class="filter-btn" data-click="setFilter" data-args='["list"]'>LISTINGS</button>
     </div>
     <div class="feed" id="feedContent">
       <div class="loading-msg">LOADING ACTIVITY...</div>

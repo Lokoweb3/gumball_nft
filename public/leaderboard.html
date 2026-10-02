@@ -283,6 +283,7 @@ header {
   .score-val{font-size:0.5rem;min-width:36px;}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -301,11 +302,11 @@ header {
       <a href="leaderboard.html" class="nav-link active">[ LEADERBOARD ]</a>
       <a href="verify.html" class="nav-link">[ VERIFY ]</a>
       <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-      <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+      <button class="hamburger" data-click="menuOpen">&#9776;</button>
     </nav>
   </header>
   <div class="mobile-menu" id="mobileMenu">
-    <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+    <button class="mobile-close" data-click="menuClose">&times;</button>
     <a href="index.html">MINT</a>
     <a href="marketplace.html">MARKET</a>
     <a href="staking.html">STAKE</a>
@@ -326,7 +327,7 @@ header {
   </div>
 
   <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
-    <button class="refresh-btn" id="refreshBtn" onclick="loadAll()" style="margin-bottom:0;">⟳ REFRESH DATA</button>
+    <button class="refresh-btn" id="refreshBtn" data-click="loadAll" style="margin-bottom:0;">⟳ REFRESH DATA</button>
     <span id="lastRefreshed" style="font-size:0.42rem;color:var(--gray);letter-spacing:1px;"></span>
     <span style="font-size:0.42rem;color:var(--gray);letter-spacing:1px;margin-left:auto;">AUTO-REFRESHES EVERY 60s</span>
   </div>
@@ -546,6 +547,11 @@ let currentSvg = "";
 let currentSerial = 0;
 let currentGumball = null;
 
+const rareFor = (el) => window._rareGumballs[+el.closest('.rare-card').dataset.idx];
+GumballActions.define("openRareSvg",  (el) => openSvgModal(rareFor(el)));
+GumballActions.define("openRareMeta", (el) => viewMetadata(rareFor(el)));
+GumballActions.define("viewCurrentMeta", () => { if (currentGumball) viewMetadata(currentGumball); });
+
 async function openSvgModal(g) {
   currentGumball = g;
   currentGumball = g;
@@ -655,14 +661,14 @@ function renderRarest(gumballs) {
     const rc = RARITY_COLORS[g.rarity];
     const gJson = encodeURIComponent(JSON.stringify(g));
     return `
-      <div class="rare-card fade-up" data-idx="${rareIdx}" onclick="openSvgModal(window._rareGumballs[+this.closest('.rare-card').dataset.idx])" title="Click to view on-chain SVG">
+      <div class="rare-card fade-up" data-idx="${rareIdx}" data-click="openRareSvg" title="Click to view on-chain SVG">
         <div class="rare-ball" style="background:radial-gradient(circle at 35% 30%, ${col}ff, ${col}44);box-shadow:0 0 20px ${col}44,0 0 0 2px ${rc}44;"></div>
         <div class="rare-serial" style="color:${rc};">#${String(g.serial).padStart(4,"0")}</div>
         <div class="rare-flavor">${flavor}</div>
         <div style="font-size:0.45rem;margin:3px 0;color:${rc};letter-spacing:1px;">${rarity}</div>
         <div class="rare-owner">${short}</div>
         <div style="font-size:0.38rem;color:#00ffcc;margin-top:4px;letter-spacing:1px;">⛓ VIEW SVG</div>
-        <div style="font-size:0.38rem;color:#666688;margin-top:2px;letter-spacing:1px;cursor:pointer;" onclick="event.stopPropagation();viewMetadata(window._rareGumballs[+this.closest('.rare-card').dataset.idx])">{ } METADATA</div>
+        <div style="font-size:0.38rem;color:#666688;margin-top:2px;letter-spacing:1px;cursor:pointer;" data-click="openRareMeta">{ } METADATA</div>
       </div>
     `;
   }).join('');
@@ -741,7 +747,7 @@ async function viewMetadata(g) {
     </style>
   </head><body>
     <h2>// GUMBALL #${String(g.serial).padStart(4,"0")} ON-CHAIN METADATA</h2>
-    <button class="copy-btn" onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent).then(()=>{this.textContent='✅ COPIED!';setTimeout(()=>this.textContent='📋 COPY JSON',1500)})">📋 COPY JSON</button>
+    <button class="copy-btn" id="copyJsonBtn">📋 COPY JSON</button>
     <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;">
       <a href="https://explorer.testnet.x1.xyz/account/${g.pubkey}" target="_blank" class="copy-btn" style="text-decoration:none;color:#00ffcc;border-color:#00ffcc;">🔗 VIEW ACCOUNT</a>
       <a href="https://explorer.testnet.x1.xyz/account/${g.owner}" target="_blank" class="copy-btn" style="text-decoration:none;color:#c844ff;border-color:#c844ff;">👤 VIEW OWNER</a>
@@ -751,11 +757,20 @@ async function viewMetadata(g) {
                .replace(/:\s*(\d+)/g,': <span class="num">$1</span>')
                .replace(/:\s*(true|false)/g,': <span class="bool">$1</span>')}</pre>
   </body></html>`);
+  win.document.close();
+  // The about:blank popup inherits this page's CSP, so no inline handlers.
+  const copyBtn = win.document.getElementById("copyJsonBtn");
+  copyBtn.addEventListener("click", () => {
+    win.navigator.clipboard.writeText(json).then(() => {
+      copyBtn.textContent = "✅ COPIED!";
+      win.setTimeout(() => { copyBtn.textContent = "📋 COPY JSON"; }, 1500);
+    });
+  });
 }
 </script>
 
 <!-- SVG VIEWER MODAL -->
-<div id="svgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:14px;" onclick="if(event.target===this)this.style.display='none'">
+<div id="svgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:14px;" data-click="hideIfBackdrop">
   <div style="font-family:'Press Start 2P',cursive;font-size:0.6rem;color:#00ffcc;letter-spacing:2px;" id="modalTitle">// GUMBALL #0000</div>
   <div id="modalSvg" style="width:300px;height:300px;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(0,255,204,0.2);background:#111;display:flex;align-items:center;justify-content:center;">
     <span style="font-family:'Press Start 2P',cursive;font-size:0.5rem;color:#444;">LOADING...</span>
@@ -766,11 +781,11 @@ async function viewMetadata(g) {
     <div style="font-size:0.5rem;color:#ffcc00;padding:4px 12px;border:1px solid #ffcc00;">🎲 ORACLE VERIFIED</div>
   </div>
   <div style="display:flex;gap:8px;">
-    <button onclick="copyModalSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #00ffcc;color:#00ffcc;cursor:pointer;">📋 COPY SVG</button>
-    <button onclick="downloadModalSvg()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #c844ff;color:#c844ff;cursor:pointer;">⬇ DOWNLOAD</button>
-    <button id="modalMetaBtn" onclick="if(currentGumball)viewMetadata(currentGumball)" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #44aaff;color:#44aaff;cursor:pointer;">{ } METADATA</button>
-    <button id="modalTxBtn" onclick="openTxLink()" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #ffcc00;color:#ffcc00;cursor:pointer;">⛓ TX LINK</button>
-    <button onclick="document.getElementById('svgModal').style.display='none'" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #1a1a2e;color:#666688;cursor:pointer;">[ CLOSE ]</button>
+    <button data-click="copyModalSvg" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #00ffcc;color:#00ffcc;cursor:pointer;">📋 COPY SVG</button>
+    <button data-click="downloadModalSvg" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #c844ff;color:#c844ff;cursor:pointer;">⬇ DOWNLOAD</button>
+    <button id="modalMetaBtn" data-click="viewCurrentMeta" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #44aaff;color:#44aaff;cursor:pointer;">{ } METADATA</button>
+    <button id="modalTxBtn" data-click="openTxLink" style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #ffcc00;color:#ffcc00;cursor:pointer;">⛓ TX LINK</button>
+    <button data-click="hide" data-args='["svgModal"]' style="font-family:'Press Start 2P',cursive;font-size:0.42rem;padding:6px 12px;background:#0f0f1a;border:1px solid #1a1a2e;color:#666688;cursor:pointer;">[ CLOSE ]</button>
   </div>
 </div>
 </body>

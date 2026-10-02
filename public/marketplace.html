@@ -151,6 +151,7 @@ header{
   .stats{flex-direction:column;}
 }
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -164,12 +165,12 @@ header{
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link">[ FAUCET ]</a>
-    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">[ CONNECT WALLET ]</button>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="wallet-btn" id="walletBtn" data-click="connectWallet">[ CONNECT WALLET ]</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html">MINT</a>
   <a href="marketplace.html" class="active">MARKET</a>
   <a href="staking.html">STAKE</a>
@@ -177,7 +178,7 @@ header{
   <a href="leaderboard.html">LEADERBOARD</a>
   <a href="verify.html">VERIFY</a>
   <a href="faucet.html">FAUCET</a>
-  <button class="wallet-btn" onclick="connectWallet();document.getElementById('mobileMenu').classList.remove('open')">[ CONNECT WALLET ]</button>
+  <button class="wallet-btn" data-click="menuConnectWallet">[ CONNECT WALLET ]</button>
 </div>
 
 <div class="wrap">
@@ -192,11 +193,11 @@ header{
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('listings')">ALL LISTINGS</button>
-    <button class="tab" onclick="switchTab('auctions')">AUCTIONS</button>
-    <button class="tab" onclick="switchTab('my-listed')">MY LISTINGS</button>
-    <button class="tab" onclick="switchTab('my-collection')">MY COLLECTION</button>
-    <button class="tab" onclick="switchTab('my-offers')">MY OFFERS</button>
+    <button class="tab active" data-click="switchTab" data-args='["listings"]'>ALL LISTINGS</button>
+    <button class="tab" data-click="switchTab" data-args='["auctions"]'>AUCTIONS</button>
+    <button class="tab" data-click="switchTab" data-args='["my-listed"]'>MY LISTINGS</button>
+    <button class="tab" data-click="switchTab" data-args='["my-collection"]'>MY COLLECTION</button>
+    <button class="tab" data-click="switchTab" data-args='["my-offers"]'>MY OFFERS</button>
   </div>
 
   <!-- Content -->
@@ -214,8 +215,8 @@ header{
     <input type="number" id="listPriceInput" placeholder="Price in XNT (e.g. 0.5)" step="0.01" min="0.01" />
     <div style="font-size:0.38rem;color:var(--gray);margin-bottom:12px;">5% royalty to treasury on sale</div>
     <div class="modal-btns">
-      <button onclick="closeListModal()" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
-      <button onclick="confirmList()" style="background:var(--teal);border:1px solid var(--teal);color:#000;">LIST</button>
+      <button data-click="closeListModal" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
+      <button data-click="confirmList" style="background:var(--teal);border:1px solid var(--teal);color:#000;">LIST</button>
     </div>
   </div>
 </div>
@@ -228,8 +229,8 @@ header{
     <input type="number" id="offerAmountInput" placeholder="Offer amount in XNT" step="0.01" min="0.01" />
     <div style="font-size:0.38rem;color:var(--gray);margin-bottom:12px;">XNT will be escrowed until accepted or cancelled</div>
     <div class="modal-btns">
-      <button onclick="closeOfferModal()" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
-      <button onclick="confirmOffer()" style="background:var(--gold);border:1px solid var(--gold);color:#000;">OFFER</button>
+      <button data-click="closeOfferModal" style="background:transparent;border:1px solid var(--gray);color:var(--gray);">CANCEL</button>
+      <button data-click="confirmOffer" style="background:var(--gold);border:1px solid var(--gold);color:#000;">OFFER</button>
     </div>
   </div>
 </div>
@@ -543,7 +544,7 @@ function incomingOfferRow(o) {
         <div class="offer-buyer">FROM: ${buyerShort} ON ${serial}</div>
         <div class="offer-amount">${amountXNT} XNT ${expiry ? '· ' + expiry : ''}</div>
       </div>
-      ${isExpired ? '<span style="font-family:\'Press Start 2P\',cursive;font-size:0.35rem;color:var(--red);">EXPIRED</span>' : `<button class="offer-btn" onclick="acceptOffer('${o.nftMint}', '${o.buyer}', ${o.amount})" style="border-color:var(--gold);color:var(--gold);">ACCEPT</button>`}
+      ${isExpired ? '<span style="font-family:\'Press Start 2P\',cursive;font-size:0.35rem;color:var(--red);">EXPIRED</span>' : `<button class="offer-btn" data-click="acceptOffer" data-args="${actArgs(o.nftMint, o.buyer, o.amount)}" style="border-color:var(--gold);color:var(--gold);">ACCEPT</button>`}
     </div>`;
 }
 
@@ -582,9 +583,9 @@ function listingCard(l, isMine) {
       <div class="card-price">${priceXNT} XNT</div>
       <div class="card-seller">Seller: ${sellerShort}</div>
       ${isMine || (walletPubkey && l.seller === walletPubkey.toBase58())
-        ? `<button class="card-btn delist" onclick="delistGumball('${mintKey}')">DELIST</button>`
-        : `<button class="card-btn buy" onclick="buyGumball('${mintKey}')" ${!walletPubkey?'disabled':''}>BUY NOW</button>
-           <button class="card-btn" onclick="openOfferModal('${mintKey}', ${l.serial})" style="margin-top:6px;">MAKE OFFER</button>`
+        ? `<button class="card-btn delist" data-click="delistGumball" data-args="${actArgs(mintKey)}">DELIST</button>`
+        : `<button class="card-btn buy" data-click="buyGumball" data-args="${actArgs(mintKey)}" ${!walletPubkey?'disabled':''}>BUY NOW</button>
+           <button class="card-btn" data-click="openOfferModal" data-args="${actArgs(mintKey, l.serial)}" style="margin-top:6px;">MAKE OFFER</button>`
       }
     </div>`;
 }
@@ -620,11 +621,11 @@ function auctionCard(a) {
 
   let action;
   if (ended) {
-    action = `<button class="card-btn buy" onclick="settleAuctionUi('${mintKey}')" ${!walletPubkey?'disabled':''}>SETTLE${a.highestBid===0?' (RETURN TO SELLER)':''}</button>`;
+    action = `<button class="card-btn buy" data-click="settleAuctionUi" data-args="${actArgs(mintKey)}" ${!walletPubkey?'disabled':''}>SETTLE${a.highestBid===0?' (RETURN TO SELLER)':''}</button>`;
   } else if (isMine) {
     action = `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">YOUR AUCTION — settle available after it ends</div>`;
   } else {
-    action = `<button class="card-btn buy" onclick="bidOnAuction('${mintKey}')" ${!walletPubkey?'disabled':''}>${amLeading ? 'RAISE (YOU LEAD)' : 'PLACE BID'}</button>`;
+    action = `<button class="card-btn buy" data-click="bidOnAuction" data-args="${actArgs(mintKey)}" ${!walletPubkey?'disabled':''}>${amLeading ? 'RAISE (YOU LEAD)' : 'PLACE BID'}</button>`;
   }
 
   return `
@@ -651,8 +652,8 @@ function collectionCard(g) {
       <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
-      ${mintKey ? `<button class="card-btn" onclick="openListModal('${mintKey}', ${g.serial})">LIST FOR SALE</button>
-      <button class="card-btn" onclick="createAuctionUi('${mintKey}')" style="margin-top:6px;">START AUCTION</button>` : `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">MINT KEY NOT FOUND — REFRESH</div>`}
+      ${mintKey ? `<button class="card-btn" data-click="openListModal" data-args="${actArgs(mintKey, g.serial)}">LIST FOR SALE</button>
+      <button class="card-btn" data-click="createAuctionUi" data-args="${actArgs(mintKey)}" style="margin-top:6px;">START AUCTION</button>` : `<div style="font-size:0.38rem;color:var(--gray);margin-top:10px;">MINT KEY NOT FOUND — REFRESH</div>`}
     </div>`;
 }
 
@@ -666,7 +667,7 @@ function offerRow(o) {
         <div class="offer-buyer">OFFER ON: ${mintShort}</div>
         <div class="offer-amount">${amountXNT} XNT ${expiry ? '· ' + expiry : ''}</div>
       </div>
-      <button class="offer-btn cancel" onclick="cancelOffer('${o.nftMint}')">CANCEL</button>
+      <button class="offer-btn cancel" data-click="cancelOffer" data-args="${actArgs(o.nftMint)}">CANCEL</button>
     </div>`;
 }
 

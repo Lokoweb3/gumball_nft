@@ -101,6 +101,7 @@ header{
 }
 .sig-link:hover{text-decoration:underline;}
 </style>
+<script src="js/actions.js"></script>
 </head>
 <body>
 
@@ -114,12 +115,12 @@ header{
     <a href="leaderboard.html" class="nav-link">[ LEADERBOARD ]</a>
     <a href="verify.html" class="nav-link">[ VERIFY ]</a>
     <a href="faucet.html" class="nav-link active">[ FAUCET ]</a>
-    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.add('open')">&#9776;</button>
+    <button class="hamburger" data-click="menuOpen">&#9776;</button>
   </div>
 </header>
 
 <div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" onclick="document.getElementById('mobileMenu').classList.remove('open')">&times;</button>
+  <button class="mobile-close" data-click="menuClose">&times;</button>
   <a href="index.html">MINT</a>
   <a href="marketplace.html">MARKET</a>
   <a href="staking.html">STAKE</a>
@@ -138,7 +139,7 @@ header{
 
     <div class="faucet-row">
       <input type="text" class="faucet-input" id="walletInput" placeholder="Paste your wallet address..." />
-      <button class="faucet-btn" id="faucetBtn" onclick="requestFaucet()">REQUEST XNT</button>
+      <button class="faucet-btn" id="faucetBtn" data-click="requestFaucet">REQUEST XNT</button>
     </div>
 
     <div id="captchaBox" style="display:none; margin-top:12px;"></div>
