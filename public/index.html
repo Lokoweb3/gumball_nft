@@ -676,15 +676,10 @@ svg#gm{width:100%;}
     </button>
     <div style="font-size:0.44rem;color:var(--gray);margin-top:6px;" id="refundInfo"></div>
   </div>
-  <div style="margin-top:16px;text-align:center;display:none;" id="reclaimWrap">
-    <button data-click="reclaimBurned" style="font-family:'Press Start 2P',cursive;font-size:0.45rem;padding:10px 16px;background:transparent;border:1px solid var(--gray);color:var(--gray);cursor:pointer;letter-spacing:1px;" id="reclaimBtn">
-      ♻ RECLAIM BURN RENT
-    </button>
-    <div style="font-size:0.44rem;color:var(--gray);margin-top:6px;" id="reclaimInfo"></div>
-  </div>
 </div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-rpc.js"></script>
 <script>
 // ── CONFIG (shared constants + helpers come from js/gumball-common.js) ───────
 const EXPLORER = "https://explorer.testnet.x1.xyz/tx";
@@ -929,31 +924,9 @@ async function fetchWalletGumballs() {
     setStatus("SCANNING YOUR GUMBALLS...");
     showCollectionSkeleton();
 
-    // Build gumballPda → { mintPubkey, ataPubkey } from wallet's token accounts
-    const gumballMintMap = {};
-    try {
-      const tokenAccts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
-      for (const { pubkey: ataPubkey, account } of tokenAccts.value) {
-        const data = account.data;
-        const mintPubkey = new PublicKey(data.slice(0, 32));
-        const amount = Number(new DataView(data.buffer, data.byteOffset).getBigUint64(64, true));
-        if (amount !== 1) continue;
-        const [gumballPda] = PublicKey.findProgramAddressSync(
-          [strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID
-        );
-        gumballMintMap[gumballPda.toBase58()] = { mintPubkey, ataPubkey };
-      }
-    } catch(e) { console.error("Token account lookup failed:", e); }
-
-    // Fetch GumballData accounts (v5 only — fresh deploy, no legacy accounts)
-    const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 bytes
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        { dataSize: GD_V5 },
-        { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
-        { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
-      ],
-    });
+    // Source of truth is the wallet's token accounts (a plain transfer does not
+    // update GumballData.owner), batch-loaded with getMultipleAccountsInfo.
+    const accounts = await loadWalletGumballAccounts(walletPubkey);
     collection = [];
     document.getElementById("collGrid").innerHTML = "";
     if (accounts.length === 0) {
@@ -962,31 +935,25 @@ async function fetchWalletGumballs() {
       document.getElementById("collArea").style.display = "none";
       return;
     }
-    const processAccount = async ({ pubkey, account }) => {
-      const data = account.data;
+    const processAccount = ({ gumballPda, mintPubkey, ataPubkey, data }) => {
       const dv = new DataView(data.buffer, data.byteOffset);
       const serial = Number(dv.getBigUint64(8+32+32, true));
       const flavor = data[8+32+32+8];
       const color  = data[8+32+32+8+1];
       const rarity = data[8+32+32+8+2];
-      const special= data[8+32+32+8+3];
 
       const colorName = COLORS[color]  || "Berry Blue";
       const ballColor = BALL_COLORS[colorName] || "#2266ee";
-      const mintInfo  = gumballMintMap[pubkey.toBase58()] || {};
-
-      if (!mintInfo.mintPubkey) return;
 
       addToCollection({
         serial, flavorName: FLAVORS[flavor]||"Mystery", colorName,
-        rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: pubkey,
+        rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: gumballPda,
         svgStr: null, // SVG loaded on demand from separate GumballSvg PDA
-        mintPubkey: mintInfo.mintPubkey || null,
-        ataPubkey:  mintInfo.ataPubkey  || null,
+        mintPubkey, ataPubkey,
       });
     };
 
-    await Promise.all(accounts.map(a => processAccount(a)));
+    accounts.forEach(processAccount);
     // Sort by serial
     const grid = document.getElementById("collGrid");
     [...grid.children].sort((a,b) => {
@@ -998,7 +965,6 @@ async function fetchWalletGumballs() {
     }).forEach(c => grid.appendChild(c));
     setStatus(`LOADED ${collection.length} GUMBALL${collection.length!==1?"S":""}`);
     renderUpgradeCards();
-    checkReclaimable();
     checkExpiredMints();
   } catch(e) {
     console.error(e);
@@ -1010,7 +976,10 @@ async function fetchWalletGumballs() {
 async function fetchRarityBreakdown() {
   try {
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } }],
+      filters: [
+        { dataSize: GUMBALL_DATA_SIZE }, // exclude MintRequest (164 B), which also has machine at offset 40
+        { memcmp: { offset: 8+32, bytes: MACHINE_PDA.toBase58() } },
+      ],
       dataSlice: { offset: 8+32+32+8+2, length: 1 },
     });
     const minted = [0,0,0,0,0];
@@ -1085,33 +1054,19 @@ function concatU8(...arrays) {
 function u8FromNum(n,bytes=1) { const a=new Uint8Array(bytes); for(let i=0;i<bytes;i++){a[i]=n&0xff;n>>=8;} return a; }
 
 // ── COMMITMENT FETCHING ───────────────────────────────────────────────────────
-async function fetchLatestCommitment() {
-  const COMMIT_SIZE = 8 + 32 + 32 + 8 + 8 + 1 + 1;
-  const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+async function fetchLatestCommitment(machineInfo, exclude) {
   const oraclePubkey = new PublicKey(machineInfo.data.slice(8+32+32, 8+32+32+32));
-  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-    filters: [{ memcmp: { offset: 8, bytes: oraclePubkey.toBase58() } }],
-  });
-  const unused = accounts.filter(({ account }) => {
-    if (account.data.length !== COMMIT_SIZE) return false;
-    return account.data[8+32+32+8+8] === 0;
-  });
-  if (unused.length === 0) throw new Error("No oracle commitment available — is oracle.cjs running?");
-  unused.sort((a,b) => {
-    const slotA = Number(new DataView(a.account.data.buffer, a.account.data.byteOffset).getBigUint64(8+32+32+8,true));
-    const slotB = Number(new DataView(b.account.data.buffer, b.account.data.byteOffset).getBigUint64(8+32+32+8,true));
-    return slotB - slotA;
-  });
-  return unused[0].pubkey;
+  return pickUnusedCommitment(oraclePubkey, exclude);
 }
 
 const BATCH_SIZE = 2;
+// MintRequest rent (~0.002 XNT) + tx fee headroom on top of the price curve.
+const MINT_MARGIN_XNT = 0.005;
 
-async function buildRequestIx(commitPda, requestDisc, quantity=1) {
+function buildRequestIx(commitPda, requestDisc, machineInfo, quantity=1) {
   const [mintRequestPda] = PublicKey.findProgramAddressSync(
     [strToU8("mint_request"), walletPubkey.toBytes(), commitPda.toBytes()], PROGRAM_ID
   );
-  const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
   const treasuryPubkey = new PublicKey(machineInfo.data.slice(8+32, 8+32+32));
   const userSeedBytes = new Uint8Array(32);
   crypto.getRandomValues(userSeedBytes);
@@ -1155,56 +1110,87 @@ async function mintGumball() {
     resetSteps(); setStep(1, 'active');
     setStatus(`FETCHING ORACLE COMMITMENT...`);
 
-    const commitPda = await fetchLatestCommitment();
-    const req = await buildRequestIx(commitPda, requestDisc, totalToMint);
+    // One machine read serves oracle, treasury and the live price.
+    const machineInfo = await connection.getAccountInfo(MACHINE_PDA);
+    if (!machineInfo) throw new Error("Machine not found");
+    const liveMinted = Number(new DataView(machineInfo.data.buffer, machineInfo.data.byteOffset).getBigUint64(8+32+32+32+8, true));
 
-    setStatus(`APPROVE 1 TRANSACTION FOR ${totalToMint} MINT${totalToMint>1?'S':''}...`);
-    toast(`1 APPROVAL = ${totalToMint} GUMBALL${totalToMint>1?'S':''}`, 'info', 5000);
-
-    const tx = new Transaction().add(req.ix);
-    tx.feePayer = walletPubkey;
-    const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
+    // Balance check BEFORE asking the wallet to sign: price curve + MintRequest
+    // rent (~0.002 XNT) + fee margin.
+    const needXnt = getBatchTotal(liveMinted, totalToMint) + MINT_MARGIN_XNT;
+    const balLamports = await connection.getBalance(walletPubkey);
+    if (balLamports / LAMPORTS_PER_SOL < needXnt) {
+      setStep(1, 'error');
+      setStatus(`NEED ${needXnt.toFixed(4)} XNT (YOU HAVE ${(balLamports / LAMPORTS_PER_SOL).toFixed(4)})`);
+      toast(`NEED ${needXnt.toFixed(4)} XNT`, 'error', 6000);
+      isMinting = false;
+      document.getElementById("mintBtn").disabled = false;
+      setTimeout(hideSteps, 3000);
+      return;
+    }
 
     // ── Snapshot BEFORE sending request ──────────────────────────
-    const GD_POLL_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32;  // 189 bytes
-    const beforeAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-    });
-    const beforeKeys = new Set(beforeAccounts.map(a => a.pubkey.toBase58()));
+    const beforeKeys = new Set((await loadWalletGumballAccounts(walletPubkey)).map(a => a.gumballPda.toBase58()));
     let lastMintedSerial = 0;
 
-    await animCoin();
-    const signed = await provider.signTransaction(tx);
-    setStatus(`LOCKING ${getBatchTotal(currentMinted, totalToMint).toFixed(4)} XNT...`);
-    await animCrank();
-    const raw = signed.serialize();
-    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false });
+    // Pick a random unused commitment; if another minter wins the race
+    // (CommitmentAlreadyUsed) pick another and retry once.
+    let req, sig;
+    const tried = new Set();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const commitPda = await fetchLatestCommitment(machineInfo, tried);
+      tried.add(commitPda.toBase58());
+      req = buildRequestIx(commitPda, requestDisc, machineInfo, totalToMint);
+
+      setStatus(`APPROVE 1 TRANSACTION FOR ${totalToMint} MINT${totalToMint>1?'S':''}...`);
+      if (attempt === 0) toast(`1 APPROVAL = ${totalToMint} GUMBALL${totalToMint>1?'S':''}`, 'info', 5000);
+
+      const tx = new Transaction().add(req.ix);
+      tx.feePayer = walletPubkey;
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+
+      if (attempt === 0) await animCoin();
+      const signed = await provider.signTransaction(tx);
+      setStatus(`LOCKING ${getBatchTotal(liveMinted, totalToMint).toFixed(4)} XNT...`);
+      if (attempt === 0) await animCrank();
+      try {
+        sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+        break;
+      } catch (e) {
+        const text = (e.message || "") + " " + (e.logs || []).join(" ");
+        if (attempt === 0 && /CommitmentAlreadyUsed|commitment already used/i.test(text)) continue;
+        throw e;
+      }
+    }
     await connection.confirmTransaction(sig, "confirmed");
 
     setStep(1, 'done');
     setStep(2, 'active');
     setStatus(`ORACLE MINTING ${totalToMint} GUMBALL${totalToMint>1?'S':''}... (0/${totalToMint})`);
-    startCountdown(150);
+    startCountdown(MINT_TIMEOUT_S);
     toast(`REQUEST LOCKED — ORACLE IS REVEALING ${totalToMint} GUMBALL${totalToMint>1?'S':''}...`, 'info', 5000);
 
-    const timeoutMs = 120000; // 2 min for multi-mint
+    const timeoutMs = MINT_TIMEOUT_S * 1000; // matches lib.rs MINT_TIMEOUT
     const start = Date.now();
 
+    // Poll the single MintRequest PDA (one getAccountInfo per tick). Only when
+    // its remaining_quantity drops do we load the wallet's gumballs.
+    // MintRequest: quantity @104, remaining_quantity @105.
     while (mintedCount < totalToMint && Date.now() - start < timeoutMs) {
       await new Promise(r => setTimeout(r, 2000));
 
-      const after = await connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: GD_POLL_V5 }, { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }],
-      });
+      const reqInfo = await connection.getAccountInfo(req.mintRequestPda);
+      if (!reqInfo || reqInfo.data.length < 106) continue;
+      const done = reqInfo.data[104] - reqInfo.data[105];
+      if (done <= mintedCount) continue;
 
-      const newAccounts = after.filter(a => !beforeKeys.has(a.pubkey.toBase58()));
+      const after = await loadWalletGumballAccounts(walletPubkey);
+      const newAccounts = after.filter(a => !beforeKeys.has(a.gumballPda.toBase58()));
 
-      for (const { pubkey, account } of newAccounts) {
-        if (beforeKeys.has(pubkey.toBase58())) continue;
-        beforeKeys.add(pubkey.toBase58()); // mark as seen
+      for (const { gumballPda, data } of newAccounts) {
+        beforeKeys.add(gumballPda.toBase58()); // mark as seen
 
-        const data = account.data;
         const dv = new DataView(data.buffer, data.byteOffset);
         const serial  = Number(dv.getBigUint64(8+32+32, true));
         const flavor  = data[8+32+32+8];
@@ -1980,92 +1966,7 @@ async function loadTicker() {
   } catch(e) {}
 }
 loadTicker();
-setInterval(loadTicker, 30000);
-
-// ── RECLAIM BURNED ────────────────────────────────────────────────────────────
-// burn_multi zeros owner on extra PDAs but can't move lamports (UnbalancedInstruction).
-// reclaim_burned recovers rent from those zombie PDAs.
-async function scanForZombiePdas() {
-  // Scan v2, v3, v4 sizes for zombie PDAs (owner = all zeros)
-  const sizes = [8+32+32+8+1+1+1+1+8+1+4+768, 8+32+32+8+1+1+1+1+8+1, 8+32+32+8+1+1+1+1+8+1+32+32];
-  const all = [];
-  for (const size of sizes) {
-    try {
-      const accts = await connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: size }] });
-      all.push(...accts);
-    } catch(e) {}
-  }
-  return all.filter(({ account }) => account.data.slice(8, 40).every(b => b === 0) && account.lamports > 0);
-}
-
-async function checkReclaimable() {
-  if (!walletPubkey) return;
-  try {
-    const zombies = await scanForZombiePdas();
-    const wrap = document.getElementById('reclaimWrap');
-    const info = document.getElementById('reclaimInfo');
-    if (zombies.length > 0) {
-      const totalLamports = zombies.reduce((sum, { account }) => sum + account.lamports, 0);
-      wrap.style.display = 'block';
-      info.textContent = `${zombies.length} ZOMBIE PDA${zombies.length>1?'S':''} — ~${(totalLamports/1e9).toFixed(4)} XNT RECLAIMABLE`;
-    } else {
-      wrap.style.display = 'none';
-    }
-  } catch(e) {}
-}
-
-async function reclaimBurned() {
-  if (!walletPubkey || isMinting) return;
-  isMinting = true;
-  const btn = document.getElementById('reclaimBtn');
-  btn.textContent = '⏳ SCANNING...';
-  try {
-    const provider = getProvider();
-    const zombies = await scanForZombiePdas();
-    if (zombies.length === 0) { toast('NO ZOMBIE PDAs FOUND', 'info'); btn.textContent = '♻ RECLAIM BURN RENT'; isMinting = false; return; }
-    const reclaimDisc = await disc("reclaim_burned");
-    const totalLamports = zombies.reduce((sum, { account }) => sum + account.lamports, 0);
-    const BATCH_SIZE = 12;
-    const { blockhash } = await connection.getLatestBlockhash();
-
-    // Build all batch transactions
-    const txs = [];
-    for (let b = 0; b < zombies.length; b += BATCH_SIZE) {
-      const batch = zombies.slice(b, b + BATCH_SIZE);
-      const tx = new Transaction();
-      for (const { pubkey } of batch) {
-        tx.add(new TransactionInstruction({
-          programId: PROGRAM_ID,
-          keys: [
-            { pubkey: walletPubkey, isSigner: true, isWritable: true },
-            { pubkey, isSigner: false, isWritable: true },
-            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          ],
-          data: reclaimDisc,
-        }));
-      }
-      tx.feePayer = walletPubkey;
-      tx.recentBlockhash = blockhash;
-      txs.push(tx);
-    }
-
-    // Sign and send each batch
-    for (let i = 0; i < txs.length; i++) {
-      btn.textContent = `⏳ APPROVE ${i+1}/${txs.length}...`;
-      const signed = await provider.signTransaction(txs[i]);
-      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
-      await connection.confirmTransaction(sig, "confirmed");
-    }
-
-    toast(`♻ RECLAIMED ${zombies.length} PDAs — +${(totalLamports/1e9).toFixed(4)} XNT`, 'success', 6000);
-    document.getElementById('reclaimWrap').style.display = 'none';
-  } catch(e) {
-    console.error('reclaimBurned:', e);
-    toast('RECLAIM FAILED: ' + (e.message||'').slice(0,60), 'error');
-  }
-  btn.textContent = '♻ RECLAIM BURN RENT';
-  isMinting = false;
-}
+setVisibleInterval(loadTicker, 30000);
 
 // Auto-connect wallet on page load
 (function autoConnect() {
