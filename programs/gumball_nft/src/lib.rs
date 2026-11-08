@@ -2318,6 +2318,17 @@ pub mod gumball_nft {
         )
     }
 
+    /// Admin: register (or change) the single LP mint that stake_lp accepts.
+    /// Kept in its own PDA so the StakeConfig layout does not change. Existing
+    /// positions keep the mint recorded in their LpStakeAccount; changing this
+    /// only affects NEW stakes.
+    pub fn set_lp_mint(ctx: Context<SetLpMint>, lp_mint: Pubkey) -> Result<()> {
+        let cfg = &mut ctx.accounts.lp_mint_config;
+        cfg.lp_mint = lp_mint;
+        cfg.bump = ctx.bumps.lp_mint_config;
+        Ok(())
+    }
+
 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -3471,8 +3482,13 @@ pub struct Unstake<'info> {
     pub stake_config: Box<Account<'info, StakeConfig>>,
     #[account(
         mut, close = staker,
-        seeds = [b"stake_v2",stake_account.nft_mint.as_ref()], bump = stake_account.bump,
+        // B1 FIX: seed from the nft_mint ACCOUNT (as StakeNft does), not from the
+        // stake account's own field. vault_ata / user_ata / xnt_debt all derive
+        // from nft_mint, so the two must be bound or a caller could pair their
+        // own StakeAccount with someone else's staked NFT.
+        seeds = [b"stake_v2",nft_mint.key().as_ref()], bump = stake_account.bump,
         constraint = stake_account.owner == staker.key() @ GumballError::Unauthorized,
+        constraint = stake_account.nft_mint == nft_mint.key() @ GumballError::InvalidAccount,
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
     pub nft_mint: Box<Account<'info, Mint>>,
@@ -3540,6 +3556,8 @@ pub struct StakeLp<'info> {
     /// Position NFT ATA for the staker
     #[account(init_if_needed, payer = staker, associated_token::mint = position_mint, associated_token::authority = staker)]
     pub position_ata: Box<Account<'info, TokenAccount>>,
+    /// B3 FIX: only the LP mint registered via set_lp_mint may be staked.
+    #[account(constraint = lp_mint.key() == lp_mint_config.lp_mint @ GumballError::InvalidLpMint)]
     pub lp_mint: Box<Account<'info, Mint>>,
     #[account(mut, constraint = user_lp_ata.mint == lp_mint.key() && user_lp_ata.owner == staker.key())]
     pub user_lp_ata: Box<Account<'info, TokenAccount>>,
@@ -3571,6 +3589,9 @@ pub struct StakeLp<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+    /// Appended LAST so existing clients only need to add one trailing account.
+    #[account(seeds = [b"lp_mint_config"], bump = lp_mint_config.bump)]
+    pub lp_mint_config: Box<Account<'info, LpMintConfig>>,
 }
 
 #[derive(Accounts)]
@@ -3619,7 +3640,10 @@ pub struct UnstakeLp<'info> {
     /// Caller must hold the position NFT
     #[account(mut, constraint = position_ata.mint == lp_stake_account.position_mint && position_ata.owner == claimer.key())]
     pub position_ata: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
+    /// B2 FIX: must be the mint this position was staked with; vault_lp_ata
+    /// derives from it, so an unbound mint let a junk-mint position drain the
+    /// real LP vault.
+    #[account(mut, constraint = lp_mint.key() == lp_stake_account.lp_mint @ GumballError::InvalidAccount)]
     pub lp_mint: Box<Account<'info, Mint>>,
     #[account(mut, associated_token::mint = lp_mint, associated_token::authority = stake_config)]
     pub vault_lp_ata: Box<Account<'info, TokenAccount>>,
@@ -3762,6 +3786,18 @@ pub struct SweepXntPoolNft<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetLpMint<'info> {
+    #[account(mut, address = stake_config.authority @ GumballError::Unauthorized)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"stake_config_v2"], bump = stake_config.bump)]
+    pub stake_config: Account<'info, StakeConfig>,
+    #[account(init_if_needed, payer = authority, space = 8 + LpMintConfig::LEN,
+              seeds = [b"lp_mint_config"], bump)]
+    pub lp_mint_config: Account<'info, LpMintConfig>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct SweepXntPoolLp<'info> {
     #[account(mut, address = machine.authority @ GumballError::Unauthorized)]
     pub authority: Signer<'info>,
@@ -3799,6 +3835,15 @@ pub struct StakeConfig {
 impl StakeConfig {
     pub const LEN: usize = 32 + 32 + 32 + 32 + 8 + 8 + 16 + 16 + 16 + 16 + 8 + 8 + 1;
 }
+
+/// The one LP mint stake_lp accepts. Sibling PDA (seeds [b"lp_mint_config"]) so
+/// StakeConfig keeps its layout. Written only by set_lp_mint.
+#[account]
+pub struct LpMintConfig {
+    pub lp_mint: Pubkey, // 32
+    pub bump:    u8,     //  1
+}
+impl LpMintConfig { pub const LEN: usize = 32 + 1; }
 
 #[account]
 pub struct StakeAccount {
@@ -3949,6 +3994,7 @@ pub enum GumballError {
     #[msg("Bid below minimum (start price or +5% raise)")] BidTooLow,
     #[msg("Listing price is higher than the maximum the buyer accepted")] PriceAboveMax,
     #[msg("Offer amount is lower than the minimum the seller accepted")]  AmountBelowMin,
+    #[msg("LP mint is not the one registered via set_lp_mint")] InvalidLpMint,
 }
 
 // ─── Unit tests (pure math — run with `cargo test`) ─────────────────────────

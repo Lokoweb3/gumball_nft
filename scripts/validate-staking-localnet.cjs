@@ -9,6 +9,11 @@
 //   6. unstake -> NFT returned, StakeAccount closed, XntDebt CLOSED (rent refunded)
 //   7. zero-staker fee deposit -> re-stake absorbs it (flash-stake protection),
 //      claim pays nothing, unstake again clean
+//   9. B1: unstake with someone else's NFT mint is rejected
+//  10. B2: unstake_lp with a different lp_mint than the position's is rejected
+//  11. B3: set_lp_mint is authority-only; stake_lp only accepts the registered mint
+// Tests 9-11 need the extra fixtures from scripts/make-staking-attack-fixtures.cjs
+// (ci-e2e.sh builds them and passes ATTACK_INFO); they are skipped without it.
 //
 // Usage: RPC=http://127.0.0.1:8899 NFT_MINT=<mint> TREASURY=<pubkey> node scripts/validate-staking-localnet.cjs
 
@@ -52,6 +57,11 @@ const xntDebt      = pda([Buffer.from("xnt_debt_nft"), NFT_MINT.toBuffer()]);
 const userAta      = ata(NFT_MINT, wallet.publicKey);
 const vaultAta     = ata(NFT_MINT, stakeConfig);
 const stakerGumAta = ata(GUM_MINT, wallet.publicKey);
+const lpRewardVault = pda([Buffer.from("lp_reward_vault")]);
+const lpMintConfig  = pda([Buffer.from("lp_mint_config")]);
+const METAPLEX_PID  = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+// Anchor custom error codes are 6000 + enum index; InvalidLpMint is index 27.
+const ERR_INVALID_LP_MINT = "0x" + (6027).toString(16);
 
 let passed = 0, failed = 0;
 function check(name, cond, detail = "") {
@@ -174,12 +184,30 @@ function sweepIx(which) {
 // keeps every transaction unique. 400k only RAISES the default 200k limit, so
 // it cannot change whether an instruction succeeds.
 let sendNonce = 0;
-async function send(c, ix) {
+async function send(c, ix, extraSigners = []) {
   const tx = new Transaction()
     .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 + (sendNonce++) }))
     .add(ix);
-  return sendAndConfirmTransaction(c, tx, [wallet], { commitment: "confirmed" });
+  return sendAndConfirmTransaction(c, tx, [wallet, ...extraSigners], { commitment: "confirmed" });
 }
+
+// Send an attack transaction; resolve to { ok, text } where text is the error
+// message plus program logs (so callers can assert WHY it was rejected).
+async function attempt(c, ix, extraSigners = []) {
+  try { await send(c, ix, extraSigners); return { ok: true, text: "" }; }
+  catch (e) { return { ok: false, text: String(e.message) + " " + JSON.stringify(e.logs || e.transactionLogs || []) }; }
+}
+// Short reason from an error text: Anchor "Error Code: X" if present, else the
+// first "Error processing Instruction" / program failure fragment.
+function why(text) {
+  const m = text.match(/Error Code: (\w+)\. Error Number: (\d+)/) || text.match(/(custom program error: 0x[0-9a-f]+)/i)
+    || text.match(/(Unsupported program id|insufficient funds|[A-Za-z ]*failed[^"\\]*)/);
+  return m ? m.slice(1).join(" ") || m[0] : text.replace(/\s+/g, " ").slice(0, 80);
+}
+async function tokenAmount(c, pk) {
+  try { return BigInt((await c.getTokenAccountBalance(pk)).value.amount); } catch { return null; }
+}
+function meta(pubkey, isSigner, isWritable) { return { pubkey, isSigner, isWritable }; }
 
 async function main() {
   const c = new Connection(RPC, "confirmed");
@@ -326,6 +354,149 @@ async function main() {
   check("authority + treasury restored",
     new PublicKey(mi.data.subarray(8, 40)).equals(wallet.publicKey) &&
     new PublicKey(mi.data.subarray(40, 72)).equals(TREASURY));
+
+
+  // ── TESTS 9-11: staking vulnerability regressions (B1 / B2 / B3) ───────────
+  const attackInfo = process.env.ATTACK_INFO && fs.existsSync(process.env.ATTACK_INFO)
+    ? JSON.parse(fs.readFileSync(process.env.ATTACK_INFO, "utf-8")) : null;
+  if (!attackInfo) {
+    console.log("\nTESTS 9-11 skipped — ATTACK_INFO fixtures not provided (run via scripts/ci-e2e.sh)");
+  } else {
+    const Y  = new PublicKey(attackInfo.victimMint);
+    const L  = new PublicKey(attackInfo.lpMint);
+    const F  = new PublicKey(attackInfo.junkMint);
+    const P  = new PublicKey(attackInfo.posMint);
+    const lpVaultAmount = BigInt(attackInfo.lpVaultAmount);
+
+    // ── TEST 9: B1 — unstake must bind nft_mint to stake_account.nft_mint ────
+    console.log("\nTEST 9 — B1: stake own NFT X, unstake X's StakeAccount against victim's NFT Y");
+    const victimVault = ata(Y, stakeConfig);
+    await send(c, stakeIx()); // attacker stakes the cheap NFT X
+    const attackerYAta = ata(Y, wallet.publicKey);
+    const b1Ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        meta(wallet.publicKey, true, true), meta(stakeConfig, false, true),
+        meta(stakeAccount, false, true),                       // X's StakeAccount
+        meta(Y, false, false),                                 // victim's mint
+        meta(victimVault, false, true),                        // vault holding Y
+        meta(attackerYAta, false, true),                       // attacker ATA for Y
+        meta(GUM_MINT, false, false), meta(nftVault, false, true), meta(stakerGumAta, false, true),
+        meta(nftState, false, true), meta(nftPool, false, true),
+        meta(pda([Buffer.from("xnt_debt_nft"), Y.toBuffer()]), false, true),
+        meta(TOKEN_PID, false, false), meta(ASSOC_PID, false, false),
+        meta(SystemProgram.programId, false, false), meta(SYSVAR_RENT_PUBKEY, false, false),
+      ],
+      data: disc("unstake"),
+    });
+    const r1 = await attempt(c, b1Ix);
+    const vaultY = await tokenAmount(c, victimVault);
+    const stolenY = await tokenAmount(c, attackerYAta);
+    console.log(`     attack ${r1.ok ? "SUCCEEDED" : "rejected"}; victim vault=${vaultY} attacker Y balance=${stolenY}`);
+    check("B1 mismatched-mint unstake rejected", !r1.ok, r1.ok ? "ATTACK SUCCEEDED" : why(r1.text));
+    check("B1 victim NFT still in the vault, none reached attacker", vaultY === 1n && !(stolenY > 0n));
+    if (!r1.ok) await send(c, unstakeIx()); // clean up X with the matching mint
+    check("B1 matching-mint unstake still works", (await c.getAccountInfo(stakeAccount)) === null);
+
+    // ── TEST 10: B2 — unstake_lp must bind lp_mint to lp_stake_account.lp_mint ─
+    console.log("\nTEST 10 — B2: position staked with junk mint F, unstake against real LP mint L");
+    const lpStakePda = pda([Buffer.from("lp_stake_v2"), P.toBuffer()]);
+    const realVault = ata(L, stakeConfig);
+    const myLpAta = ata(L, wallet.publicKey);
+    const b2Data = Buffer.alloc(16);
+    disc("unstake_lp").copy(b2Data, 0);
+    b2Data.writeBigUInt64LE(lpVaultAmount, 8);
+    const b2Ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        meta(wallet.publicKey, true, true), meta(stakeConfig, false, true),
+        meta(lpStakePda, false, true), meta(P, false, true), meta(ata(P, wallet.publicKey), false, true),
+        meta(L, false, true),                                  // real LP mint (position says F)
+        meta(realVault, false, true), meta(myLpAta, false, true),
+        meta(GUM_MINT, false, false), meta(lpRewardVault, false, true), meta(stakerGumAta, false, true),
+        meta(lpState, false, true), meta(lpPool, false, true),
+        meta(pda([Buffer.from("xnt_debt_lp"), P.toBuffer()]), false, true),
+        meta(TOKEN_PID, false, false), meta(ASSOC_PID, false, false),
+        meta(SystemProgram.programId, false, false), meta(SYSVAR_RENT_PUBKEY, false, false),
+      ],
+      data: b2Data,
+    });
+    const myLpBefore = await tokenAmount(c, myLpAta);
+    const r2 = await attempt(c, b2Ix);
+    const vaultL = await tokenAmount(c, realVault);
+    const myLpAfter = await tokenAmount(c, myLpAta);
+    console.log(`     attack ${r2.ok ? "SUCCEEDED" : "rejected"}; real LP vault=${vaultL} attacker LP ${myLpBefore} -> ${myLpAfter}`);
+    check("B2 mismatched-lp_mint unstake_lp rejected", !r2.ok, r2.ok ? "ATTACK SUCCEEDED" : why(r2.text));
+    check("B2 real LP vault untouched", vaultL === lpVaultAmount && myLpAfter === myLpBefore, `vault=${vaultL}`);
+
+    // ── TEST 11: B3 — only the registered LP mint can be staked ──────────────
+    console.log("\nTEST 11 — B3: set_lp_mint is authority-only; stake_lp rejects unregistered mints");
+    function setLpMintIx(signer, mint) {
+      return new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [meta(signer, true, true), meta(stakeConfig, false, false),
+               meta(lpMintConfig, false, true), meta(SystemProgram.programId, false, false)],
+        data: Buffer.concat([disc("set_lp_mint"), mint.toBuffer()]),
+      });
+    }
+    const stranger = Keypair.generate();
+    await send(c, SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: stranger.publicKey, lamports: 100_000_000 }));
+    // The stranger pays and signs; the wallet is only the (unrelated) first signer of send().
+    const rNon = await (async () => {
+      try {
+        await sendAndConfirmTransaction(c, new Transaction().add(setLpMintIx(stranger.publicKey, F)), [stranger], { commitment: "confirmed" });
+        return { ok: true, text: "" };
+      } catch (e) { return { ok: false, text: String(e.message) + JSON.stringify(e.logs || []) }; }
+    })();
+    check("B3 non-authority set_lp_mint rejected", !rNon.ok && (await c.getAccountInfo(lpMintConfig)) === null,
+      rNon.ok ? "NON-AUTHORITY SUCCEEDED" : why(rNon.text));
+    await send(c, setLpMintIx(wallet.publicKey, L));
+    const cfgInfo = await c.getAccountInfo(lpMintConfig);
+    check("B3 authority set_lp_mint stores the mint", !!cfgInfo && new PublicKey(cfgInfo.data.subarray(8, 40)).equals(L));
+    const rNon2 = await (async () => {
+      try {
+        await sendAndConfirmTransaction(c, new Transaction().add(setLpMintIx(stranger.publicKey, F)), [stranger], { commitment: "confirmed" });
+        return true;
+      } catch { return false; }
+    })();
+    const cfgAfter = await c.getAccountInfo(lpMintConfig);
+    check("B3 non-authority cannot overwrite the registered mint", !rNon2 && new PublicKey(cfgAfter.data.subarray(8, 40)).equals(L));
+
+    function stakeLpIx(mint, positionMint) {
+      const data = Buffer.alloc(8 + 8 + 1);
+      disc("stake_lp").copy(data, 0);
+      data.writeBigUInt64LE(1_000_000_000n, 8);
+      data.writeUInt8(0, 16);
+      const metadata = pda([Buffer.from("metadata"), METAPLEX_PID.toBuffer(), positionMint.toBuffer()], METAPLEX_PID);
+      return new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [
+          meta(wallet.publicKey, true, true), meta(stakeConfig, false, true),
+          meta(pda([Buffer.from("lp_stake_v2"), positionMint.toBuffer()]), false, true),
+          meta(positionMint, true, true), meta(ata(positionMint, wallet.publicKey), false, true),
+          meta(mint, false, false), meta(ata(mint, wallet.publicKey), false, true), meta(ata(mint, stakeConfig), false, true),
+          meta(lpRewardVault, false, false), meta(lpState, false, true), meta(lpPool, false, false),
+          meta(pda([Buffer.from("xnt_debt_lp"), positionMint.toBuffer()]), false, true),
+          meta(metadata, false, true), meta(METAPLEX_PID, false, false),
+          meta(TOKEN_PID, false, false), meta(ASSOC_PID, false, false),
+          meta(SystemProgram.programId, false, false), meta(SYSVAR_RENT_PUBKEY, false, false),
+          meta(lpMintConfig, false, false),
+        ],
+        data,
+      });
+    }
+    const posF = Keypair.generate();
+    const rF = await attempt(c, stakeLpIx(F, posF.publicKey), [posF]);
+    check("B3 stake_lp with unregistered (junk) mint rejected with InvalidLpMint",
+      !rF.ok && rF.text.includes(ERR_INVALID_LP_MINT), rF.ok ? "ATTACK SUCCEEDED" : why(rF.text));
+    // Control: the registered mint gets PAST the mint check. The local validator
+    // has no Metaplex program, so it is expected to fail later at the metadata
+    // CPI — what matters is that the failure is not InvalidLpMint.
+    const posL = Keypair.generate();
+    const rL = await attempt(c, stakeLpIx(L, posL.publicKey), [posL]);
+    check("B3 stake_lp with registered mint passes the mint check", !rL.text.includes(ERR_INVALID_LP_MINT),
+      rL.ok ? "staked" : why(rL.text));
+  }
 
   console.log(`\n══ RESULT: ${passed} passed, ${failed} failed ══`);
   process.exit(failed === 0 ? 0 : 1);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the 25-check staking/fee validation suite against a local validator
-# seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
+# Runs the staking/fee validation suite (25 checks) plus the vulnerability
+# regression tests (B1/B2/B3) against a local validator seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
 # Used by CI (.github/workflows/tests.yml); also works locally on Linux/WSL:
 #   OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
 #   FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh
@@ -13,10 +13,20 @@ RPC_URL=http://127.0.0.1:8899
 
 [ -f "$SO" ] || { echo "program binary missing: $SO (run anchor build / cargo build-sbf)"; exit 1; }
 
+# Extra fixtures for the staking-vulnerability tests (B1/B2/B3). A file here
+# with the same name as a base fixture (stake_config.json) replaces it.
+ATTACK_DIR=$(mktemp -d)
+FIXTURES="$FIXTURES" OUT_DIR="$ATTACK_DIR" node scripts/make-staking-attack-fixtures.cjs
+
 # Account fixtures are the JSONs with a .pubkey field (skips treasury-keypair.json)
 ARGS=()
 for f in "$FIXTURES"/*.json; do
+  [ -f "$ATTACK_DIR/$(basename "$f")" ] && continue
   PK=$(node -pe "require('./$f').pubkey ?? ''" 2>/dev/null || true)
+  [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
+done
+for f in "$ATTACK_DIR"/*.json; do
+  PK=$(node -pe "require('$f').pubkey ?? ''" 2>/dev/null || true)
   [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
 done
 echo "Loaded ${#ARGS[@]} validator args from $FIXTURES"
@@ -32,7 +42,7 @@ dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
-trap 'kill $VALIDATOR_PID 2>/dev/null || true' EXIT
+trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR"' EXIT
 
 echo "Waiting for validator RPC (up to 5 min)..."
 for i in $(seq 1 150); do
@@ -48,7 +58,7 @@ echo "Validator up after ~$((i*2))s."
 NFT_MINT=$(cat "$FIXTURES/nft-mint-pubkey.txt")
 TREASURY=$(node -pe "const{Keypair}=require('@solana/web3.js');Keypair.fromSecretKey(Uint8Array.from(require('./$FIXTURES/treasury-keypair.json'))).publicKey.toBase58()")
 
-if ! RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs; then
+if ! ATTACK_INFO="$ATTACK_DIR/attack-info.json" RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs; then
   dump_log
   exit 1
 fi
