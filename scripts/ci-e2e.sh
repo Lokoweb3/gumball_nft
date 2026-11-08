@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the staking/fee suite (with the B1/B2/B3 regression tests), then the fair-seed,
-# legacy-refund, auction and init-gate suites, against a local validator seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
+# legacy-refund, close-burned, auction and init-gate suites, against a local validator seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
 # Used by CI (.github/workflows/tests.yml); also works locally on Linux/WSL:
 #   OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
 #   FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh
@@ -29,6 +29,11 @@ LEGACY_DIR=$(pwd)/ci-legacy-fixtures
 rm -rf "$LEGACY_DIR"
 node scripts/make-legacy-request-fixtures.cjs "$LEGACY_DIR"
 
+# Burned/live/forged balls for the close_burned suite (built in the on-chain layout, offline).
+CB_DIR=$(pwd)/ci-closeburned-fixtures
+rm -rf "$CB_DIR"
+node scripts/make-close-burned-fixtures.cjs "$FIXTURES" "$CB_DIR"
+
 # Account fixtures are the JSONs with a .pubkey field (skips treasury-keypair.json)
 ARGS=()
 for f in "$FIXTURES"/*.json; do
@@ -42,6 +47,9 @@ for f in "$ATTACK_DIR"/*.json; do
   [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
 done
 for f in "$LEGACY_DIR"/legacy-*.json; do
+  ARGS+=(--account "$(node -pe "require('$f').pubkey")" "$f")
+done
+for f in "$CB_DIR"/cb-*.json; do
   ARGS+=(--account "$(node -pe "require('$f').pubkey")" "$f")
 done
 echo "Loaded ${#ARGS[@]} validator args from $FIXTURES"
@@ -59,7 +67,7 @@ dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
-trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR" "$FAIR_DIR" "$LEGACY_DIR"' EXIT
+trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR" "$FAIR_DIR" "$LEGACY_DIR" "$CB_DIR"' EXIT
 
 # start_validator [extra args...]; $FRESH=1 resets the ledger and loads the program
 start_validator() {
@@ -106,6 +114,14 @@ fi
 
 # refund_legacy_mint: pre-upgrade 156-byte MintRequests (fixtures loaded at validator start).
 if ! RPC="$RPC_URL" LEGACY_DIR="$LEGACY_DIR" node scripts/validate-legacy-refund-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
+# close_burned: closes burned balls' GumballData + GumballSvg into machine.treasury. Burns real balls
+# (burn_to_upgrade, burn_multi) first, so it changes Machine counters and the fee pools: keep it after
+# the suites that read those.
+if ! RPC="$RPC_URL" CB_DIR="$CB_DIR" node scripts/validate-close-burned-localnet.cjs; then
   dump_log
   exit 1
 fi

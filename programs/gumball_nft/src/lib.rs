@@ -124,6 +124,12 @@ pub mod gumball_nft {
         instructions::burn_multi(ctx, user_seed)
     }
 
+    /// Permissionless: close ONE burned ball's GumballData + GumballSvg PDAs and
+    /// send all their lamports to machine.treasury (never to the caller).
+    pub fn close_burned(ctx: Context<CloseBurned>) -> Result<()> {
+        instructions::close_burned(ctx)
+    }
+
     /// Migrate machine account to new struct size (adds total_burned field).
     /// Safe to call multiple times — idempotent.
     pub fn migrate_machine(ctx: Context<MigrateMachine>) -> Result<()> {

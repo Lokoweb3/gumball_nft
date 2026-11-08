@@ -131,6 +131,8 @@ pub(crate) const FEE_LP_BPS_ROYAL:        u64 = 2500; // 25%
 // Must match GumballData struct layout: disc(8) + owner(32) + machine(32) + serial(8) + flavor(1) + color(1) + rarity(1)
 pub(crate) const GD_OWNER_OFFSET:  usize = 8;
 
+pub(crate) const GD_MACHINE_OFFSET: usize = 8 + 32;
+
 pub(crate) const GD_RARITY_OFFSET: usize = 8 + 32 + 32 + 8 + 1 + 1; // = 82
 
 // CRIT-2 FIX: burns required per rarity level [Common, Uncommon, Rare, Epic]

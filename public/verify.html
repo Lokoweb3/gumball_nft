@@ -333,14 +333,14 @@ async function verify() {
         const dv = new DataView(account.data.buffer, account.data.byteOffset);
         return Number(dv.getBigUint64(8+32+32, true)) === serial;
       });
-      if (!match) throw new Error(`Gumball #${serial} not found on-chain.`);
+      if (!match) throw new Error(`Gumball #${serial} not found on-chain (a burned ball's accounts are closed once it is swept).`);
       gumballPda = match.pubkey;
       accountData = match.account.data;
     } else {
       // PDA address
       gumballPda = new PublicKey(input);
       const info = await connection.getAccountInfo(gumballPda);
-      if (!info) throw new Error('Account not found on-chain.');
+      if (!info) throw new Error('Account not found on-chain (a burned ball\'s accounts are closed once it is swept).');
       accountData = info.data;
     }
 

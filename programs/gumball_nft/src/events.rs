@@ -49,3 +49,5 @@ use crate::*;
 #[event] pub struct AuctionBidEvent       { pub bidder: Pubkey, pub nft_mint: Pubkey, pub amount: u64, pub ends_at: i64 }
 
 #[event] pub struct XntFeeDistributedEvent { pub source: u8, pub treasury: u64, pub nft_pool: u64, pub lp_pool: u64 }
+
+#[event] pub struct BurnedClosedEvent     { pub nft_mint: Pubkey, pub lamports: u64 }
