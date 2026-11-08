@@ -31,7 +31,7 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 | **Faucet** | 0.1 XNT per wallet per 24h |
 | **Max Supply** | 10,000 |
 | **Max Per Tx** | 10 mints per transaction |
-| **Mint Timeout** | 300 seconds (5 min) before refund eligible |
+| **Mint Timeout** | 150 seconds (2.5 min; shorter than the 512-slot SlotHashes window) before refund eligible |
 
 ### Staking & Fee-Sharing Accounts
 
@@ -73,7 +73,7 @@ sequenceDiagram
     P->>P: verify sha256(secret + oracle_pubkey) == commitment
     P->>P: traits = sha256(secret + slot_hash + user_seed + mint_index)
     P->>U: mint GumballData + GumballSvg — proof fields stored on-chain
-    Note over U: if no reveal within 5 min, refund_mint reclaims the XNT
+    Note over U: if no reveal within 150 s, refund_mint reclaims the XNT
 ```
 
 | | |
@@ -214,7 +214,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `submit_commitment` | Oracle | Submit randomness commitment pre-mint |
 | `request_mint` | User | Pay and lock 1-10 mints in one transaction |
 | `reveal_and_mint` | Oracle | Reveal secret and mint NFT (loops for multi-mint) |
-| `refund_mint` | User | Reclaim XNT after oracle timeout (5 min) |
+| `refund_mint` | User | Reclaim XNT after oracle timeout (150 s) |
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
@@ -252,7 +252,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | C-2 | Oracle randomness manipulation | Critical | Fixed (commit-reveal) |
 | C-3 | Oracle brute-force user seed at reveal | Critical | Fixed (user seed mixed post-commit) |
 | M-1 | Oracle pubkey hardcoded | Medium | Fixed (rotatable via set_oracle) |
-| M-2 | No mint timeout / stuck funds | Medium | Fixed (5 min timeout + refund_mint) |
+| M-2 | No mint timeout / stuck funds | Medium | Fixed (150 s timeout + refund_mint) |
 | H-2 | Traded NFTs non-upgradeable | High | Fixed (update_owner) |
 | H-4 | Raw lamport manipulation | High | Fixed |
 | A-1 | Payment division rounding in batch mints | High | Fixed (last mint sweeps remainder) |
@@ -537,7 +537,7 @@ Live URL: `https://gumballnft-production.up.railway.app`
 
 ## Known Limitations
 
-- Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 5 minutes
+- Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 150 seconds
 - Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
 - Faucet cooldowns persist to disk across restarts; on Railway, point `FAUCET_STATE_FILE` at a mounted volume to also survive redeploys
 

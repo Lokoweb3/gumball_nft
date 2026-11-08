@@ -90,8 +90,15 @@ Oracle submits: sha256(secret || oracle_pubkey) on-chain BEFORE user pays
 User pays with: random user_seed (unknown to oracle)
 Oracle reveals: secret -> contract verifies commitment, derives traits from
                 sha256(secret || slot_hash || user_seed || mint_index)
+slot_hash:      hash of the first slot > request_slot + 2 (fixed by request_mint,
+                looked up in SlotHashes), NOT the newest hash at reveal time
 ```
 
+`MintRequest` is 164 bytes (`request_slot` appended to the old 156). `MINT_TIMEOUT` is
+150 s so a request is always revealable inside the 512-slot SlotHashes window; reveal
+refunds a request whose slot aged out. `MintSeedEvent` carries the slot hash for
+verify.html (GumballData has no room). Legacy 156-byte requests are unreadable by the
+program: let them drain before deploying.
 Neither party can manipulate outcome: oracle committed before seeing user_seed,
 user doesn't know secret or slot_hash.
 
@@ -306,6 +313,20 @@ trustworthy, but the process dies. Consequences for anyone extending the suite:
 ## Changelog
 
 Each entry documents what changed, which files were affected, and why the change was made.
+
+---
+
+### [2026-11-08] Fair seed — reveal bound to a slot fixed at request time
+
+**Files:** `lib.rs`, `oracle.cjs`, `monitor.cjs`, `index.html`, `verify.html`, `ci-e2e.sh`,
+`validate-fairseed-localnet.cjs`, `make-fairseed-fixtures.cjs`, `DEPLOY.md`
+
+**What:** `MintRequest.request_slot` (appended, 156 -> 164 bytes); `reveal_and_mint` seeds with
+the hash of the first slot > `request_slot + 2`, parsed in place from SlotHashes; `MINT_TIMEOUT`
+300 -> 150 s; new `MintSeedEvent`; oracle waits for the seed slot; frontends read 164-byte requests.
+
+**Why:** the oracle knew every seed input at reveal time and could pick the reveal slot (or let the
+request time out) to cherry-pick Legendary outcomes.
 
 ---
 

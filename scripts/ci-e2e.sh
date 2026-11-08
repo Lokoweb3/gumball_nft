@@ -13,9 +13,16 @@ RPC_URL=http://127.0.0.1:8899
 
 [ -f "$SO" ] || { echo "program binary missing: $SO (run anchor build / cargo build-sbf)"; exit 1; }
 
+# The fair-seed suite reveals mints, so it needs the Machine's oracle to be a key we hold.
+# Use a COPY of the machine fixture patched to a throwaway oracle (shared fixtures untouched).
+FAIR_DIR=ci-fairseed-fixtures
+rm -rf "$FAIR_DIR"
+node scripts/make-fairseed-fixtures.cjs "$FIXTURES" "$FAIR_DIR"
+
 # Account fixtures are the JSONs with a .pubkey field (skips treasury-keypair.json)
 ARGS=()
 for f in "$FIXTURES"/*.json; do
+  [ "$(basename "$f")" = machine.json ] && f="$FAIR_DIR/machine.json"
   PK=$(node -pe "require('./$f').pubkey ?? ''" 2>/dev/null || true)
   [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
 done
@@ -32,7 +39,7 @@ dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
-trap 'kill $VALIDATOR_PID 2>/dev/null || true' EXIT
+trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$FAIR_DIR"' EXIT
 
 echo "Waiting for validator RPC (up to 5 min)..."
 for i in $(seq 1 150); do
@@ -49,6 +56,12 @@ NFT_MINT=$(cat "$FIXTURES/nft-mint-pubkey.txt")
 TREASURY=$(node -pe "const{Keypair}=require('@solana/web3.js');Keypair.fromSecretKey(Uint8Array.from(require('./$FIXTURES/treasury-keypair.json'))).publicKey.toBase58()")
 
 if ! RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
+# Fair-seed mints: seed slot fixed at request time (see DEPLOY.md 0.5). ~3 min: includes the 150 s timeout refund.
+if ! RPC="$RPC_URL" ORACLE_KEYPAIR="$FAIR_DIR/oracle.json" node scripts/validate-fairseed-localnet.cjs; then
   dump_log
   exit 1
 fi

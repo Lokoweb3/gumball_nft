@@ -19,7 +19,19 @@ declare_id!("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const MAX_SUPPLY:     u64   = 10_000;
 const MAX_PER_TX:     u8    = 10;
 const MAX_SVG_LEN:    usize = 1400;
-const MINT_TIMEOUT:   i64   = 300; // 5 min before request expires — M-2 fix
+// A request expires (and becomes refundable) after MINT_TIMEOUT seconds — M-2 fix.
+// FAIRNESS: the reveal seed uses the SlotHashes entry fixed by the request
+// (see lookup_fixed_slot_hash). The sysvar only keeps the newest 512 slots,
+// ~190 s at X1's ~0.37 s/slot. The timeout must be comfortably shorter than that
+// window, otherwise a request could outlive its slot hash and be unrevealable
+// (and refundable only after the timeout). 150 s ≈ 405 slots leaves ~100 slots
+// of margin for slot-time jitter. If the entry still ages out first, reveal_and_mint
+// refunds the request itself.
+const MINT_TIMEOUT:   i64   = 150;
+/// The seed slot is the first recorded slot STRICTLY AFTER request_slot + this delay,
+/// so its hash did not exist when request_mint landed (SlotHashes at slot R only
+/// holds slots < R) and cannot be known to the minter or oracle at request time.
+const REVEAL_DELAY_SLOTS: u64 = 2;
 
 // Exponential pricing: 0.01 XNT at mint #0, 0.04 XNT at mint #10,000
 // Formula: price = BASE_PRICE * 4^(total_minted / MAX_SUPPLY)
@@ -338,6 +350,7 @@ pub mod gumball_nft {
         req.requested_at = clock.unix_timestamp;
         req.fulfilled    = false;
         req.bump         = ctx.bumps.mint_request;
+        req.request_slot = clock.slot; // fixes the seed slot (see reveal_and_mint)
 
 
         // Mark commitment as used so it can't be reused
@@ -368,18 +381,7 @@ pub mod gumball_nft {
 
         // M-2 FIX: timeout — refund if oracle took too long
         if clock.unix_timestamp - requested_at > MINT_TIMEOUT {
-            let req_info = ctx.accounts.mint_request.to_account_info();
-            let rent_lamports = req_info.lamports();
-            **req_info.try_borrow_mut_lamports()? = 0;
-            **ctx.accounts.minter.try_borrow_mut_lamports()? += rent_lamports;
-            // Close the PDA: zero data + mark fulfilled
-            req_info.try_borrow_mut_data()?.fill(0);
-            ctx.accounts.mint_request.fulfilled = true;
-            emit!(MintRefundedEvent {
-                minter: minter_key,
-                amount: paid_amount,
-            });
-            return Ok(());
+            return refund_in_reveal(&mut ctx.accounts.mint_request, &ctx.accounts.minter, minter_key, paid_amount);
         }
 
         // C-2 FIX: verify commitment on-chain
@@ -391,11 +393,22 @@ pub mod gumball_nft {
             GumballError::InvalidCommitment
         );
 
-        // Derive seed from secret + slot_hash (slot_hash unknown at commit time)
-        let slot_hash_data = &ctx.accounts.slot_hashes.data.borrow();
-        let slot_hash_bytes: &[u8; 32] = &slot_hash_data[16..48]
-            .try_into()
-            .map_err(|_| error!(GumballError::InvalidSlotHash))?;
+        // FAIRNESS: the hash comes from a slot fixed at request time, not from
+        // "whatever is newest now". The oracle therefore cannot choose WHEN to reveal
+        // to steer the outcome: every reveal of this request, at any slot, uses the same
+        // hash. (It can still decline to reveal and let the request refund.)
+        let (seed_slot, slot_hash) = {
+            let slot_hash_data = ctx.accounts.slot_hashes.data.borrow();
+            match lookup_fixed_slot_hash(&slot_hash_data, ctx.accounts.mint_request.request_slot) {
+                SlotLookup::Found(slot, hash) => (slot, hash),
+                SlotLookup::NotYet => return err!(GumballError::SeedSlotNotReached),
+                SlotLookup::AgedOut => {
+                    drop(slot_hash_data);
+                    return refund_in_reveal(&mut ctx.accounts.mint_request, &ctx.accounts.minter, minter_key, paid_amount);
+                }
+            }
+        };
+        let slot_hash_bytes: &[u8; 32] = &slot_hash;
 
         // CRIT-1 FIX: derive per-mint seed using secret + slot_hash + mint_index
         // This ensures each NFT in a batch gets different traits
@@ -446,6 +459,15 @@ pub mod gumball_nft {
         let seed_bytes = seed_hash.to_bytes();
         let mut seed = u64::from_le_bytes(seed_bytes[..8].try_into()
             .map_err(|_| error!(GumballError::InvalidSlotHash))?);
+        // Published so verify.html can recompute sha256(secret || slot_hash || user_seed || index)
+        // (GumballData has no room for the slot hash and must not change layout).
+        emit!(MintSeedEvent {
+            mint: ctx.accounts.nft_mint.key(),
+            request_slot: ctx.accounts.mint_request.request_slot,
+            seed_slot,
+            slot_hash,
+            mint_index,
+        });
 
         let traits = resolve_traits(seed, machine.total_minted)?;
         // Seasonal drop: remap flavor/color into the active season's window
@@ -2529,6 +2551,69 @@ fn get_mint_price(total_minted: u64) -> u64 {
 #[derive(Default)]
 struct Traits { flavor: u8, color: u8, rarity: u8, special: u8 }
 
+/// Result of looking up the request's fixed seed slot in the SlotHashes sysvar.
+#[derive(Debug, PartialEq)]
+enum SlotLookup {
+    /// (slot, hash) of the first recorded slot > request_slot + REVEAL_DELAY_SLOTS
+    Found(u64, [u8; 32]),
+    /// that slot has not been produced yet: retry later
+    NotYet,
+    /// the window has moved past it: the request can never be revealed
+    AgedOut,
+}
+
+/// Find the first slot strictly greater than `request_slot + REVEAL_DELAY_SLOTS`
+/// in raw SlotHashes data (`u64 len`, then `len` x (`u64 slot`, `[u8;32] hash`),
+/// newest first). Reads the bytes in place and binary-searches them: no deserialization,
+/// so the 32 KB heap is untouched. Skipped slots are handled: the result is the first
+/// slot that actually exists after the threshold.
+fn lookup_fixed_slot_hash(data: &[u8], request_slot: u64) -> SlotLookup {
+    const ENTRY: usize = 40;
+    let threshold = request_slot.saturating_add(REVEAL_DELAY_SLOTS);
+    let count = match data.get(..8) {
+        Some(b) => u64::from_le_bytes(b.try_into().unwrap_or([0; 8])) as usize,
+        None => return SlotLookup::NotYet,
+    };
+    let count = count.min((data.len() - 8) / ENTRY);
+    if count == 0 { return SlotLookup::NotYet; }
+    let slot_at = |i: usize| -> u64 {
+        let o = 8 + i * ENTRY;
+        u64::from_le_bytes(data[o..o + 8].try_into().unwrap_or([0; 8]))
+    };
+    if slot_at(0) <= threshold { return SlotLookup::NotYet; }
+    // The oldest entry must not sit beyond threshold+1, or the true first slot
+    // after the threshold may already have been dropped from the window.
+    if slot_at(count - 1) > threshold.saturating_add(1) { return SlotLookup::AgedOut; }
+    // slots are strictly descending: find the largest index with slot > threshold
+    let (mut lo, mut hi) = (0usize, count - 1);
+    while lo < hi {
+        let mid = (lo + hi + 1) / 2;
+        if slot_at(mid) > threshold { lo = mid; } else { hi = mid - 1; }
+    }
+    let o = 8 + lo * ENTRY;
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&data[o + 8..o + 40]);
+    SlotLookup::Found(slot_at(lo), hash)
+}
+
+/// Refund a request from inside reveal_and_mint (timeout, or seed slot aged out).
+fn refund_in_reveal<'info>(
+    mint_request: &mut Account<'info, MintRequest>,
+    minter: &AccountInfo<'info>,
+    minter_key: Pubkey,
+    paid_amount: u64,
+) -> Result<()> {
+    let req_info = mint_request.to_account_info();
+    let rent_lamports = req_info.lamports();
+    **req_info.try_borrow_mut_lamports()? = 0;
+    **minter.try_borrow_mut_lamports()? += rent_lamports;
+    // Close the PDA: zero data + mark fulfilled
+    req_info.try_borrow_mut_data()?.fill(0);
+    mint_request.fulfilled = true;
+    emit!(MintRefundedEvent { minter: minter_key, amount: paid_amount });
+    Ok(())
+}
+
 fn resolve_traits(mut seed: u64, serial: u64) -> Result<Traits> {
     seed = seed.wrapping_mul(6364136223846793005).wrapping_add(serial.wrapping_add(1));
     let flavor  = lcg_next(&mut seed, FLAVORS.len()  as u64) as u8;
@@ -3281,8 +3366,9 @@ pub struct MintRequest {
     pub fulfilled:          bool,      //  1
     pub bump:               u8,        //  1
     pub user_seed:          [u8; 32],  // 32 — CRIT-3 FIX: user-provided entropy
+    pub request_slot:       u64,       //  8 — Clock slot of request_mint; fixes the seed slot (APPENDED: old 156-byte accounts lack it)
 }
-impl MintRequest { pub const LEN: usize = 32+32+32+1+1+8+8+1+1+32; }
+impl MintRequest { pub const LEN: usize = 32+32+32+1+1+8+8+1+1+32+8; }
 
 #[account]
 pub struct GumballData {
@@ -3898,6 +3984,7 @@ impl XntDebt { pub const LEN: usize = 16 + 1; }
 #[event] pub struct OracleUpdatedEvent      { pub new_oracle: Pubkey }
 #[event] pub struct CommitmentSubmittedEvent { pub oracle: Pubkey, pub commitment: [u8; 32] }
 #[event] pub struct MintRequestedEvent      { pub minter: Pubkey, pub commitment: Pubkey, pub quantity: u8, pub paid: u64 }
+#[event] pub struct MintSeedEvent           { pub mint: Pubkey, pub request_slot: u64, pub seed_slot: u64, pub slot_hash: [u8; 32], pub mint_index: u8 }
 #[event] pub struct MintRefundedEvent       { pub minter: Pubkey, pub amount: u64 }
 #[event] pub struct GumballMintedEvent      { pub minter: Pubkey, pub serial: u64, pub mint: Pubkey, pub flavor: u8, pub color: u8, pub rarity: u8, pub special: u8, pub total_minted: u64 }
 #[event] pub struct GumballUpgradedEvent    { pub burner: Pubkey, pub burned_rarity: u8, pub burned_count: u8, pub new_serial: u64, pub new_rarity: u8, pub new_mint: Pubkey, pub flavor: u8, pub color: u8, pub special: u8 }
@@ -3940,6 +4027,7 @@ pub enum GumballError {
     #[msg("Invalid slot hash")]                      InvalidSlotHash,
     #[msg("Invalid account data")]                   InvalidAccount,
     #[msg("Mint request has expired")]               RequestExpired,
+    #[msg("Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS")] SeedSlotNotReached,
     #[msg("Offer has expired")]                      OfferExpired,
     #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
     #[msg("Invalid lock tier — must be 0 (Flexible), 1 (Bronze), 2 (Silver), 3 (Gold), or 4 (Diamond)")] InvalidLockPeriod,
@@ -3956,6 +4044,68 @@ pub enum GumballError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Build raw SlotHashes data: `slots` newest first, hash = [slot as u8; 32].
+    fn slot_hashes_data(slots: &[u64]) -> Vec<u8> {
+        let mut d = (slots.len() as u64).to_le_bytes().to_vec();
+        for s in slots {
+            d.extend_from_slice(&s.to_le_bytes());
+            d.extend_from_slice(&[*s as u8; 32]);
+        }
+        d
+    }
+
+    #[test]
+    fn slot_lookup_found_is_first_slot_after_threshold() {
+        // request_slot 100 -> threshold 102 -> first slot > 102 is 103
+        let slots: Vec<u64> = (90..=110).rev().collect();
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100),
+                   SlotLookup::Found(103, [103u8; 32]));
+        // identical answer whether the sysvar is 1 or 7 slots further on
+        let later: Vec<u64> = (90..=117).rev().collect();
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&later), 100),
+                   SlotLookup::Found(103, [103u8; 32]));
+    }
+
+    #[test]
+    fn slot_lookup_skips_missing_slots() {
+        // 103 and 104 were skipped: the first recorded slot after 102 is 105
+        let slots = [110u64, 109, 108, 107, 106, 105, 102, 101, 100, 99];
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100),
+                   SlotLookup::Found(105, [105u8; 32]));
+    }
+
+    #[test]
+    fn slot_lookup_not_yet() {
+        // newest recorded slot is 102 == threshold: hash for >102 doesn't exist yet
+        let slots = [102u64, 101, 100, 99];
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100), SlotLookup::NotYet);
+        // request slot itself is the newest (reveal right after request)
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&[99u64, 98]), 100), SlotLookup::NotYet);
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&[]), 100), SlotLookup::NotYet);
+        assert_eq!(lookup_fixed_slot_hash(&[], 100), SlotLookup::NotYet);
+    }
+
+    #[test]
+    fn slot_lookup_aged_out() {
+        // full 512-entry window 1000..=1511; request at 100 is long gone
+        let slots: Vec<u64> = (1000..1512).rev().collect();
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100), SlotLookup::AgedOut);
+        // boundary: oldest entry is threshold+1 -> still resolvable
+        let slots: Vec<u64> = (103..615).rev().collect();
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100),
+                   SlotLookup::Found(103, [103u8; 32]));
+        // one slot later the true first slot (103) has been dropped
+        let slots: Vec<u64> = (104..616).rev().collect();
+        assert_eq!(lookup_fixed_slot_hash(&slot_hashes_data(&slots), 100), SlotLookup::AgedOut);
+    }
+
+    #[test]
+    fn slot_lookup_tolerates_truncated_data() {
+        let mut d = slot_hashes_data(&[110u64, 109, 108, 103, 102]);
+        d.truncate(8 + 40 * 3 + 5); // header claims 5 entries, only 3 whole ones present
+        assert_eq!(lookup_fixed_slot_hash(&d, 100), SlotLookup::AgedOut);
+    }
 
     #[test]
     fn mint_price_curve_endpoints_and_monotonic() {

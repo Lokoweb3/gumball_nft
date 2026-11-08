@@ -564,7 +564,7 @@ svg#gm{width:100%;}
         <div class="step" id="step2"><span class="step-icon">🎲</span><span class="step-label">ORACLE REVEALING</span></div>
         <div class="step" id="step3"><span class="step-icon">✨</span><span class="step-label">MINTED!</span></div>
       </div>
-      <div class="oracle-countdown" id="oracleCountdown">ORACLE TIMEOUT IN <span id="countdownVal">270</span>s</div>
+      <div class="oracle-countdown" id="oracleCountdown">ORACLE TIMEOUT IN <span id="countdownVal">150</span>s</div>
     </div>
   </div>
 
@@ -822,7 +822,7 @@ function setStep(n, state) { // state: 'active' | 'done' | 'error'
 }
 
 // ── ORACLE COUNTDOWN ──────────────────────────────────────────────────────────
-function startCountdown(seconds=270) {
+function startCountdown(seconds=150) {
   const cd = document.getElementById('oracleCountdown');
   const val = document.getElementById('countdownVal');
   cd.style.display = 'block';
@@ -1185,7 +1185,7 @@ async function mintGumball() {
     setStep(1, 'done');
     setStep(2, 'active');
     setStatus(`ORACLE MINTING ${totalToMint} GUMBALL${totalToMint>1?'S':''}... (0/${totalToMint})`);
-    startCountdown(270);
+    startCountdown(150);
     toast(`REQUEST LOCKED — ORACLE IS REVEALING ${totalToMint} GUMBALL${totalToMint>1?'S':''}...`, 'info', 5000);
 
     const timeoutMs = 120000; // 2 min for multi-mint
@@ -1825,10 +1825,15 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
 }
 
 // ── REFUND EXPIRED MINTS ──────────────────────────────────────────────────────
+// Must match lib.rs MINT_TIMEOUT (150 s: shorter than the 512-slot SlotHashes window the
+// fair-seed reveal depends on). MintRequest is now 164 bytes (request_slot appended).
+// Legacy 156-byte accounts are deliberately NOT queried: the upgraded program cannot
+// deserialize them, so a refund_mint on one would only fail.
+const MINT_TIMEOUT_S = 150;
+const MINT_REQUEST_SIZE = 8+32+32+32+1+1+8+8+1+1+32+8; // 164 bytes
 async function checkExpiredMints() {
   if (!walletPubkey) return;
   try {
-    const MINT_REQUEST_SIZE = 8+32+32+32+1+1+8+8+1+1+32; // 156 bytes
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
         { dataSize: MINT_REQUEST_SIZE },
@@ -1836,7 +1841,7 @@ async function checkExpiredMints() {
       ],
     });
     const now = Math.floor(Date.now() / 1000);
-    const TIMEOUT = 300; // 5 minutes
+    const TIMEOUT = MINT_TIMEOUT_S;
     const expired = accounts.filter(({ account }) => {
       const dv = new DataView(account.data.buffer, account.data.byteOffset);
       const requestedAt = Number(dv.getBigInt64(114, true));
@@ -1868,7 +1873,6 @@ async function refundExpiredMint() {
 
   try {
     const provider = getProvider();
-    const MINT_REQUEST_SIZE = 8+32+32+32+1+1+8+8+1+1+32;
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
         { dataSize: MINT_REQUEST_SIZE },
@@ -1880,7 +1884,7 @@ async function refundExpiredMint() {
       const dv = new DataView(account.data.buffer, account.data.byteOffset);
       const requestedAt = Number(dv.getBigInt64(114, true));
       const fulfilled   = account.data[122] === 1;
-      return !fulfilled && (now - requestedAt) > 300;
+      return !fulfilled && (now - requestedAt) > MINT_TIMEOUT_S;
     });
 
     if (expired.length === 0) {
