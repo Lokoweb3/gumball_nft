@@ -34,31 +34,85 @@ echo "Loaded ${#ARGS[@]} validator args from $FIXTURES"
 # CI runners can be slow and resource-constrained
 ulimit -n 1000000 2>/dev/null || true
 
-solana-test-validator --reset --quiet --ledger ci-test-ledger \
-  --limit-ledger-size 10000 \
-  --bpf-program "$PROGRAM_ID" "$SO" "${ARGS[@]}" &
-VALIDATOR_PID=$!
+# The program is loaded as UPGRADEABLE with the local wallet as upgrade
+# authority so the initialize_machine gate (S2) is testable. Same wallet path
+# the suites use (WALLET, else ~/.config/solana/id.json).
+WALLET_FILE=${WALLET:-$HOME/.config/solana/id.json}
+AUTHORITY=$(node -pe "const{Keypair}=require('@solana/web3.js');Keypair.fromSecretKey(Uint8Array.from(require('$WALLET_FILE'))).publicKey.toBase58()")
+
 dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
 trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR"' EXIT
 
-echo "Waiting for validator RPC (up to 5 min)..."
-for i in $(seq 1 150); do
-  if ! kill -0 $VALIDATOR_PID 2>/dev/null; then
-    echo "validator process DIED"; dump_log; exit 1
+# start_validator [extra args...]; $FRESH=1 resets the ledger and loads the program
+start_validator() {
+  if [ "${FRESH:-0}" = 2 ]; then
+    # clean validator, no fixtures: program only, so no Machine PDA exists
+    solana-test-validator --reset --quiet --ledger ci-test-ledger-init \
+      --upgradeable-program "$PROGRAM_ID" "$SO" "$AUTHORITY" &
+  elif [ "${FRESH:-0}" = 1 ]; then
+    solana-test-validator --reset --quiet --ledger ci-test-ledger \
+      --limit-ledger-size 10000 \
+      --upgradeable-program "$PROGRAM_ID" "$SO" "$AUTHORITY" "${ARGS[@]}" &
+  else
+    solana-test-validator --quiet --ledger ci-test-ledger \
+      --limit-ledger-size 10000 "$@" &
   fi
-  if solana cluster-version -u "$RPC_URL" >/dev/null 2>&1; then break; fi
-  [ "$i" = 150 ] && { echo "validator never came up"; dump_log; exit 1; }
-  sleep 2
-done
-echo "Validator up after ~$((i*2))s."
+  VALIDATOR_PID=$!
+  echo "Waiting for validator RPC (up to 5 min)..."
+  for i in $(seq 1 150); do
+    if ! kill -0 $VALIDATOR_PID 2>/dev/null; then
+      echo "validator process DIED"; dump_log; exit 1
+    fi
+    if solana cluster-version -u "$RPC_URL" >/dev/null 2>&1; then break; fi
+    [ "$i" = 150 ] && { echo "validator never came up"; dump_log; exit 1; }
+    sleep 2
+  done
+  echo "Validator up after ~$((i*2))s."
+}
+
+FRESH=1 start_validator
 
 NFT_MINT=$(cat "$FIXTURES/nft-mint-pubkey.txt")
 TREASURY=$(node -pe "const{Keypair}=require('@solana/web3.js');Keypair.fromSecretKey(Uint8Array.from(require('./$FIXTURES/treasury-keypair.json'))).publicKey.toBase58()")
 
 if ! ATTACK_INFO="$ATTACK_DIR/attack-info.json" RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" node scripts/validate-staking-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
+# Auctions, phase 1 (live): create_auction guards, dust-bid outbid, escrow, refund.
+AUCTION_STATE=$(pwd)/ci-auction-state.json
+FIXTURE_DIR=$(pwd)/ci-auction-fixtures
+export AUCTION_STATE FIXTURE_DIR
+rm -rf "$AUCTION_STATE" "$FIXTURE_DIR"
+if ! RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" AUCTION_PHASE=1 node scripts/validate-auction-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
+# Auctions, phase 2 (settle): the minimum auction is 1h and the validator cannot
+# warp mid-run, so settle runs on a fresh validator seeded with an already-ended
+# auction + escrowed NFT written in the on-chain layout.
+kill $VALIDATOR_PID; wait $VALIDATOR_PID 2>/dev/null || true
+RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" AUCTION_PHASE=fixture node scripts/validate-auction-localnet.cjs
+for f in "$FIXTURE_DIR"/*.json; do
+  ARGS+=(--account "$(node -pe "require('$f').pubkey")" "$f")
+done
+FRESH=1 start_validator
+if ! RPC="$RPC_URL" NFT_MINT="$NFT_MINT" TREASURY="$TREASURY" AUCTION_PHASE=2 node scripts/validate-auction-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+rm -rf "$AUCTION_STATE" "$FIXTURE_DIR"
+
+# S2: initialize_machine upgrade-authority gate, on a clean validator with no
+# Machine PDA (the fixture ledger already has one, which masks the gate).
+kill $VALIDATOR_PID; wait $VALIDATOR_PID 2>/dev/null || true
+FRESH=2 start_validator
+if ! RPC="$RPC_URL" TREASURY="$TREASURY" node scripts/validate-init-gate-localnet.cjs; then
   dump_log
   exit 1
 fi
