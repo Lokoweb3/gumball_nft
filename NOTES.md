@@ -45,7 +45,7 @@ BEFORE (one account per NFT, ~865 bytes):
 │ TOTAL: ~865 bytes                   │
 └─────────────────────────────────────┘
 
-AFTER (two accounts per NFT, 93 + 788 bytes):
+AFTER (two accounts per NFT, 93 + 788 bytes; historical figures from the 768-byte-SVG design, current GumballSvg is 1,412):
 ┌──────────────────────────────┐   ┌──────────────────────────────────┐
 │ GumballData PDA              │   │ GumballSvg PDA                   │
 │ seeds: [b"gumball", mint]    │   │ seeds: [b"svg", mint.key()]      │
@@ -189,13 +189,13 @@ testnet and mainnet. The heap issue is fully resolved.
 | Account | Size | Notes |
 |---|---|---|
 | `Machine` | 138 bytes | Global state |
-| `OracleCommit` | 66 bytes | Per commitment |
+| `OracleCommit` | 90 bytes | Per commitment |
 | `MintRequest` | 164 bytes | Per mint batch |
 | `GumballData` v1 | 1,129 bytes | Original (inline SVG, MAX_SVG_LEN=1024) |
 | `GumballData` v2 | 873 bytes | Reduced SVG (MAX_SVG_LEN=768) |
 | `GumballData` v3 | 93 bytes | Legacy — SVG moved to separate PDA, no proof fields |
 | `GumballData` v4 | 157 bytes | Legacy — v3 + commitment_hash + user_seed |
-| `GumballSvg` | 788 bytes | Current — holds SVG, never loaded by burns |
+| `GumballSvg` | 1,412 bytes | Current (MAX_SVG_LEN 1,400 + 4 + 8 disc); the 788 figure was the 768-byte-SVG layout |
 | `GumballData` v5 | 189 bytes | Current — v4 + oracle_secret for trustless verification |
 
 Only GumballData v5 (189 bytes) exists on the current deployment. Previous v1–v4 formats

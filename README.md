@@ -57,7 +57,7 @@ Randomness is generated via a **commit-reveal scheme**:
 1. Oracle generates a random secret off-chain
 2. Oracle submits `sha256(secret || oracle_pubkey)` on-chain before any mint request
 3. User pays and locks the commitment with a random `user_seed` (unknown to oracle)
-4. Oracle reveals the secret — contract derives traits from `sha256(secret || slot_hash || user_seed || mint_index)`
+4. Oracle reveals the secret — contract derives traits from `sha256(secret || slot_hash || user_seed || mint_index)`, where `slot_hash` is the hash of the first slot greater than `request_slot + 2` (`request_slot` is stored in the MintRequest at request time and looked up in SlotHashes), not the newest hash at reveal time. Each reveal emits a `MintSeedEvent` carrying that slot hash; `verify.html` recomputes the traits from it
 
 The oracle cannot predict or manipulate outcomes: slot hash (32 bytes) is unknown at commit time, user seed is unknown until after commit is submitted.
 
@@ -203,18 +203,17 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 
 | Instruction | Caller | Description |
 |---|---|---|
-| `initialize_machine` | Admin | Set up the gumball machine |
+| `initialize_machine` | Upgrade authority | Set up the gumball machine (must be signed by the program's upgrade authority) |
 | `set_active` | Admin | Enable/disable minting |
 | `set_oracle` | Admin | Rotate oracle wallet |
 | `set_mint_price` | Admin | Update base mint price |
-| `withdraw` | Admin | Withdraw treasury funds |
 | `transfer_authority` | Admin | Hand machine admin + treasury to a new key (multisig path) |
 | `migrate_machine` | Admin | Migrate machine account to new struct size |
-| `reset_counts` | Admin | Reset total_minted and total_burned to zero |
 | `submit_commitment` | Oracle | Submit randomness commitment pre-mint |
 | `request_mint` | User | Pay and lock 1-10 mints in one transaction |
 | `reveal_and_mint` | Oracle | Reveal secret and mint NFT (loops for multi-mint) |
 | `refund_mint` | User | Reclaim XNT after oracle timeout (150 s) |
+| `refund_legacy_mint` | Anyone | Refund a pre-fair-seed 156-byte MintRequest after the timeout; lamports always go to the stored minter |
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
@@ -234,7 +233,8 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `initialize_xnt_fees` | Admin | Create the XNT fee pools + accumulator state PDAs |
 | `stake` / `unstake` | User | Stake/unstake a gumball NFT (unstake settles pending XNT + closes XntDebt) |
 | `claim` | User | Claim pending GUM rewards for a staked NFT |
-| `stake_lp` / `unstake_lp` | User | Stake/unstake LP with lock tier (position NFT minted/burned) |
+| `stake_lp` / `unstake_lp` | User | Stake/unstake LP with lock tier (position NFT minted/burned). `stake_lp` only accepts the LP mint registered via `set_lp_mint` and takes `lp_mint_config` as its trailing account; `unstake` / `unstake_lp` require the mint accounts to match the stake account |
+| `set_lp_mint` | Admin | Register/replace the single LP mint `stake_lp` accepts (PDA `["lp_mint_config"]`, gated on `stake_config.authority`). Affects new stakes only |
 | `claim_lp` | User | Claim pending GUM rewards for an LP position |
 | `claim_xnt_fees_nft` / `claim_xnt_fees_lp` | User | Claim accumulated XNT fee share |
 | `sweep_xnt_pool_nft` / `sweep_xnt_pool_lp` | Admin | Recover unattributed pool lamports to treasury (only when stream has zero stakers) |
@@ -267,6 +267,20 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | MED-4 | Inconsistent slot hash entropy in burn_to_upgrade | Medium | Fixed (32-byte hash) |
 
 **Core contract audit: CLEAN — A- grade.**
+
+### 2026-11 security batch (branch `security-fixes`: fixed in code, NOT yet deployed)
+
+| ID | Issue | Fix |
+|---|---|---|
+| S1 | `reveal_and_mint` could mint past `max_supply` (concurrent pending requests) | supply check at reveal; the user recovers payment via the timeout refund |
+| S2 | First caller of `initialize_machine` became `machine.authority` | signer must be the program's upgrade authority (ProgramData check) |
+| S3 | Oracle knew every seed input at reveal and could pick the reveal slot | seed slot fixed at request time (`request_slot`, 164-byte MintRequest), `MINT_TIMEOUT` 300 -> 150 s, `MintSeedEvent` |
+| B1 / B2 | `unstake` / `unstake_lp` did not bind the NFT / LP mint accounts to the stake account | mint accounts constrained to the stake account (InvalidAccount) |
+| B3 | `stake_lp` accepted any mint as "LP" | only the mint registered via `set_lp_mint` (InvalidLpMint); `stake_lp` is off until it is set |
+| L3 | Auction `start_price` below rent-exempt minimum froze outbid refunds | `create_auction` requires `start_price >= rent-exempt minimum (0-byte account)` |
+| - | 156-byte MintRequests stranded by the layout change | `refund_legacy_mint` + `scripts/refund-legacy-mints.cjs` |
+
+Residual: the oracle can still withhold a reveal for a request it dislikes (selective abort); the user is refunded after 150 s. Pre-deploy steps are in DEPLOY.md.
 
 ### Phase 2 staking / XNT fee-sharing audit (2026)
 
@@ -313,7 +327,7 @@ A monitoring bot runs alongside the oracle and sends alerts to Telegram:
 |---|---|
 | Oracle down | PM2 status changes from online to stopped/errored |
 | Oracle recovered | Comes back online after being down |
-| Mint request expiring | Unfulfilled request < 60s from 5-min timeout |
+| Mint request expiring | Unfulfilled request < 60s from the 150 s timeout |
 | Low oracle balance | Oracle wallet below 0.5 XNT |
 
 Telegram commands:
@@ -376,9 +390,22 @@ node scripts/init-xnt-fees.cjs
 node scripts/sweep-xnt-pool.cjs [nft|lp]
 ```
 
+### Tests and toolchain
+
+```bash
+cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit tests (11 passed on 2026-11-08, security-fixes HEAD)
+npm run test:marketplace                                     # marketplace + auctions (LiteSVM)
+OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
+FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # all validator suites below
+```
+
+`scripts/ci-e2e.sh` runs, against one `solana-test-validator` (program loaded as upgradeable): `validate-staking-localnet.cjs` (staking, XNT fees, B1-B3 attacks), `validate-fairseed-localnet.cjs` (S1/S3), `validate-legacy-refund-localnet.cjs` (`refund_legacy_mint`), `validate-auction-localnet.cjs` (auctions incl. L3) and `validate-init-gate-localnet.cjs` (S2). Per-suite check counts reported by the owner for this branch (UNVERIFIED as of 2026-11-08, validator suites not re-run by the docs pass): staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
+
+Toolchain: use the **3.1 Solana tools** for the test build and runs; LiteSVM 0.7 cannot load binaries built with the 4.3 tools (owner-reported, not re-checked in this pass).
+
 ### Local validation (before deploying staking changes)
 
-Runs 21 end-to-end checks against a local validator seeded with **cloned live
+Runs end-to-end checks against a local validator seeded with **cloned live
 testnet state** plus the freshly built program — sweep recovery, stake/claim
 math, rent-leak close, flash-stake protection:
 
@@ -474,9 +501,9 @@ For v5 gumballs, the commitment hash, user seed, and oracle secret are all store
 
 ```
 GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, traits + proof fields + oracle_secret)
-GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG artwork)
+GumballSvg   seeds: [b"svg", mint.key()]       — 1,412 bytes (8 disc + 4 Vec len + MAX_SVG_LEN 1,400; on-chain SVG artwork)
 Listing      seeds: [b"listing", mint.key()]  — 89 bytes (marketplace listing)
-Offer        seeds: [b"offer", mint, buyer]   — 89 bytes (marketplace offer)
+Offer        seeds: [b"offer", mint, buyer]   — 97 bytes (marketplace offer)
 ```
 
 SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 189 bytes each, well within limits.
@@ -491,31 +518,54 @@ XntPool         seeds: [b"nft_xnt_pool"] / [b"lp_xnt_pool"]    —   9 bytes (la
 XntFeeState     seeds: [b"xnt_fee_state_nft"] / [.._lp"]       —  34 bytes (acc_xnt_per_weight, last_seen_balance)
 XntDebt         seeds: [b"xnt_debt_nft", nft_mint]             —  25 bytes (per-position fee debt; closed on unstake)
                        [b"xnt_debt_lp", position_mint]
+LpMintConfig    seeds: [b"lp_mint_config"]                    —  41 bytes (the one LP mint stake_lp accepts; written by set_lp_mint)
 ```
+
+Core account sizes (include the 8-byte discriminator; each is `LEN` in `lib.rs` + 8): `Machine` 138, `OracleCommit` 90, `MintRequest` 164 (`request_slot` u64 at offset 156; pre-fair-seed requests are 156 bytes and the program can no longer decode them, see `refund_legacy_mint`), `GumballData` 189.
 
 ### Error Codes
 
 For debugging `custom program error: 0x...` — code = 6000 + index (hex 0x1770 + index):
 
-| Code | Error | | Code | Error |
-|---|---|---|---|---|
-| 6000 | MachineInactive | | 6011 | UseMultiBurn |
-| 6001 | SoldOut | | 6012 | AlreadyFulfilled |
-| 6002 | InvalidQuantity | | 6013 | CommitmentAlreadyUsed |
-| 6003 | InvalidPrice | | 6014 | InvalidCommitment |
-| 6004 | InvalidTreasury | | 6015 | InvalidSlotHash |
-| 6005 | Unauthorized | | 6016 | InvalidAccount |
-| 6006 | MathOverflow | | 6017 | RequestExpired |
-| 6007 | InsufficientFunds | | 6018 | OfferExpired |
-| 6008 | AlreadyLegendary | | 6019 | GumSupplyExhausted |
-| 6009 | RarityMismatch | | 6020 | InvalidLockPeriod |
-| 6010 | WrongBurnCount | | 6021 | PoolHasStakers |
+| Code | Error |
+|---|---|
+| 6000 | MachineInactive |
+| 6001 | SoldOut |
+| 6002 | InvalidQuantity |
+| 6003 | InvalidPrice |
+| 6004 | InvalidTreasury |
+| 6005 | Unauthorized |
+| 6006 | MathOverflow |
+| 6007 | InsufficientFunds |
+| 6008 | AlreadyLegendary |
+| 6009 | RarityMismatch |
+| 6010 | WrongBurnCount |
+| 6011 | UseMultiBurn |
+| 6012 | AlreadyFulfilled |
+| 6013 | CommitmentAlreadyUsed |
+| 6014 | InvalidCommitment |
+| 6015 | InvalidSlotHash |
+| 6016 | InvalidAccount |
+| 6017 | RequestExpired |
+| 6018 | OfferExpired |
+| 6019 | GumSupplyExhausted |
+| 6020 | InvalidLockPeriod |
+| 6021 | PoolHasStakers |
+| 6022 | AuctionEnded |
+| 6023 | AuctionNotEnded |
+| 6024 | BidTooLow |
+| 6025 | PriceAboveMax |
+| 6026 | AmountBelowMin |
+| 6027 | InvalidLpMint |
+| 6028 | SeedSlotNotReached |
+
+New variants are only ever appended (codes never shift). `scripts/lib/gumball-errors.cjs` derives codes from the enum for tests.
 
 ### Events
 
 Emitted via Anchor `emit!` (base64 in `Program data:` logs; discriminator = `sha256("event:<Name>")[0..8]`) — this is what `scripts/announcer.cjs` and any indexer consume:
 
-`MachineInitializedEvent` `OracleUpdatedEvent` `CommitmentSubmittedEvent` `MintRequestedEvent` `MintRefundedEvent` `GumballMintedEvent` `GumballUpgradedEvent` `GumballListedEvent` `GumballDelistedEvent` `GumballSoldEvent` `OfferMadeEvent` `OfferCancelledEvent` `NftStakedEvent` `NftUnstakedEvent` `RewardsClaimedEvent` `LpStakedEvent` `LpUnstakedEvent` `LpRewardsClaimedEvent` `XntFeeClaimedEvent` `XntFeeDistributedEvent`
+`MachineInitializedEvent` `OracleUpdatedEvent` `CommitmentSubmittedEvent` `MintRequestedEvent` `MintSeedEvent` `MintRefundedEvent` `GumballMintedEvent` `GumballUpgradedEvent` `GumballListedEvent` `GumballDelistedEvent` `GumballSoldEvent` `OfferMadeEvent` `OfferCancelledEvent` `NftStakedEvent` `NftUnstakedEvent` `RewardsClaimedEvent` `LpStakedEvent` `LpUnstakedEvent` `LpRewardsClaimedEvent` `XntFeeClaimedEvent` `XntFeeDistributedEvent`
 
 ---
 
@@ -538,7 +588,7 @@ Live URL: `https://gumballnft-production.up.railway.app`
 ## Known Limitations
 
 - Oracle must be running for mints to fulfill — auto-restarts on crash, Telegram monitor alerts if down. Users can reclaim XNT via refund after 150 seconds
-- Oracle can choose when to reveal within the 5-min window, but cannot predict or control traits
+- The seed slot is fixed at request time, so reveal timing no longer changes traits. The oracle can still withhold a reveal (selective abort); the user is then refunded after 150 s, so a non-oracle party should call refunds promptly
 - Faucet cooldowns persist to disk across restarts; on Railway, point `FAUCET_STATE_FILE` at a mounted volume to also survive redeploys
 
 ---

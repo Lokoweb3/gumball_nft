@@ -23,6 +23,16 @@ Verified on chain: **one** key, `53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy`
 
 The oracle is the one role that *must* be a hot key. The other three must not be.
 
+**Second exposure (2026-11-08): the oracle key `53fT...` is ALSO the X1 mainnet upgrade
+authority of a separate program, the TEST vault (`D9jtb7vgd7SAMJeqi97w9mtG8pL7yBizgsChNyb6jHxW`).**
+The gumball oracle is online 24/7, so a leak of that hot key hands over the vault program's code
+too. Rotating the gumball oracle off `53fT` is urgent and does not need to wait for the rest of
+this checklist: `node scripts/set-oracle.cjs --cluster mainnet --oracle <NEW_ORACLE_PUBKEY>`
+(preview by default; `--live` sends it, signed by the machine authority; refuses a wrong-cluster RPC via
+a genesis-hash check, and refuses `--live` while any MintRequest is pending unless `--force-pending`).
+Then restart the oracle with `ORACLE_WALLET` pointing at the new key. (Upgrade-authority claim for the
+TEST vault is the owner's statement; not re-read on chain in this docs pass: UNVERIFIED as of 2026-11-08.)
+
 - [ ] Generate a **dedicated oracle keypair** (hot, on the oracle host only, funded with just fees)
 - [ ] Generate a **deployer/upgrade keypair** (cold — hardware wallet or offline machine)
 - [ ] Create the **multisig** (Squads if deployed on X1 mainnet; otherwise any m-of-n) for admin + treasury
@@ -40,8 +50,9 @@ These are committed to `main` but **not on chain** yet:
 | `withdraw` removed | could never work once treasury ≠ authority |
 | `generate_svg` rewrite | −86 % heap allocations on the burn path; golden-tested byte-identical |
 
-- [ ] `cargo test` green (6 incl. the SVG golden test)
-- [ ] CI `tests` green: staking 25/25; marketplace suite guard scenarios report **6025 / 6026** on the fresh build
+- [ ] `cargo test` green (11 passed on 2026-11-08 at security-fixes HEAD 0855f78, incl. the SVG golden test)
+- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Owner-reported counts, UNVERIFIED as of 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8
+- [ ] marketplace suite guard scenarios report **6025 / 6026** on the fresh build (codes unchanged: new errors were appended, 6027 InvalidLpMint, 6028 SeedSlotNotReached)
 - [ ] Verifiable build hash recorded (Phase 3)
 
 ### 0.3 Decide the mainnet economics (all `lib.rs` constants — need a rebuild)
@@ -64,18 +75,57 @@ every wallet shows a broken image forever.
 - [ ] add an authority-gated `update_metadata_uri` instruction, **or**
 - [ ] embed the on-chain SVG as a `data:` URI at attach time (fully on-chain, no host)
 
-### 0.5 Fairness caveat: seed slot fixed at request time (FIXED in fix-fairseed)
-`request_mint` records `request_slot`. `reveal_and_mint` seeds traits with the
-hash of the first slot strictly after `request_slot + 2` (REVEAL_DELAY_SLOTS),
-so reveal timing no longer changes the outcome. `MINT_TIMEOUT` is 150 s so a
-request is always revealable while that hash is inside the 512-slot SlotHashes
-window; if it ages out anyway, reveal refunds the request.
-Remaining, by design: the oracle can still decline to reveal (request refunds),
-and it can grind as an ordinary user with its own wallet and seeds.
-**Deploy together:** program + oracle + frontend (MintRequest grew 156 -> 164
-bytes). Let in-flight requests settle first (wait > 5 min with the old oracle
-running, and have users claim refunds): legacy 156-byte requests cannot be
-revealed or refunded by the new program.
+### 0.5 Security batch on branch `security-fixes`: FIXED IN CODE, PENDING DEPLOY
+None of these is on chain until the program is redeployed (steps in 0.6).
+
+| ID | Issue | Fix in code |
+|---|---|---|
+| S1 | `reveal_and_mint` could mint past `max_supply` | supply check at reveal; user recovers payment by timeout refund |
+| S2 | first caller of `initialize_machine` became `machine.authority` | signer must be the program's upgrade authority |
+| S3 | oracle chose the reveal slot | seed = hash of first slot > `request_slot + 2` (REVEAL_DELAY_SLOTS); MintRequest 156 -> 164 bytes; `MINT_TIMEOUT` 150 s; `MintSeedEvent`; verify.html recomputes from it |
+| B1 / B2 | `unstake` / `unstake_lp` mint accounts not bound to the stake account | constrained to the stake account |
+| B3 | `stake_lp` accepted any mint as LP | only the mint set via `set_lp_mint` (`LpMintConfig` PDA `["lp_mint_config"]`); `stake_lp` takes it as a trailing account |
+| L3 | auction `start_price` below rent-exempt minimum froze outbids | `create_auction` requires `start_price >=` rent-exempt minimum for a 0-byte account |
+| - | stranded 156-byte requests | `refund_legacy_mint` (permissionless, funds go to the stored minter) |
+
+**Residual risk that remains by design (selective abort):** the oracle can still withhold a
+reveal for a request whose outcome it dislikes (it can compute the outcome before revealing).
+The user is refunded after `MINT_TIMEOUT` (150 s), so the cost is delay, not loss. Mitigation:
+a non-oracle party (monitor, team wallet, or the user) should call `refund_mint` promptly after
+the timeout; do not rely on the oracle operator to refund. The oracle can also grind as an
+ordinary user with its own wallet and seeds.
+
+### 0.6 Pre-deploy checklist for the security batch (owner runs; order matters)
+Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_ID>`).
+
+- [ ] **(a) Drain requests.** Send `set_active(false)` from the machine authority, then wait out
+      the timeout (> 150 s; allow 5 min). Confirm there are **0 unfulfilled MintRequests of either
+      size (164 and 156 bytes)**. Run `RPC=<RPC> node scripts/refund-legacy-mints.cjs` (preview, sends
+      nothing) and refund anything it lists. Refund order: before (c), the OLD program's `refund_mint`
+      handles 156-byte requests (the minter, or anyone building the tx, calls it); `refund-legacy-mints.cjs --live`
+      sends `refund_legacy_mint`, which exists only in the NEW program, so it is the tool for any
+      156-byte request still outstanding AFTER (c). 164-byte requests are refunded with `refund_mint`.
+      Have a non-oracle party do the refunds; do not wait for the oracle operator.
+- [ ] **(b) Scan LP stakes.** Every `lp_stake_v2` account must use the real LP mint (GUM/XNT LP
+      `D2bJsDoWVuvykQbMgwFeH7cvuvXZjL2scsjPMVGwNXiV` on testnet; on 2026-11-08 all 14 testnet accounts use it,
+      read on chain in this pass). Re-run right before deploy:
+      `RPC=<RPC> node -e 'const{Connection,PublicKey}=require("@solana/web3.js");(async()=>{const c=new Connection(process.env.RPC);const a=await c.getProgramAccounts(new PublicKey("<PROGRAM_ID>"),{filters:[{dataSize:140}]});const m={};for(const x of a){const k=new PublicKey(x.account.data.subarray(40,72)).toBase58();m[k]=(m[k]||0)+1}console.log(a.length,m)})()'`
+      (`LpStakeAccount` is 140 bytes with the discriminator, `lp_mint` at offset 40.) Any other mint in the
+      output means a position staked with a fake mint: stop and investigate before deploy.
+- [ ] **(c) Deploy program + oracle + frontend together** (MintRequest grew to 164 bytes; the old oracle
+      and frontends cannot read it; `stake_lp` callers must pass the new trailing `lp_mint_config`).
+- [ ] **(d) Immediately call `set_lp_mint(<real LP mint>)`** (signer: `stake_config.authority`; accounts:
+      authority, `stake_config_v2`, `lp_mint_config` PDA, system program). `stake_lp` is **off** until this
+      is done. No script for this exists in `scripts/` (checked 2026-11-08); it needs a one-off client.
+- [ ] **(e) `set_active(true)`.** No standalone script either; `scripts/initialize.cjs` sends it only as
+      part of first-time setup.
+
+**On mainnet, `initialize_machine` must be sent by the program's upgrade authority** (the account passed
+as `program_data` is checked against the signer). Do this in Phase 4, before Phase 5 hands the
+upgrade authority to the multisig. **Doc/code mismatch:** `scripts/initialize.cjs` builds the
+instruction with only 3 accounts (authority, machine, system program); the new program also needs
+`program` and `program_data` (see `InitializeMachine`), so that script will fail against the new
+binary until it is updated. UNRESOLVED as of 2026-11-08.
 
 ---
 

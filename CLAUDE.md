@@ -48,7 +48,7 @@ Each NFT creates two on-chain accounts:
 
 ```
 GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, metadata + proof fields + oracle_secret)
-GumballSvg   seeds: [b"svg", mint.key()]       — 788 bytes (on-chain SVG)
+GumballSvg   seeds: [b"svg", mint.key()]       — 1,412 bytes (8 + 4 + MAX_SVG_LEN 1,400; on-chain SVG)
 ```
 
 **Why:** Burn instructions load 3–5 GumballData accounts simultaneously. The SBF runtime
@@ -143,6 +143,33 @@ Offset  Size  Field
 8       4     svg vec length (u32, little-endian)
 12      N     svg bytes (UTF-8 SVG string)
 ```
+
+---
+
+## Reference: accounts, instructions, errors, timeouts
+
+Account sizes (bytes, include the 8-byte discriminator = `LEN` in `lib.rs` + 8):
+`Machine` 138, `OracleCommit` 90, `MintRequest` 164 (`request_slot` u64 at offset 156; legacy
+requests are 156), `GumballData` 189, `GumballSvg` 1,412 (4 + `MAX_SVG_LEN` 1,400, + 8), `Listing` 89,
+`Offer` 97, `LpMintConfig` 41 (`["lp_mint_config"]`), `LpStakeAccount` 140. Older docs said GumballSvg
+was 788 bytes; that was the 768-byte-SVG layout and is stale.
+
+Instructions (every `pub fn` in the `gumball_nft` module, verified against `lib.rs` 2026-11-08):
+- machine/admin: `initialize_machine` (upgrade authority only), `set_oracle`, `set_active`,
+  `set_mint_price`, `migrate_machine`, `set_season`, `transfer_authority`
+- mint: `submit_commitment`, `request_mint`, `reveal_and_mint`, `refund_mint`, `refund_legacy_mint`
+- burns/cosmetics: `burn_to_upgrade`, `burn_multi`, `reroll_cosmetics`, `attach_metadata`, `update_owner`
+- market: `list_gumball`, `delist_gumball`, `buy_gumball`, `make_offer`, `cancel_offer`, `accept_offer`,
+  `create_auction`, `bid`, `settle_auction`
+- staking: `initialize_staking`, `initialize_xnt_fees`, `stake`, `claim`, `unstake`, `stake_lp` (trailing
+  `lp_mint_config` account), `claim_lp`, `unstake_lp`, `set_lp_mint`, `claim_xnt_fees_nft`,
+  `claim_xnt_fees_lp`, `sweep_xnt_pool_nft`, `sweep_xnt_pool_lp`, `recover_legacy_v1_stake`
+
+Errors (`GumballError`, code = 6000 + index; new variants are only appended; tests read codes from the enum via
+`scripts/lib/gumball-errors.cjs`): 6000 MachineInactive, 6001 SoldOut, 6002 InvalidQuantity, 6003 InvalidPrice, 6004 InvalidTreasury, 6005 Unauthorized, 6006 MathOverflow, 6007 InsufficientFunds, 6008 AlreadyLegendary, 6009 RarityMismatch, 6010 WrongBurnCount, 6011 UseMultiBurn, 6012 AlreadyFulfilled, 6013 CommitmentAlreadyUsed, 6014 InvalidCommitment, 6015 InvalidSlotHash, 6016 InvalidAccount, 6017 RequestExpired, 6018 OfferExpired, 6019 GumSupplyExhausted, 6020 InvalidLockPeriod, 6021 PoolHasStakers, 6022 AuctionEnded, 6023 AuctionNotEnded, 6024 BidTooLow, 6025 PriceAboveMax, 6026 AmountBelowMin, 6027 InvalidLpMint, 6028 SeedSlotNotReached.
+
+Timeouts: `MINT_TIMEOUT` 150 s (refund window; oracle `MAX_AGE_S` 130 s), `REVEAL_DELAY_SLOTS` 2
+(seed slot = first slot > `request_slot + 2`), SlotHashes window 512 slots.
 
 ---
 
@@ -293,8 +320,12 @@ node scripts/initialize.cjs --migrate
 cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit (incl. generate_svg golden)
 node scripts/make-localnet-fixtures.cjs                      # once — clones live X1 state
 npm run test:marketplace                                     # marketplace + auctions (LiteSVM, ~15s)
-FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # staking + XNT fees (validator)
+FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # all validator suites (staking+B1-B3, fairseed, legacy refund, auction, init-gate)
+node scripts/refund-legacy-mints.cjs                         # preview stranded 156-byte requests (sends nothing)
+node scripts/set-oracle.cjs --cluster <testnet|mainnet> --oracle <PUBKEY>   # preview; --live sends
 ```
+
+Toolchain: use the 3.1 Solana tools for the test build; LiteSVM 0.7 cannot load 4.3-built binaries (owner-reported, not re-checked 2026-11-08). `cargo test` = 11 passed (run 2026-11-08). Owner-reported validator-suite counts, UNVERIFIED as of 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
 
 ### Testing notes
 
@@ -318,6 +349,27 @@ trustworthy, but the process dies. Consequences for anyone extending the suite:
 ## Changelog
 
 Each entry documents what changed, which files were affected, and why the change was made.
+
+---
+
+### [2026-11-08] Security batch (branch `security-fixes`; fixed in code, NOT deployed)
+
+**Files:** `lib.rs`, `oracle.cjs`, `monitor.cjs`, `index.html`, `verify.html`, `staking.html`,
+`marketplace.html`, `scripts/set-oracle.cjs`, `scripts/refund-legacy-mints.cjs`, `scripts/lib/*`,
+`ci-e2e.sh` and the `validate-*-localnet.cjs` / `make-*-fixtures.cjs` suites, `README.md`, `DEPLOY.md`
+
+**What:** B1/B2 `unstake` / `unstake_lp` bind mint accounts to the stake account; B3 new `LpMintConfig`
+PDA + `set_lp_mint`, `stake_lp` accepts only the registered mint and takes a trailing `lp_mint_config`;
+S1 supply cap enforced in `reveal_and_mint`; S2 `initialize_machine` gated to the upgrade authority;
+S3 fair seed (see entry above: 164-byte MintRequest, 150 s timeout, `MintSeedEvent`, verify.html
+recomputes); L3 `create_auction` start_price >= rent-exempt minimum; new `refund_legacy_mint` for
+156-byte requests; errors `InvalidLpMint` (6027) and `SeedSlotNotReached` (6028) appended. New
+`set-oracle.cjs` (--cluster, genesis check, pending guard).
+
+**Why:** independent audit findings S1-S3, B1-B3, L3. Remaining by design: the oracle can withhold a
+reveal (selective abort); users are refunded after 150 s. Deploy order and the pre-deploy checks are in
+DEPLOY.md 0.5-0.6. `scripts/initialize.cjs` still sends 3 accounts and will fail against the gated
+`initialize_machine` (open item).
 
 ---
 
