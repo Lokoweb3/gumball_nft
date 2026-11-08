@@ -950,6 +950,9 @@ async function fetchWalletGumballs() {
         rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: gumballPda,
         svgStr: null, // SVG loaded on demand from separate GumballSvg PDA
         mintPubkey, ataPubkey,
+        // GumballData.owner (bytes 8..40) only changes via update_owner; a ball received by plain
+        // transfer still names the sender, and burns check it. Burns sync it first (see burnToUpgrade).
+        ownerStale: !new PublicKey(data.slice(8, 40)).equals(walletPubkey),
       });
     };
 
@@ -1763,7 +1766,23 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
       data: ixData,
     });
 
-    const tx = new Transaction().add(ix);
+    // Received by plain transfer → GumballData.owner still names the sender and the burn would fail
+    // Unauthorized. update_owner (holder signs, ATA proves holding) syncs it in the same transaction.
+    const updateOwnerDisc = await disc("update_owner");
+    const syncIxs = selected.filter(g => g.ownerStale).map(g => new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletPubkey, isSigner: true,  isWritable: false }, // holder
+        { pubkey: g.gbPda,      isSigner: false, isWritable: true  }, // gumball_data
+        { pubkey: g.mintPubkey, isSigner: false, isWritable: false }, // nft_mint
+        { pubkey: g.ataPubkey,  isSigner: false, isWritable: false }, // holder_ata
+        { pubkey: TOKEN_PID,    isSigner: false, isWritable: false }, // token_program
+        { pubkey: ASSOC_PID,    isSigner: false, isWritable: false }, // associated_token_program
+      ],
+      data: updateOwnerDisc,
+    }));
+
+    const tx = new Transaction().add(...syncIxs, ix);
     tx.feePayer = walletPubkey;
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -1780,7 +1799,7 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
     toast(`APPROVE BURN: ${burnsNeeded} ${fromName} → 1 ${toName}`, 'info');
 
     // Re-build tx since simulation consumed the partial sig state
-    const tx2 = new Transaction().add(ix);
+    const tx2 = new Transaction().add(...syncIxs, ix);
     tx2.feePayer = walletPubkey;
     tx2.recentBlockhash = blockhash;
     tx2.partialSign(newMint);

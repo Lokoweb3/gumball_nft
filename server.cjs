@@ -53,8 +53,12 @@ function setCacheHeaders(res, filePath) {
     res.setHeader("Cache-Control", "no-cache");
   } else if (VERSIONED_ASSET.test(path.relative(PUBLIC_DIR, filePath))) {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  } else if (/\.(m?js|css|json)$/i.test(filePath)) {
+    // Unversioned scripts/styles must match the HTML that loads them: revalidate every time (ETag),
+    // so a deploy never runs new HTML against a stale helper or an old account layout.
+    res.setHeader("Cache-Control", "no-cache");
   } else {
-    res.setHeader("Cache-Control", "public, max-age=300");
+    res.setHeader("Cache-Control", "public, max-age=300"); // images, fonts
   }
 }
 
