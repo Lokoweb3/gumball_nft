@@ -1782,7 +1782,22 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
       data: updateOwnerDisc,
     }));
 
-    const tx = new Transaction().add(...syncIxs, ix);
+    // Sync goes in its OWN transaction first: a 5-ball burn_multi is already 1,231 of the 1,232-byte
+    // limit, so even one extra instruction overflows it. The burn below then sees the fresh owner.
+    if (syncIxs.length) {
+      statusEl.textContent = `SYNCING OWNER OF ${syncIxs.length} RECEIVED GUMBALL(S) — APPROVE IN WALLET...`;
+      const syncTx = new Transaction().add(...syncIxs);
+      syncTx.feePayer = walletPubkey;
+      syncTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      const syncSim = await connection.simulateTransaction(syncTx);
+      if (syncSim.value.err) throw new Error("Owner sync simulation failed: " + JSON.stringify(syncSim.value.err));
+      const syncSigned = await provider.signTransaction(syncTx);
+      const syncSig = await connection.sendRawTransaction(syncSigned.serialize(), { skipPreflight: false });
+      await connection.confirmTransaction(syncSig, "confirmed");
+      for (const g of selected) g.ownerStale = false;
+    }
+
+    const tx = new Transaction().add(ix);
     tx.feePayer = walletPubkey;
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -1799,7 +1814,7 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
     toast(`APPROVE BURN: ${burnsNeeded} ${fromName} → 1 ${toName}`, 'info');
 
     // Re-build tx since simulation consumed the partial sig state
-    const tx2 = new Transaction().add(...syncIxs, ix);
+    const tx2 = new Transaction().add(ix);
     tx2.feePayer = walletPubkey;
     tx2.recentBlockhash = blockhash;
     tx2.partialSign(newMint);
