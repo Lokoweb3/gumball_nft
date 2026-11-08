@@ -209,6 +209,8 @@ were from earlier testnet iterations and no longer exist after the fresh deploy.
 const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 - current (with oracle_secret)
 ```
 
+Wallet gumballs are loaded by `loadWalletGumballAccounts` in `public/js/gumball-rpc.js`: token accounts (amount 1, decimals 0) -> GumballData PDAs, checked for program owner, dataSize 189 and this machine. `GumballData.owner` can be stale after a plain transfer; burns sync it with `update_owner` in a separate transaction first (a 5-ball `burn_multi` is 1,231 of 1,232 bytes).
+
 SVG is always fetched lazily from the separate `GumballSvg` PDA when the user opens a modal.
 
 ---
@@ -223,7 +225,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] `refund_mint` — only after MINT_TIMEOUT, only unfulfilled requests
 - [x] `reset_counts` — admin only, zeros total_minted and total_burned
 - [x] `withdraw` — REMOVED (could not work: CPI-debited a system-owned
-      treasury that never signed; see the note in lib.rs where it used to live)
+      treasury that never signed; see the note in `programs/gumball_nft/src/lib.rs` where it used to live)
 - [x] `set_oracle` — only admin/authority
 - [x] **Review:** `burn_multi` remaining_accounts validated via PDA seed check + owner + rarity
 - [x] **Review:** `update_owner` safe — reads ATA balance, only syncs to actual token holder

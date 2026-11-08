@@ -117,7 +117,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burns now auto-reclaim rent in the same transaction. No zombie PDAs are created.
+Burns now auto-reclaim rent in the same transaction. No zombie PDAs are created, and the frontend's zombie-PDA scan and reclaim button were removed (2026-11-08).
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -444,6 +444,8 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 - Live collection — on-chain SVG rendering with rarity-colored glow effects
 - Rarity filters — filter by Common / Uncommon / Rare / Epic / Legendary
 - Burn to upgrade — all 4 upgrade paths with upgrade fee display and pre-simulation
+- Wallet view lists every gumball the wallet holds, including ones received by plain transfer (burning one first syncs its stored owner in a separate transaction)
+- Server: gzip compression; HTML is `no-cache`, versioned js/css (name contains x.y.z) is immutable for 1 year, unversioned js/css/json is `no-cache` with ETag, other files `max-age=300`
 - Refund expired — claim XNT back if oracle was down during your mint
 - Testnet faucet — get 0.1 XNT per wallet per 24h to test minting
 - Oracle countdown — live timer showing mint request timeout
@@ -521,7 +523,7 @@ XntDebt         seeds: [b"xnt_debt_nft", nft_mint]             —  25 bytes (pe
 LpMintConfig    seeds: [b"lp_mint_config"]                    —  41 bytes (the one LP mint stake_lp accepts; written by set_lp_mint)
 ```
 
-Core account sizes (include the 8-byte discriminator; each is `LEN` in `lib.rs` + 8): `Machine` 138, `OracleCommit` 90, `MintRequest` 164 (`request_slot` u64 at offset 156; pre-fair-seed requests are 156 bytes and the program can no longer decode them, see `refund_legacy_mint`), `GumballData` 189.
+Core account sizes (include the 8-byte discriminator; each is `LEN` in `programs/gumball_nft/src/state/*.rs` + 8): `Machine` 138, `OracleCommit` 90, `MintRequest` 164 (`request_slot` u64 at offset 156; pre-fair-seed requests are 156 bytes and the program can no longer decode them, see `refund_legacy_mint`), `GumballData` 189.
 
 ### Error Codes
 
@@ -619,7 +621,12 @@ Live URL: `https://gumballnft-production.up.railway.app`
 
 | File | Purpose |
 |---|---|
-| `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
+| `programs/gumball_nft/src/lib.rs` | Anchor program entry: `declare_id!`, module declarations, thin `#[program]` wrappers |
+| `programs/gumball_nft/src/instructions/` | Handlers and account structs by domain (admin, mint, burn, market, auction, staking, lp, xnt, metadata) |
+| `programs/gumball_nft/src/state/` | Account structs |
+| `programs/gumball_nft/src/{constants,errors,events,pricing,randomness,svg,accumulators}.rs` | Constants, error enum, events, price curve, randomness, SVG, reward accumulators |
+| `scripts/check-idl.sh` | Interface-unchanged check against `tests/idl.golden.json` (names, args, account lists, discriminators, errors, events; not constraints or logic). `--update` only for an intended interface change |
+| `public/js/gumball-rpc.js` | Shared frontend RPC helpers (wallet gumball loading, commitment picking) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring + remote commands (private ops) |
 | `scripts/announcer.cjs` | Public Telegram channel bot (mints, upgrades, sales) |

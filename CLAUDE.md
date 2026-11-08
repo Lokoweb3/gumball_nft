@@ -148,7 +148,7 @@ Offset  Size  Field
 
 ## Reference: accounts, instructions, errors, timeouts
 
-Account sizes (bytes, include the 8-byte discriminator = `LEN` in `lib.rs` + 8):
+Account sizes (bytes, include the 8-byte discriminator = `LEN` in `programs/gumball_nft/src/state/*.rs` + 8):
 `Machine` 138, `OracleCommit` 90, `MintRequest` 164 (`request_slot` u64 at offset 156; legacy
 requests are 156), `GumballData` 189, `GumballSvg` 1,412 (4 + `MAX_SVG_LEN` 1,400, + 8), `Listing` 89,
 `Offer` 97, `LpMintConfig` 41 (`["lp_mint_config"]`), `LpStakeAccount` 140. Older docs said GumballSvg
@@ -188,14 +188,14 @@ Timeouts: `MINT_TIMEOUT` 150 s (refund window; oracle `MAX_AGE_S` 130 s), `REVEA
 ### Debugging frontend collection loading
 
 1. Check `dataSize` filters match current `GumballData::LEN`
-2. Check `gumballMintMap` — built from token accounts with `amount === 1`
+2. Check `loadWalletGumballAccounts` in `public/js/gumball-rpc.js` — walks the wallet's token accounts (`amount` 1, decimals 0), then batch-loads the GumballData PDAs
 3. Check version handling — v3 has no inline SVG, fetches lazily
 4. Run in console: `collection.forEach(g => console.log(g.serial, g.version, g.mintPubkey?.toBase58()?.slice(0,8)))`
 
 ### Adding a new instruction
 
-1. Add instruction function in `lib.rs` inside `#[program]` block
-2. Add `#[derive(Accounts)]` struct for the instruction
+1. Write the handler and its `#[derive(Accounts)]` struct in the matching `programs/gumball_nft/src/instructions/<domain>.rs`, then add a thin wrapper (with `///` docs) inside the `#[program]` block of `lib.rs`
+2. Run `scripts/check-idl.sh` (it will report the new instruction as an intended interface change); if so, `scripts/check-idl.sh --update` and commit `tests/idl.golden.json`
 3. Build: `anchor build`
 4. Update frontend: compute discriminator with `disc("instruction_name")`, build keys array matching struct order exactly
 5. If oracle calls it, update `oracle.cjs` with new PDA derivations and keys
@@ -204,7 +204,7 @@ Timeouts: `MINT_TIMEOUT` 150 s (refund window; oracle `MAX_AGE_S` 130 s), `REVEA
 
 ### Changing GumballData struct
 
-1. Update struct in `lib.rs`
+1. Update the struct in `programs/gumball_nft/src/state/gumball.rs`
 2. Update `GumballData::LEN`
 3. Add migration instruction if existing accounts need updating
 4. Add new `dataSize` filter in frontend alongside existing v5 filter
@@ -249,7 +249,10 @@ No migration needed unless Machine struct changed.
 | `programs/gumball_nft/src/pricing.rs` | `get_mint_price` curve, `stake_weight` |
 | `programs/gumball_nft/src/randomness.rs` | SlotHashes lookup, trait resolution, season remap |
 | `programs/gumball_nft/src/accumulators.rs` | NFT / LP / XNT reward accumulators and fee-settlement helpers |
-| `scripts/check-idl.sh` | Rebuilds the IDL (`cargo test --features idl-build`) and diffs it against `tests/idl.golden.json`; `--update` regenerates. Run after any program change that should not alter the interface |
+| `scripts/check-idl.sh` | Rebuilds the IDL (`cargo test --features idl-build`), canonicalises it with `scripts/lib/idl-canon.cjs`, and diffs it against `tests/idl.golden.json`. Proves the interface is unchanged: instruction names, args, account lists, discriminators, errors, events. It does NOT cover account constraints or handler logic (use the test suites for those). Run `--update` only when an interface change is intended |
+| `scripts/lib/idl-canon.cjs` | Canonicalises idl-build output (strips module paths from type names, sorts accounts/types/blocks) so moving code between modules is not a diff |
+| `tests/idl.golden.json` | Golden IDL, regenerated from the pre-split base output |
+| `public/js/gumball-rpc.js` | Shared RPC helpers: `loadWalletGumballAccounts` (wallet token accounts -> GumballData; dataSize 189, program-owner and machine checks, `getMultipleAccountsInfo` in batches of 100), `pickUnusedCommitment` (OracleCommit dataSize 90, `used` byte at offset 88, random pick), `setVisibleInterval` (skips ticks while the tab is hidden) |
 | `tests/cu-baseline.txt` | Compute units per marketplace instruction at the pre-split base |
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
@@ -297,7 +300,7 @@ No migration needed unless Machine struct changed.
   it and now refuses to run unless the configured mint matches `stake_config`
 - **Never add an instruction that debits a system-owned account** the program
   does not own. `withdraw` did this to the treasury and only appeared to work
-  while treasury == authority (see the note in `lib.rs`)
+  while treasury == authority (see the note in `programs/gumball_nft/src/lib.rs`)
 - **Never serve the repo root** over HTTP. `server.cjs` serves `public/` and nginx
   roots at `$APP_DIR/public`. Serving `__dirname` publishes `oracle-secrets.json`,
   `*-wallet.json` and every runtime state file — this was a live leak on production
@@ -305,6 +308,7 @@ No migration needed unless Machine struct changed.
   generated HTML. The CSP sets `script-src-attr 'none'`, so they silently do
   nothing. Use `data-click="fn" data-args='[...]'` (see `public/js/actions.js`;
   in templates `data-args="${actArgs(a, b)}"`) or `addEventListener`
+- **Never add accounts or data to `burn_multi`** without re-measuring the serialized transaction size. A 5-ball `burn_multi` is 1,231 of the 1,232-byte limit (measured by the round-2 implementer; the frontend therefore sends the `update_owner` sync as a separate transaction first). One extra account or byte overflows it
 - **Never commit private keys** under an innocuous filename — an OpenSSH key was
   committed as `yes` and sat in the public repo
 
@@ -361,6 +365,21 @@ trustworthy, but the process dies. Consequences for anyone extending the suite:
 ## Changelog
 
 Each entry documents what changed, which files were affected, and why the change was made.
+
+---
+
+### [2026-11-08] Round 2: module split, IDL check, frontend RPC and caching (branch `security-fixes`, 4cc2653..9164f1e; NOT deployed)
+
+**Files:** `programs/gumball_nft/src/*` (split), `scripts/check-idl.sh`, `scripts/lib/idl-canon.cjs`,
+`tests/idl.golden.json`, `tests/cu-baseline.txt`, `public/js/gumball-rpc.js`, `server.cjs`,
+`index/marketplace/staking/activity/leaderboard/landing.html`
+
+- `lib.rs` split into modules (zero behaviour change): see Files Overview. `check-idl.sh` proves the interface is unchanged, not the constraints or logic.
+- New `public/js/gumball-rpc.js` (see Files Overview). The wallet view now lists gumballs received by plain transfer. Burns first sync a stale `GumballData.owner` with `update_owner` in a separate transaction (a 5-ball `burn_multi` is 1,231 of 1,232 bytes).
+- Mint flow: one pre-sign balance check (price curve + 0.005 XNT margin), a random unused commitment with one retry on `CommitmentAlreadyUsed`, and polling by a single `getAccountInfo` on the MintRequest PDA (wallet gumballs load only when `remaining_quantity` drops). Background pollers (ticker, marketplace, activity, staking clock) use `setVisibleInterval` and pause while the tab is hidden; the mint-confirmation loop itself has no hidden-tab check.
+- `server.cjs`: `compression()` on. Cache-Control: HTML `no-cache`; versioned js/css (filename contains x.y.z, e.g. `solana-web3-1.87.6.min.js`) `public, max-age=31536000, immutable`; unversioned js/css/json `no-cache` (ETag); everything else `max-age=300`. It still forks the oracle and monitor unconditionally (unchanged; DEPLOY Phase 2 wants a single launcher).
+- Removed: the zombie-PDA scan and the reclaim-burn-rent UI from `index.html`.
+- Measured (round-2 implementer's Playwright run against testnet, 2026-11-08; not re-run by docs-keeper): RPC calls staking.html 43 -> 19, marketplace.html 19 -> 6, index.html with a wallet 10 -> 7. Gzip of the web3 bundle 469,608 -> 109,905 bytes on the wire (bytes and headers checked by the lead on a local server).
 
 ---
 
