@@ -689,7 +689,8 @@ async function updateHeroStats() {
   } catch(e) {}
 }
 updateHeroStats();
-setInterval(updateHeroStats, 30000);
+setInterval(() => { if (!document.hidden) updateHeroStats(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) updateHeroStats(); });
 </script>
 </body>
 </html>

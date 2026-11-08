@@ -425,6 +425,7 @@ header{
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-rpc.js"></script>
 <script>
 // Shared constants + helpers come from js/gumball-common.js. NOTE: this page
 // previously carried DRIFTED copies of FLAVORS/COLORS/BALL_COLORS that
@@ -524,10 +525,18 @@ async function loadStakedNfts() {
     ],
   });
 
-  for (const { pubkey, account } of accounts) {
-    const data = account.data;
+  // Gumball traits for every stake in one batched read
+  const parsedStakes = accounts.map(({ pubkey, account }) => {
+    const nftMint = new PublicKey(account.data.slice(8+32, 8+32+32));
+    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
+    return { pubkey, data: account.data, nftMint, gumballPda };
+  });
+  const gbInfos = await getMultipleAccountsChunked(parsedStakes.map(p => p.gumballPda));
+
+  parsedStakes.forEach(({ pubkey, data, nftMint }, idx) => {
+    const gbInfo = gbInfos[idx];
+    if (!gbInfo) return;
     const dv = new DataView(data.buffer, data.byteOffset);
-    const nftMint = new PublicKey(data.slice(8+32, 8+32+32));
     const rarity = data[8+32+32];
     // Phase 1 StakeAccount layout: disc(8) owner(32) nft_mint(32) rarity(1)
     // weight u64(8) staked_at i64(8) last_claimed i64(8) reward_debt u128(16) bump(1)
@@ -535,27 +544,21 @@ async function loadStakedNfts() {
     const stakedAt    = Number(dv.getBigInt64 (8+32+32+1+8, true));
     const lastClaimed = Number(dv.getBigInt64 (8+32+32+1+8+8, true));
 
-    // Read gumball data for traits
-    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), nftMint.toBytes()], PROGRAM_ID);
-    try {
-      const gbInfo = await connection.getAccountInfo(gumballPda);
-      if (!gbInfo) continue;
-      const gd = gbInfo.data;
-      const serial = Number(new DataView(gd.buffer, gd.byteOffset).getBigUint64(8+32+32, true));
-      const flavor = gd[8+32+32+8];
-      const color = gd[8+32+32+8+1];
-      const special = gd[8+32+32+8+3];
-      const colorName = COLORS[color] || "Berry Blue";
-      const ballColor = BALL_COLORS[colorName] || "#2266ee";
+    const gd = gbInfo.data;
+    const serial = Number(new DataView(gd.buffer, gd.byteOffset).getBigUint64(8+32+32, true));
+    const flavor = gd[8+32+32+8];
+    const color = gd[8+32+32+8+1];
+    const special = gd[8+32+32+8+3];
+    const colorName = COLORS[color] || "Berry Blue";
+    const ballColor = BALL_COLORS[colorName] || "#2266ee";
 
-      stakedGumballs.push({
-        stakePda: pubkey, nftMint, rarity, weight, stakedAt, lastClaimed,
-        serial, flavor, color, special, colorName, ballColor,
-        flavorName: FLAVORS[flavor] || "Mystery",
-        rarName: RARITY[rarity] || "Common",
-      });
-    } catch(e) {}
-  }
+    stakedGumballs.push({
+      stakePda: pubkey, nftMint, rarity, weight, stakedAt, lastClaimed,
+      serial, flavor, color, special, colorName, ballColor,
+      flavorName: FLAVORS[flavor] || "Mystery",
+      rarName: RARITY[rarity] || "Common",
+    });
+  });
 
   document.getElementById('sYourStaked').textContent = stakedGumballs.length;
 }
@@ -564,36 +567,15 @@ async function loadUnstakedNfts() {
   unstakedGumballs = [];
   if (!walletPubkey) return;
 
-  // Query all gumballs owned by this wallet directly from the program
-  // Much faster than scanning 600+ token accounts individually
-  const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      { dataSize: GD_V5 },
-      { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } }, // owner field
-    ],
-  });
+  // Start from the wallet's token accounts (GumballData.owner is stale after a
+  // plain transfer), batch-load the gumball PDAs, then batch the stake check.
+  const held = await loadWalletGumballAccounts(walletPubkey);
+  const stakePdas = held.map(h =>
+    PublicKey.findProgramAddressSync([strToU8("stake_v2"), h.mintPubkey.toBytes()], PROGRAM_ID)[0]);
+  const stakeInfos = await getMultipleAccountsChunked(stakePdas);
 
-  // Build a mint map from token accounts to get mint keys
-  const tokenAccounts = await connection.getTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
-  const gumballMintMap = {};
-  for (const { account } of tokenAccounts.value) {
-    const mintKey = new PublicKey(account.data.slice(0, 32));
-    const amount = Number(new DataView(account.data.buffer, account.data.byteOffset).getBigUint64(64, true));
-    if (amount !== 1) continue;
-    const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
-    gumballMintMap[gumballPda.toBase58()] = mintKey;
-  }
-
-  for (const { pubkey, account } of accounts) {
-    const mintKey = gumballMintMap[pubkey.toBase58()];
-    if (!mintKey) continue;
-
-    // Check not already staked
-    const [stakePda] = PublicKey.findProgramAddressSync([strToU8("stake_v2"), mintKey.toBytes()], PROGRAM_ID);
-    const stakeInfo = await connection.getAccountInfo(stakePda);
-    if (stakeInfo) continue;
-
-    const gd = account.data;
+  held.forEach(({ gumballPda, mintPubkey, data: gd }, i) => {
+    if (stakeInfos[i]) return; // already staked
     const dv = new DataView(gd.buffer, gd.byteOffset);
     const serial = Number(dv.getBigUint64(8+32+32, true));
     const flavor = gd[8+32+32+8];
@@ -604,12 +586,12 @@ async function loadUnstakedNfts() {
     const ballColor = BALL_COLORS[colorName] || "#2266ee";
 
     unstakedGumballs.push({
-      nftMint: mintKey, gumballPda: pubkey, rarity, serial, flavor, color, special,
+      nftMint: mintPubkey, gumballPda, rarity, serial, flavor, color, special,
       colorName, ballColor,
       flavorName: FLAVORS[flavor] || "Mystery",
       rarName: RARITY[rarity] || "Common",
     });
-  }
+  });
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -1193,8 +1175,7 @@ async function loadPoolState() {
     }
     const d = info.data;
     // Read vault balances directly
-    const v0Info = await connection.getAccountInfo(VAULT_0);
-    const v1Info = await connection.getAccountInfo(VAULT_1);
+    const [v0Info, v1Info] = await connection.getMultipleAccountsInfo([VAULT_0, VAULT_1]);
     if (v0Info) {
       const dv = new DataView(v0Info.data.buffer, v0Info.data.byteOffset);
       poolReserve0 = Number(dv.getBigUint64(64, true));
@@ -1793,26 +1774,32 @@ async function loadLpStakeState() {
     const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [{ dataSize: LP_STAKE_SIZE }],
     });
+    const rows = [];
     for (const { pubkey, account } of accounts) {
       const d = account.data;
       const dv = new DataView(d.buffer, d.byteOffset);
-      const positionMint = new PublicKey(d.slice(8, 40));
-      const lpMintKey = new PublicKey(d.slice(40, 72));
       const amount = Number(dv.getBigUint64(72, true));
-      const stakedAt = Number(dv.getBigInt64(80, true));
-      const lastClaimed = Number(dv.getBigInt64(88, true));
-      const lockUntil = Number(dv.getBigInt64(96, true));
-      const multiplier = dv.getUint16(104, true);
       if (amount === 0) continue;
-      const posAta = getAta(positionMint, walletPubkey);
-      try {
-        const ataInfo = await connection.getAccountInfo(posAta);
-        if (!ataInfo || ataInfo.data.length < 72) continue;
-        const bal = Number(new DataView(ataInfo.data.buffer, ataInfo.data.byteOffset).getBigUint64(64, true));
-        if (bal !== 1) continue;
-        lpPositions.push({ positionMint, lpMintKey, amount, stakedAt, lastClaimed, lockUntil, multiplier, stakePda: pubkey, positionAta: posAta });
-      } catch(e) {}
+      const positionMint = new PublicKey(d.slice(8, 40));
+      rows.push({
+        positionMint, amount, stakePda: pubkey,
+        lpMintKey: new PublicKey(d.slice(40, 72)),
+        stakedAt: Number(dv.getBigInt64(80, true)),
+        lastClaimed: Number(dv.getBigInt64(88, true)),
+        lockUntil: Number(dv.getBigInt64(96, true)),
+        multiplier: dv.getUint16(104, true),
+        positionAta: getAta(positionMint, walletPubkey),
+      });
     }
+    // One batched read for every position-NFT token account
+    const ataInfos = await getMultipleAccountsChunked(rows.map(r => r.positionAta));
+    rows.forEach((r, i) => {
+      const ataInfo = ataInfos[i];
+      if (!ataInfo || ataInfo.data.length < 72) return;
+      const bal = Number(new DataView(ataInfo.data.buffer, ataInfo.data.byteOffset).getBigUint64(64, true));
+      if (bal !== 1) return;
+      lpPositions.push(r);
+    });
     document.getElementById('stakeLpBtn').disabled = false;
     document.getElementById('availableLpBalance').textContent = `Available: ${(userLpBalance / 1e9).toFixed(6)} LP`;
     renderLpPositions();
@@ -1903,7 +1890,7 @@ async function syncBlockchainTime() {
 }
 
 // Re-sync every 60 seconds
-setInterval(syncBlockchainTime, 60000);
+setVisibleInterval(syncBlockchainTime, 60000, false);
 
 function chainNow() {
   return Math.floor(Date.now() / 1000) - blockchainTimeOffset;

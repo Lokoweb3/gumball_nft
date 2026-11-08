@@ -176,6 +176,7 @@ header{
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-rpc.js"></script>
 <script>
 // Shared constants + helpers (PROGRAM_ID, connection, trait arrays, disc,
 // strToU8, getAta, ...) come from js/gumball-common.js
@@ -497,7 +498,7 @@ function renderFeed() {
 loadActivityFeed();
 
 // Auto-refresh every 30s
-setInterval(() => {
+setVisibleInterval(() => {
   loadActivityFeed();
   if (walletPubkey) loadAnalytics();
 }, 30000);

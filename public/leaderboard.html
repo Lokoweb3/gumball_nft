@@ -446,7 +446,13 @@ async function loadAll() {
 }
 
 // Auto-refresh every 60 seconds
-setInterval(() => loadAll(), 60000);
+// Skipped while the tab is hidden; refreshes on return if a tick was missed.
+let _lbLast = Date.now();
+function _lbTick() { _lbLast = Date.now(); loadAll(); }
+setInterval(() => { if (!document.hidden) _lbTick(); }, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - _lbLast >= 60000) _lbTick();
+});
 
 function renderRarityBreakdown(gumballs, totalMinted) {
   const counts = [0,0,0,0,0];

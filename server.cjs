@@ -1,4 +1,5 @@
 const express = require("express");
+const compression = require("compression");
 const path = require("path");
 const fs = require("fs");
 const { fork } = require("child_process");
@@ -32,6 +33,7 @@ app.set("trust proxy", 1); // Railway sits behind a proxy — needed for real cl
 // Security headers (helmet + CSP) and per-IP rate limits. Must come before the
 // static handler and every route so they apply to all of them.
 applySecurity(app);
+app.use(compression()); // gzip/deflate text responses (JS, CSS, HTML, JSON)
 
 // Static web root. This MUST stay a dedicated directory — serving __dirname
 // publishes every file next to server.cjs, which meant oracle-secrets.json,
@@ -39,14 +41,32 @@ applySecurity(app);
 // Only dotfiles are excluded by default, so `.env` was the one thing safe.
 const PUBLIC_DIR = path.join(__dirname, "public");
 
+// Cache policy. HTML always revalidates (no-cache + ETag => cheap 304s) so a
+// deploy shows up at once. Assets under js/ or css/ whose FILENAME carries a
+// version (solana-web3-1.87.6.min.js) never change in place, so they are
+// immutable for a year. Everything else (unversioned js/css, images, ...) gets
+// a short max-age. Do NOT mark an unversioned file immutable: its URL stays
+// the same when its content changes.
+const VERSIONED_ASSET = /^(js|css)[\\/][^\\/]*[-.]v?\d+\.\d+\.\d+[^\\/]*\.(js|css)$/;
+function setCacheHeaders(res, filePath) {
+  if (/\.html?$/i.test(filePath)) {
+    res.setHeader("Cache-Control", "no-cache");
+  } else if (VERSIONED_ASSET.test(path.relative(PUBLIC_DIR, filePath))) {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  } else {
+    res.setHeader("Cache-Control", "public, max-age=300");
+  }
+}
+
 // Serve landing.html as the homepage
 app.get("/", (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "landing.html"));
+  res.sendFile(path.join(PUBLIC_DIR, "landing.html"), { headers: { "Cache-Control": "no-cache" } });
 });
 
 app.use(express.static(PUBLIC_DIR, {
   extensions: ["html"],
   dotfiles: "deny",
+  setHeaders: setCacheHeaders,
 }));
 
 // ── Faucet ──────────────────────────────────────────────────────────────────

@@ -238,6 +238,7 @@ header{
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-rpc.js"></script>
 <script>
 // Shared constants + helpers come from js/gumball-common.js
 const RENT_PID  = RENT_SYSVAR_PID; // legacy local alias
@@ -384,19 +385,21 @@ async function loadListings() {
       filters: [{ dataSize: LISTING_SIZE }],
     });
     allListings = [];
-    for (const { pubkey, account } of accounts) {
+    // Gumball traits for every listing in batched reads
+    const rows = accounts.map(({ pubkey, account }) => {
       const listing = parseListing(account.data);
-      // Fetch gumball data for traits
       const mintPubkey = new PublicKey(listing.nftMint);
       const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID);
+      return { pubkey, listing, mintPubkey, gumballPda };
+    });
+    const gbInfos = await getMultipleAccountsChunked(rows.map(r => r.gumballPda));
+    rows.forEach(({ pubkey, listing, mintPubkey }, i) => {
+      if (!gbInfos[i]) return;
       try {
-        const gbInfo = await connection.getAccountInfo(gumballPda);
-        if (gbInfo) {
-          const gb = parseGumball(gbInfo.data);
-          allListings.push({ ...listing, ...gb, listingPda: pubkey.toBase58(), mintPubkey });
-        }
+        const gb = parseGumball(gbInfos[i].data);
+        allListings.push({ ...listing, ...gb, listingPda: pubkey.toBase58(), mintPubkey });
       } catch(e) {}
-    }
+    });
     allListings.sort((a, b) => a.price - b.price);
   } catch(e) { console.error("loadListings:", e); }
 }
@@ -407,19 +410,22 @@ async function loadAuctions() {
       filters: [{ dataSize: AUCTION_SIZE }],
     });
     allAuctions = [];
+    const rows = [];
     for (const { pubkey, account } of accounts) {
       const auction = parseAuction(account.data);
       if (auction.settled) continue;
       const mintPubkey = new PublicKey(auction.nftMint);
       const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintPubkey.toBytes()], PROGRAM_ID);
-      try {
-        const gbInfo = await connection.getAccountInfo(gumballPda);
-        if (gbInfo) {
-          const gb = parseGumball(gbInfo.data);
-          allAuctions.push({ ...auction, ...gb, auctionPda: pubkey.toBase58(), mintPubkey });
-        }
-      } catch(e) {}
+      rows.push({ pubkey, auction, mintPubkey, gumballPda });
     }
+    const gbInfos = await getMultipleAccountsChunked(rows.map(r => r.gumballPda));
+    rows.forEach(({ pubkey, auction, mintPubkey }, i) => {
+      if (!gbInfos[i]) return;
+      try {
+        const gb = parseGumball(gbInfos[i].data);
+        allAuctions.push({ ...auction, ...gb, auctionPda: pubkey.toBase58(), mintPubkey });
+      } catch(e) {}
+    });
     allAuctions.sort((a, b) => a.endsAt - b.endsAt); // ending soonest first
   } catch(e) { console.error("loadAuctions:", e); }
 }
@@ -428,20 +434,23 @@ async function loadMyCollection() {
   if (!walletPubkey) return;
   try {
     myCollection = [];
-    // Start from token accounts — each NFT the user holds
+    // Start from token accounts — each NFT the user holds — then batch-load the PDAs
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, { programId: TOKEN_PID });
+    const held = [];
     for (const ta of tokenAccounts.value) {
       const parsed = ta.account.data.parsed.info;
       if (parsed.tokenAmount.uiAmount !== 1) continue;
-
       const mintKey = new PublicKey(parsed.mint);
       const [gumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
-
+      held.push({ ta, mintKey, gumballPda });
+    }
+    const gbInfos = await getMultipleAccountsChunked(held.map(h => h.gumballPda));
+    held.forEach(({ ta, mintKey, gumballPda }, i) => {
+      const gbInfo = gbInfos[i];
+      if (!gbInfo || gbInfo.owner.toBase58() !== PROGRAM_ID.toBase58()) return;
       try {
-        const gbInfo = await connection.getAccountInfo(gumballPda);
-        if (!gbInfo || gbInfo.owner.toBase58() !== PROGRAM_ID.toBase58()) continue;
         const gb = parseGumball(gbInfo.data);
-        if (gb.serial === 0) continue;
+        if (gb.serial === 0) return;
         gb.gbPda = gumballPda;
         gb.mintPubkey = mintKey;
         gb.ataPubkey = ta.pubkey;
@@ -449,7 +458,7 @@ async function loadMyCollection() {
         gb.isListed = allListings.some(l => l.mintPubkey && l.mintPubkey.equals(mintKey));
         myCollection.push(gb);
       } catch(e) {}
-    }
+    });
     myCollection.sort((a, b) => a.serial - b.serial);
   } catch(e) { console.error("loadMyCollection:", e); }
 }
@@ -674,27 +683,33 @@ function offerRow(o) {
 // ── SVG LOADING ──────────────────────────────────────────────────────────────
 
 async function loadSvgs() {
-  const svgEls = document.querySelectorAll('.card-svg[data-mint]:not([data-loaded])');
+  const svgEls = [...document.querySelectorAll('.card-svg[data-mint]:not([data-loaded])')]
+    .filter(el => el.dataset.mint);
+  const items = [];
   for (const el of svgEls) {
-    const mintStr = el.dataset.mint;
-    if (!mintStr) continue;
     el.dataset.loaded = "1"; // prevent re-fetch
     try {
-      const mintKey = new PublicKey(mintStr);
+      const mintKey = new PublicKey(el.dataset.mint);
       const [svgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
-      const info = await connection.getAccountInfo(svgPda);
-      if (info) {
-        const dv = new DataView(info.data.buffer, info.data.byteOffset);
-        const svgLen = dv.getUint32(8, true);
-        if (svgLen > 0 && svgLen <= 1400) {
-          const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
-          // <img> data URI: nothing inside the SVG can execute, and gradient ids
-          // can't collide across cards (each image is its own document)
-          el.innerHTML = svgImgHtml(svgStr, "100%");
-        }
-      }
+      items.push({ el, svgPda });
     } catch(e) {}
   }
+  let infos;
+  try { infos = await getMultipleAccountsChunked(items.map(i => i.svgPda)); } catch(e) { return; }
+  items.forEach(({ el }, idx) => {
+    const info = infos[idx];
+    if (!info) return;
+    try {
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      const svgLen = dv.getUint32(8, true);
+      if (svgLen > 0 && svgLen <= 1400) {
+        const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
+        // <img> data URI: nothing inside the SVG can execute, and gradient ids
+        // can't collide across cards (each image is its own document)
+        el.innerHTML = svgImgHtml(svgStr, "100%");
+      }
+    } catch(e) {}
+  });
 }
 
 // ── MARKETPLACE ACTIONS ──────────────────────────────────────────────────────
@@ -1213,7 +1228,7 @@ async function acceptOffer(nftMintStr, buyerStr, minAmountLamports) {
 })();
 
 // Auto-refresh every 30s
-setInterval(async () => {
+setVisibleInterval(async () => {
   if (walletPubkey) {
     await loadAll();
     loadSvgs();
