@@ -1970,6 +1970,7 @@ async function stakeLpTokens() {
         { pubkey: ASSOC_PID,                 isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId,   isSigner: false, isWritable: false },
         { pubkey: RENT_SYSVAR_PID,           isSigner: false, isWritable: false },
+        { pubkey: PublicKey.findProgramAddressSync([strToU8("lp_mint_config")], PROGRAM_ID)[0], isSigner: false, isWritable: false }, // lp_mint_config (allowed LP mint)
       ],
       data,
     });

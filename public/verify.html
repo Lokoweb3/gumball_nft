@@ -180,7 +180,7 @@ header{
     </div>
     <div class="how-step">
       <div class="how-num">4</div>
-      <div class="how-text">Traits are derived from <strong>sha256(secret + slot_hash + user_seed)</strong>. Neither the oracle (didn't know user_seed) nor you (didn't know secret or slot_hash) could predict or manipulate the result.</div>
+      <div class="how-text">Traits are derived from <strong>sha256(secret + slot_hash + user_seed + mint_index)</strong>, where slot_hash is the hash of a slot fixed by your request (the first slot more than 2 after it), so it did not exist when you paid. Neither the oracle (didn't know user_seed) nor you (didn't know secret or slot_hash) could predict the result, and the oracle cannot change it by choosing when to reveal.</div>
     </div>
   </div>
 
@@ -629,6 +629,64 @@ function resolveTraitsFromSeed(seedU64, serial) {
   return { flavor, color, rarity, special };
 }
 
+// ── Seed-slot proof (fair-seed mints) ────────────────────────────────────
+// reveal_and_mint emits MintSeedEvent { mint, request_slot, seed_slot, slot_hash, mint_index }.
+// The slot hash is NOT stored in GumballData (its layout is fixed), so we read the event from
+// the mint transaction's logs and recompute sha256(secret || slot_hash || user_seed || index).
+// seed_slot must be > request_slot + 2, i.e. fixed by the request and unknown at request time.
+const REVEAL_DELAY_SLOTS = 2;
+
+function b64ToBytes(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+async function fetchSeedEvent(mintSig, gumballPdaStr) {
+  if (!mintSig) return null;
+  const tx = await connection.getTransaction(mintSig, { maxSupportedTransactionVersion: 0 });
+  const logs = (tx && tx.meta && tx.meta.logMessages) || [];
+  const d = await sha256(new TextEncoder().encode('event:MintSeedEvent'));
+  const evDisc = d.slice(0, 8);
+  for (const line of logs) {
+    if (!line.startsWith('Program data: ')) continue;
+    let b; try { b = b64ToBytes(line.slice(14)); } catch (e) { continue; }
+    if (b.length < 8 + 32 + 8 + 8 + 32 + 1 || !evDisc.every((x, i) => x === b[i])) continue;
+    const dv = new DataView(b.buffer, b.byteOffset);
+    const mint = new PublicKey(b.slice(8, 40));
+    const [pda] = PublicKey.findProgramAddressSync([new TextEncoder().encode('gumball'), mint.toBytes()], PROGRAM_ID);
+    if (pda.toBase58() !== gumballPdaStr) continue;
+    return {
+      requestSlot: dv.getBigUint64(40, true), seedSlot: dv.getBigUint64(48, true),
+      slotHash: b.slice(56, 88), mintIndex: b[88],
+    };
+  }
+  return null;
+}
+
+async function seedProofHtml(data, secretBytes) {
+  let ev = null;
+  try { ev = await fetchSeedEvent(data.mintSig, data.gumballPda); } catch (e) {}
+  if (!ev) {
+    return `<div style="color:var(--gray);line-height:1.8;margin-top:10px;font-size:0.42rem;">No seed-slot event found in the mint transaction (minted before the fixed-slot upgrade, or the transaction is no longer served by this RPC). Trait re-derivation is not available for this gumball.</div>`;
+  }
+  const slotOk = ev.seedSlot > ev.requestSlot + BigInt(REVEAL_DELAY_SLOTS);
+  const seedBytes = await sha256(new Uint8Array([...secretBytes, ...ev.slotHash, ...data.userSeed, ev.mintIndex]));
+  let seedU64 = 0n;
+  for (let i = 7; i >= 0; i--) seedU64 = (seedU64 << 8n) | BigInt(seedBytes[i]);
+  // on-chain resolve_traits gets machine.total_minted == serial - 1
+  const t = resolveTraitsFromSeed(seedU64, data.serial - 1);
+  const rarityMatch = t.rarity === data.rarity && t.special === data.special;
+  const allMatch = rarityMatch && t.flavor === data.flavor && t.color === data.color;
+  const verdict = allMatch ? '✓ TRAITS RE-DERIVED AND MATCH'
+    : rarityMatch ? '✓ RARITY + SPECIAL MATCH (flavor/color differ: seasonal remap?)'
+    : '✗ TRAITS DO NOT MATCH';
+  return `
+    <div style="margin-top:10px;border-top:1px solid rgba(0,255,204,0.2);padding-top:8px;">
+      <div style="color:${allMatch || rarityMatch ? 'var(--teal)' : 'var(--red)'};margin-bottom:6px;font-family:'Press Start 2P',cursive;font-size:0.38rem;">${verdict}</div>
+      <div style="color:var(--gray);line-height:1.8;">seed = sha256(secret + slot_hash + user_seed + mint_index), slot hash taken from slot ${ev.seedSlot}, fixed by the request (made at slot ${ev.requestSlot}).
+      ${slotOk ? 'The seed slot is after the request, so the hash did not exist when you paid.' : '<strong style="color:var(--red);">Seed slot is NOT after request_slot + ' + REVEAL_DELAY_SLOTS + '.</strong>'}</div>
+      <div class="step-data">Slot hash: ${toHex(ev.slotHash)}</div>
+      <div class="step-data">Mint index: ${ev.mintIndex}</div>
+    </div>`;
+}
+
 // v5 auto-verification using on-chain oracle_secret
 async function verifyHashAuto() {
   const data = window._verifyData;
@@ -675,7 +733,9 @@ async function verifyHashAuto() {
         <div style="color:var(--gray);line-height:1.8;">The oracle secret stored on-chain matches the commitment hash. This was verified automatically using <strong>only on-chain data</strong> — no external input needed. The oracle committed to this secret <strong>before</strong> the mint request was made.</div>
         <div class="step-data" style="margin-top:8px;">Secret:     ${secretHex}</div>
         <div class="step-data">Commitment: ${toHex(computedCommitment)}</div>
+        <div id="seedProof"></div>
       </div>`;
+    document.getElementById('seedProof').innerHTML = await seedProofHtml(data, secretBytes);
 
   } catch(e) {
     resultDiv.innerHTML = `<div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;color:var(--red);">ERROR: ${e.message}</div>`;
@@ -719,20 +779,6 @@ async function verifyHash() {
       return;
     }
 
-    // Step 2: We need the slot_hash to fully re-derive traits.
-    // Fetch from the mint transaction
-    let slotHashBytes = null;
-    if (data.mintSig) {
-      try {
-        const tx = await connection.getTransaction(data.mintSig, { maxSupportedTransactionVersion: 0 });
-        if (tx && tx.slot) {
-          // We can't directly get the slot hash from the transaction.
-          // The slot hash was read from SlotHashes sysvar during the tx.
-          // We note this limitation for the user.
-        }
-      } catch(e) {}
-    }
-
     // Commitment verified successfully
     stepDiv.className = 'proof-step verified';
     iconDiv.textContent = '✅';
@@ -743,10 +789,9 @@ async function verifyHash() {
         <div style="color:var(--gray);line-height:1.8;">The oracle secret matches the commitment hash stored on-chain. This proves the oracle committed to this exact secret <strong>before</strong> the mint request was made.</div>
         <div class="step-data" style="margin-top:8px;">Secret:     ${secretHex}</div>
         <div class="step-data">Commitment: ${toHex(computedCommitment)}</div>
-        <div style="color:var(--gray);line-height:1.8;margin-top:10px;font-size:0.42rem;">
-          <strong style="color:var(--white);">Note:</strong> Full trait re-derivation requires the slot hash from the block where the mint transaction executed. The slot hash is consumed at runtime from the SlotHashes sysvar and is not stored on-chain. The commitment verification above proves that the oracle could not have manipulated the outcome — the secret was locked before the slot hash or user seed were known.
-        </div>
+        <div id="seedProof"></div>
       </div>`;
+    document.getElementById('seedProof').innerHTML = await seedProofHtml(data, secretBytes);
 
   } catch(e) {
     resultDiv.innerHTML = `<div style="background:rgba(255,34,68,0.1);border:1px solid var(--red);padding:10px;font-size:0.45rem;color:var(--red);">ERROR: ${e.message}</div>`;

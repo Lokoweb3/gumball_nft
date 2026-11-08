@@ -50,7 +50,7 @@ These are committed to `main` but **not on chain** yet:
 | `BASE_PRICE` / `MAX_PRICE` | 0.01 → 0.04 XNT | 28–29 | mainnet curve (testnet was set low for the faucet) |
 | `MAX_SUPPLY` | 10 000 | 19 | final |
 | `MAX_PER_TX` | 10 | 20 | final |
-| `MINT_TIMEOUT` | 300 s | 22 | refund window; oracle SLA must beat it |
+| `MINT_TIMEOUT` | 150 s | 22 | refund window; oracle SLA must beat it |
 | `ROYALTY_BPS` + 50/25/25 split | 5 % | 32, 112–113 | final |
 | `REROLL_COST_GUM` | 25 GUM | 47 | GUM sink price |
 | `EMISSION_BPS_PER_DAY` | 0.3 % | 75 | staking emission |
@@ -64,12 +64,18 @@ every wallet shows a broken image forever.
 - [ ] add an authority-gated `update_metadata_uri` instruction, **or**
 - [ ] embed the on-chain SVG as a `data:` URI at attach time (fully on-chain, no host)
 
-### 0.5 Known fairness caveat (decide, then document publicly)
-The reveal seed uses the *latest* slot hash at reveal time, so the oracle can
-simulate and choose *when* to submit (~750 slots inside the timeout). Users
-cannot grind; the oracle can. Either bind the seed to a slot fixed at request
-time, or state plainly that outcomes are fair against everyone except the
-operator.
+### 0.5 Fairness caveat: seed slot fixed at request time (FIXED in fix-fairseed)
+`request_mint` records `request_slot`. `reveal_and_mint` seeds traits with the
+hash of the first slot strictly after `request_slot + 2` (REVEAL_DELAY_SLOTS),
+so reveal timing no longer changes the outcome. `MINT_TIMEOUT` is 150 s so a
+request is always revealable while that hash is inside the 512-slot SlotHashes
+window; if it ages out anyway, reveal refunds the request.
+Remaining, by design: the oracle can still decline to reveal (request refunds),
+and it can grind as an ordinary user with its own wallet and seeds.
+**Deploy together:** program + oracle + frontend (MintRequest grew 156 -> 164
+bytes). Let in-flight requests settle first (wait > 5 min with the old oracle
+running, and have users claim refunds): legacy 156-byte requests cannot be
+revealed or refunded by the new program.
 
 ---
 

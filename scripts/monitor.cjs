@@ -12,11 +12,18 @@ const MACHINE_PDA     = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvo
 const ORACLE_PUBKEY   = new PublicKey("53fTZRZmMMbgWLxkLMtxgECNXcd1iXbVw8aNKrT7RxKy");
 const RPC             = "https://rpc.testnet.x1.xyz";
 
-const MINT_TIMEOUT    = 300; // 5 min
+const MINT_TIMEOUT    = 150; // must match lib.rs MINT_TIMEOUT (was 300 before the fair-seed change)
 const CHECK_INTERVAL  = 30_000;  // check every 30 seconds
 const LOW_BALANCE_XNT = 0.5;     // alert if oracle wallet below this
 
-const MINT_REQUEST_SIZE = 8 + 32 + 32 + 32 + 1 + 1 + 8 + 8 + 1 + 1 + 32; // 156 bytes
+// Current MintRequest appended request_slot (u64) to the legacy 156-byte layout. Every field
+// this file reads sits before offset 156, so both sizes parse identically.
+const MINT_REQUEST_SIZES = [8 + 32 + 32 + 32 + 1 + 1 + 8 + 8 + 1 + 1 + 32 + 8 /* 164 */, 156 /* legacy */];
+async function getMintRequests() {
+  const lists = await Promise.all(MINT_REQUEST_SIZES.map(size =>
+    connection.getProgramAccounts(PROGRAM_ID, { filters: [{ dataSize: size }] })));
+  return lists.flat();
+}
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
@@ -105,9 +112,7 @@ async function monitorOracleProcess() {
 
 async function monitorPendingRequests() {
   try {
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [{ dataSize: MINT_REQUEST_SIZE }],
-    });
+    const accounts = await getMintRequests();
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -205,9 +210,7 @@ async function handleCommand(command) {
     // Check pending requests
     let pendingCount = 0;
     try {
-      const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: MINT_REQUEST_SIZE }],
-      });
+      const accounts = await getMintRequests();
       const now = Math.floor(Date.now() / 1000);
       for (const { account } of accounts) {
         const fulfilled = account.data[8 + 32 + 32 + 32 + 1 + 1 + 8 + 8] === 1;

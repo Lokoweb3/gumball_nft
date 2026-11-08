@@ -120,6 +120,7 @@ async function main() {
       { pubkey: ASSOC_PID,               isSigner: false, isWritable: false }, // associated_token_program
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
       { pubkey: SYSVAR_RENT_PUBKEY,      isSigner: false, isWritable: false }, // rent
+      { pubkey: PublicKey.findProgramAddressSync([Buffer.from("lp_mint_config")], PROGRAM_ID)[0], isSigner: false, isWritable: false }, // lp_mint_config
     ],
     data: stakeData,
   });

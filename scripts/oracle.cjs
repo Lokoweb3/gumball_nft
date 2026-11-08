@@ -37,7 +37,11 @@ const RPC_URLS    = (process.env.RPC_URLS || RPC).split(",").map(s => s.trim()).
 // while PM2 still reports the process online (catches "alive but wedged").
 const HEARTBEAT_FILE = require("path").join(__dirname, "..", "logs", "oracle-heartbeat.json");
 const POLL_MS     = 2000;
-const MAX_AGE_S   = 270; // slightly less than MINT_TIMEOUT (300s)
+const MAX_AGE_S   = 130; // slightly less than MINT_TIMEOUT (150s in lib.rs)
+const REVEAL_DELAY_SLOTS = 2; // must match lib.rs: seed slot = first slot > request_slot + this
+// MintRequest sizes. The current layout appended request_slot (u64) to the old 156-byte one.
+const MINT_REQUEST_LEN        = 8 + 32 + 32 + 32 + 1 + 1 + 8 + 8 + 1 + 1 + 32 + 8; // 164
+const MINT_REQUEST_LEN_LEGACY = 156; // pre-fair-seed accounts: program can no longer decode them
 
 const TOKEN_PROGRAM_ID            = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -219,9 +223,11 @@ async function submitCommitment(connection, secret) {
 // 8  requested_at
 // 1  fulfilled
 // 1  bump
+// 32 user_seed
+// 8  request_slot   (appended; 164 bytes total. Legacy 156-byte accounts lack it)
 
 function parseMintRequest(data) {
-  if (data.length < 156) return null; // 8+32+32+32+1+1+8+8+1+1+32 = 156
+  if (data.length < MINT_REQUEST_LEN) return null; // legacy 156-byte accounts: not revealable
   const dv = new DataView(data.buffer, data.byteOffset);
   return {
     minter:             new PublicKey(data.slice(8, 40)),
@@ -234,14 +240,14 @@ function parseMintRequest(data) {
     fulfilled:          data[122] === 1,
     bump:               data[123],
     userSeed:           data.slice(124, 156),
+    requestSlot:        Number(dv.getBigUint64(156, true)),
   };
 }
 
 async function findPendingRequests(connection, commitPda) {
-  // MintRequest size is 156 bytes: 8+32+32+32+1+1+8+8+1+1+32
   const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
     filters: [
-      { dataSize: 156 }, // FIXED: was 157, actual size is 156
+      { dataSize: MINT_REQUEST_LEN },
       { memcmp: { offset: 72, bytes: commitPda.toBase58() } },
     ],
   });
@@ -263,7 +269,7 @@ async function findPendingRequests(connection, commitPda) {
 // Find ALL pending requests across ALL commitments (used on startup)
 async function findAllPendingRequests(connection) {
   const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-    filters: [{ dataSize: 156 }],
+    filters: [{ dataSize: MINT_REQUEST_LEN }],
   });
 
   const now = Math.floor(Date.now() / 1000);
@@ -282,7 +288,21 @@ async function findAllPendingRequests(connection) {
 
 // ── STEP 3: REVEAL AND MINT ───────────────────────────────────────────────────
 
+// Seed slot is fixed by the request (see lib.rs lookup_fixed_slot_hash): the hash of the first
+// slot > request_slot + REVEAL_DELAY_SLOTS. The reveal tx executes at a slot >= (current + 1) and
+// needs that hash to already be in SlotHashes, so wait until current >= request_slot + DELAY + 2,
+// then reveal at once. Outcome does not depend on when we reveal, so there is nothing to gain by waiting longer.
+async function waitForSeedSlot(connection, request) {
+  const ready = request.requestSlot + REVEAL_DELAY_SLOTS + 2;
+  for (;;) {
+    const cur = await connection.getSlot("confirmed");
+    if (cur >= ready) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
 async function revealAndMint(connection, mintRequestPubkey, request, commitPda, commitSlot, secret) {
+  await waitForSeedSlot(connection, request);
   console.log(`\nRevealing for request ${mintRequestPubkey.toBase58().slice(0, 8)}...`);
   console.log(`  Minter:   ${request.minter.toBase58().slice(0, 8)}`);
   console.log(`  Quantity: ${request.quantity}`);
@@ -388,6 +408,12 @@ async function main() {
   // On startup: check for any pending requests from previous oracle sessions
   console.log("Scanning for any pending requests from previous sessions...");
   try {
+    const legacy = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: MINT_REQUEST_LEN_LEGACY }], dataSlice: { offset: 0, length: 0 },
+    });
+    if (legacy.length > 0) {
+      console.log(`⚠️  ${legacy.length} legacy 156-byte MintRequest account(s) exist; the upgraded program cannot reveal or refund them.`);
+    }
     const oldPending = await findAllPendingRequests(connection);
     if (oldPending.length > 0) {
       console.log(`Found ${oldPending.length} pending request(s) from previous sessions!`);

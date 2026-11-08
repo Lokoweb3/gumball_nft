@@ -410,6 +410,7 @@ async function testLpStakeFlow() {
       { pubkey: ASSOC_PID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: PublicKey.findProgramAddressSync([Buffer.from("lp_mint_config")], PROGRAM_ID)[0], isSigner: false, isWritable: false }, // lp_mint_config
     ],
     data: stakeData,
   });

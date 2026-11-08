@@ -18,10 +18,17 @@ RPC_URL=http://127.0.0.1:8899
 ATTACK_DIR=$(mktemp -d)
 FIXTURES="$FIXTURES" OUT_DIR="$ATTACK_DIR" node scripts/make-staking-attack-fixtures.cjs
 
+# The fair-seed suite reveals mints, so it needs the Machine's oracle to be a key we hold.
+# Use a COPY of the machine fixture patched to a throwaway oracle (shared fixtures untouched).
+FAIR_DIR=ci-fairseed-fixtures
+rm -rf "$FAIR_DIR"
+node scripts/make-fairseed-fixtures.cjs "$FIXTURES" "$FAIR_DIR"
+
 # Account fixtures are the JSONs with a .pubkey field (skips treasury-keypair.json)
 ARGS=()
 for f in "$FIXTURES"/*.json; do
   [ -f "$ATTACK_DIR/$(basename "$f")" ] && continue
+  [ "$(basename "$f")" = machine.json ] && f="$FAIR_DIR/machine.json"
   PK=$(node -pe "require('./$f').pubkey ?? ''" 2>/dev/null || true)
   [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
 done
@@ -44,7 +51,7 @@ dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
-trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR"' EXIT
+trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR" "$FAIR_DIR"' EXIT
 
 # start_validator [extra args...]; $FRESH=1 resets the ledger and loads the program
 start_validator() {
@@ -83,6 +90,12 @@ if ! ATTACK_INFO="$ATTACK_DIR/attack-info.json" RPC="$RPC_URL" NFT_MINT="$NFT_MI
   exit 1
 fi
 
+# Fair-seed mints: seed slot fixed at request time (see DEPLOY.md 0.5). ~3 min: includes the 150 s timeout refund.
+if ! RPC="$RPC_URL" ORACLE_KEYPAIR="$FAIR_DIR/oracle.json" node scripts/validate-fairseed-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
 # Auctions, phase 1 (live): create_auction guards, dust-bid outbid, escrow, refund.
 AUCTION_STATE=$(pwd)/ci-auction-state.json
 FIXTURE_DIR=$(pwd)/ci-auction-fixtures
@@ -116,3 +129,4 @@ if ! RPC="$RPC_URL" TREASURY="$TREASURY" node scripts/validate-init-gate-localne
   dump_log
   exit 1
 fi
+
