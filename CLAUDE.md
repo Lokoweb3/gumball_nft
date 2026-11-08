@@ -368,6 +368,10 @@ Each entry documents what changed, which files were affected, and why the change
 
 ---
 
+### [2026-11-08] close_burned now exists (branch `security-fixes`, 149abd8; NOT deployed)
+
+The correction further down that says recovering burn rent "would be a program change" is now done: the permissionless `close_burned` instruction (`instructions/burn.rs`) closes a burned ball's `GumballData` + `GumballSvg` and sends all their lamports to `machine.treasury`; `scripts/close-burned.cjs` sweeps them. Burns themselves still move no lamports.
+
 ### [2026-11-08] Round 2: module split, IDL check, frontend RPC and caching (branch `security-fixes`, 4cc2653..9164f1e; NOT deployed)
 
 **Files:** `programs/gumball_nft/src/*` (split), `scripts/check-idl.sh`, `scripts/lib/idl-canon.cjs`,

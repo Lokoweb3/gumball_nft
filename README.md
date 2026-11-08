@@ -117,7 +117,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burned gumballs' `GumballData` and `GumballSvg` accounts stay on chain with a zeroed owner; their rent is **not** reclaimable (burns move no lamports, and the `reclaim_burned` instruction and the reclaim UI are gone). The frontend's zombie-PDA scan and dead reclaim button were removed (2026-11-08).
+Burned gumballs' `GumballData` and `GumballSvg` accounts stay on chain with a zeroed owner. The burn itself moves no lamports, and the old `reclaim_burned` instruction and reclaim UI are gone. The rent is recovered only by the permissionless `close_burned`, which closes one burned ball's two accounts and sends **all** their lamports to `machine.treasury` (never to the caller or the burner, so minting-and-burning cannot be farmed for rent). It requires the mint supply to be 0, a mint authority of the program's `machine_authority` PDA, and a zeroed owner in `GumballData`. Sweep them in bulk with `scripts/close-burned.cjs` (see Admin and ops scripts).
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -216,6 +216,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `refund_legacy_mint` | Anyone | Refund a pre-fair-seed 156-byte MintRequest after the timeout; lamports always go to the stored minter |
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
+| `close_burned` | Anyone | Close one burned ball's `GumballData` + `GumballSvg`; all rent goes to `machine.treasury` |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
 | `list_gumball` | User | List NFT for sale at fixed price (escrowed) |
 | `delist_gumball` | Seller | Cancel listing, NFT returned |
@@ -280,7 +281,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | L3 | Auction `start_price` below rent-exempt minimum froze outbid refunds | `create_auction` requires `start_price >= rent-exempt minimum (0-byte account)` |
 | - | 156-byte MintRequests stranded by the layout change | `refund_legacy_mint` + `scripts/refund-legacy-mints.cjs` |
 
-Residual: the oracle can still withhold a reveal for a request it dislikes (selective abort); the user is refunded after 150 s. Pre-deploy steps are in DEPLOY.md.
+Residual: the oracle can still withhold a reveal for a request it dislikes (selective abort); the user is refunded after 150 s. The deploy order is in DEPLOY.md section 0.6.
 
 ### Phase 2 staking / XNT fee-sharing audit (2026)
 
@@ -375,10 +376,7 @@ Load env before starting: `export $(cat .env | xargs) && pm2 start ecosystem.con
 anchor build
 anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet ~/.config/solana/id.json
 
-# Initialize machine (first time only; signer = upgrade authority). Preview, then --live
-node scripts/admin.cjs --cluster testnet init-machine <TREASURY>
-node scripts/set-oracle.cjs --cluster testnet --oracle <ORACLE_PUBKEY>
-node scripts/admin.cjs --cluster testnet set-active true
+# Initialize machine (first time only; signer = upgrade authority): see Admin and ops scripts below
 # (scripts/initialize.cjs, incl. --migrate, is retired; migrate_machine has no client yet)
 
 # Staking setup — REQUIRED before any stake/unstake on a fresh Program ID
@@ -390,18 +388,31 @@ node scripts/init-xnt-fees.cjs
 node scripts/sweep-xnt-pool.cjs [nft|lp]
 ```
 
+### Admin and ops scripts
+
+Deploy order for the pending security batch: **DEPLOY.md section 0.6** (not repeated here). Every script below that sends transactions previews by default (checks and simulation, nothing sent) and sends only with `--live`; `measure-mint-cost.cjs` is read-only and never sends. Except `refund-legacy-mints.cjs`, each requires `--cluster testnet|mainnet` and refuses an RPC whose genesis hash does not match. `refund-legacy-mints.cjs` has **no genesis check**: confirm the `RPC` value yourself before `--live`. Keys come from the `WALLET` env var, else `~/.config/solana/id.json`.
+
+| Script | Does |
+|---|---|
+| `scripts/admin.cjs` | `init-machine <TREASURY>` (signer = upgrade authority), `set-active true\|false`, `set-lp-mint <LP_MINT>` (classic SPL mint) |
+| `scripts/set-oracle.cjs` | Rotate the oracle (`--oracle <PUBKEY>`); `--live` is refused while requests are pending unless `--force-pending` |
+| `scripts/refund-legacy-mints.cjs` | Refund pre-upgrade 156-byte MintRequests via `refund_legacy_mint`; takes no `--cluster` (RPC defaults to testnet, override with `RPC`) |
+| `scripts/close-burned.cjs` | List burned balls and the reclaimable rent, then `close_burned` them in batches (`--batch`, default 8; `--limit`); the signer only pays fees |
+| `scripts/measure-mint-cost.cjs` | Read-only per-mint cost report (no key loaded); see Supply and Economics |
+
 ### Tests and toolchain
 
 ```bash
-cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit tests (11 passed on 2026-11-08, security-fixes HEAD)
+cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit tests (11 passed, re-run 2026-11-08 at 149abd8)
+bash scripts/check-idl.sh                                    # IDL vs tests/idl.golden.json (--update only for an intended interface change)
 npm run test:marketplace                                     # marketplace + auctions (LiteSVM)
 OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
 FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # all validator suites below
 ```
 
-`scripts/ci-e2e.sh` runs, against one `solana-test-validator` (program loaded as upgradeable): `validate-staking-localnet.cjs` (staking, XNT fees, B1-B3 attacks), `validate-fairseed-localnet.cjs` (S1/S3), `validate-legacy-refund-localnet.cjs` (`refund_legacy_mint`), `validate-auction-localnet.cjs` (auctions incl. L3) and `validate-init-gate-localnet.cjs` (S2). Per-suite check counts from the lead's run and an independent fresh-clone run, 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
+`scripts/ci-e2e.sh` runs, against one `solana-test-validator` (program loaded as upgradeable): `validate-staking-localnet.cjs` (staking, XNT fees, B1-B3 attacks), `validate-fairseed-localnet.cjs` (S1/S3), `validate-legacy-refund-localnet.cjs` (`refund_legacy_mint`), `validate-close-burned-localnet.cjs` (`close_burned`), `validate-auction-localnet.cjs` (auctions incl. L3) and `validate-init-gate-localnet.cjs` (S2). Per-suite check counts (staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8) are from the lead's run and an independent fresh-clone run on 2026-11-08; close-burned 45 is the figure recorded in DEPLOY.md. They are not re-run in this README pass.
 
-Toolchain: use the **3.1 Solana tools** for the test build and runs; LiteSVM 0.7 cannot load binaries built with the 4.3 tools (owner-reported, not re-checked in this pass).
+Toolchain: the Solana **3.1 tools** are needed to build the program and run the validator suites (`ci-e2e.sh` needs `target/deploy/gumball_nft.so`); `cargo test` and `check-idl.sh` are host-side Rust. Use the 3.1 tools for the test build; LiteSVM 0.7 cannot load binaries built with the 4.3 tools (owner-reported, not re-checked in this pass).
 
 ### Local validation (before deploying staking changes)
 
@@ -468,9 +479,13 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 ## Supply and Economics
 
 - Total supply: 10,000 hard cap enforced on-chain
-- Treasury: all mint + upgrade fee proceeds sent to treasury wallet, withdrawable by admin
-- Burns: reduce circulating supply; total_burned tracked on-chain
+- Treasury: 50% of mint and upgrade-fee proceeds (the rest goes to the NFT and LP XNT pools, see the fee table)
+- Burns: reduce circulating supply; total_burned tracked on-chain. A burn does not return rent; the burned ball's `GumballData` + `GumballSvg` rent reaches the treasury only through `close_burned`
 - Upgrades: consume input tokens + upgrade fee, mint new serial at higher rarity; blocked at max supply
+
+### Per-mint cost to the oracle
+
+The oracle wallet pays the rent for each mint's accounts (OracleCommit, mint, ATA, `GumballData`, `GumballSvg`), while the treasury receives 50% of the mint price. Run `node scripts/measure-mint-cost.cjs --cluster testnet` for the current figures. Last run (2026-11-08, testnet, total_minted 413; rent model, because the public RPC returned no oracle transaction history; fees add about 0.00001 XNT): oracle outlay 0.017943 XNT per mint vs treasury share 0.005307 XNT, break-even price about 0.0359 XNT. None of this rent returns to the oracle: `GumballData` + `GumballSvg` rent reaches the **treasury** only when a burned ball is closed with `close_burned`; the mint account can never be closed, the ATA can be closed only by its holder, and OracleCommit rent is never returned by the current program.
 
 ### Dynamic Mint Pricing
 
@@ -560,6 +575,8 @@ For debugging `custom program error: 0x...` — code = 6000 + index (hex 0x1770 
 | 6026 | AmountBelowMin |
 | 6027 | InvalidLpMint |
 | 6028 | SeedSlotNotReached |
+| 6029 | NotBurned |
+| 6030 | NotGumballMint |
 
 New variants are only ever appended (codes never shift). `scripts/lib/gumball-errors.cjs` derives codes from the enum for tests.
 
@@ -567,7 +584,7 @@ New variants are only ever appended (codes never shift). `scripts/lib/gumball-er
 
 Emitted via Anchor `emit!` (base64 in `Program data:` logs; discriminator = `sha256("event:<Name>")[0..8]`) — this is what `scripts/announcer.cjs` and any indexer consume:
 
-`MachineInitializedEvent` `OracleUpdatedEvent` `CommitmentSubmittedEvent` `MintRequestedEvent` `MintSeedEvent` `MintRefundedEvent` `GumballMintedEvent` `GumballUpgradedEvent` `GumballListedEvent` `GumballDelistedEvent` `GumballSoldEvent` `OfferMadeEvent` `OfferCancelledEvent` `NftStakedEvent` `NftUnstakedEvent` `RewardsClaimedEvent` `LpStakedEvent` `LpUnstakedEvent` `LpRewardsClaimedEvent` `XntFeeClaimedEvent` `XntFeeDistributedEvent`
+`MachineInitializedEvent` `OracleUpdatedEvent` `CommitmentSubmittedEvent` `MintRequestedEvent` `MintSeedEvent` `MintRefundedEvent` `GumballMintedEvent` `GumballUpgradedEvent` `BurnedClosedEvent` `GumballListedEvent` `GumballDelistedEvent` `GumballSoldEvent` `OfferMadeEvent` `OfferCancelledEvent` `AuctionCreatedEvent` `AuctionBidEvent` `CosmeticsRerolledEvent` `NftStakedEvent` `NftUnstakedEvent` `RewardsClaimedEvent` `LpStakedEvent` `LpUnstakedEvent` `LpRewardsClaimedEvent` `XntFeeClaimedEvent` `XntFeeDistributedEvent`
 
 ---
 
@@ -617,6 +634,22 @@ Live URL: `https://gumballnft-production.up.railway.app`
 
 ---
 
+## Project structure
+
+```
+programs/gumball_nft/src/
+  lib.rs            declare_id!, module declarations, #[program] wrappers
+  instructions/     handlers + account structs: admin, mint, burn, market, auction, staking, lp, xnt, metadata
+  state/            account structs (machine, mint, gumball, market, auction, staking, xnt, season, lp_mint_config)
+  constants.rs errors.rs events.rs pricing.rs randomness.rs svg.rs accumulators.rs
+scripts/            oracle, monitor, admin/ops scripts, localnet fixtures + validate-*-localnet suites, ci-e2e.sh, check-idl.sh
+public/             frontend (js/css, shared RPC helpers in public/js/gumball-rpc.js)
+tests/              idl.golden.json, cu-baseline.txt
+server.cjs          Express server (frontend, oracle, monitor, faucet API)
+```
+
+---
+
 ## Files
 
 | File | Purpose |
@@ -632,11 +665,16 @@ Live URL: `https://gumballnft-production.up.railway.app`
 | `scripts/announcer.cjs` | Public Telegram channel bot (mints, upgrades, sales) |
 | `scripts/initialize.cjs` | RETIRED (2026-11-08); use `scripts/admin.cjs` |
 | `scripts/admin.cjs` | init-machine / set-active / set-lp-mint, preview by default, genesis-checked |
+| `scripts/set-oracle.cjs` | Oracle rotation, preview by default |
+| `scripts/refund-legacy-mints.cjs` | Refund pre-upgrade 156-byte MintRequests |
+| `scripts/close-burned.cjs` | Sweep burned balls' rent to the treasury via `close_burned` |
+| `scripts/measure-mint-cost.cjs` | Read-only oracle cost vs treasury share per mint |
+| `scripts/ci-e2e.sh` | Runs all validator suites against one local validator |
 | `scripts/init-staking.cjs` | Staking init (stake config + GUM reward vaults) |
 | `scripts/init-xnt-fees.cjs` | XNT fee-sharing init (pools + accumulator state) |
 | `scripts/sweep-xnt-pool.cjs` | Admin sweep of unattributed XNT pool lamports |
 | `scripts/make-localnet-fixtures.cjs` | Clone live state into local-validator fixtures |
-| `scripts/validate-staking-localnet.cjs` | 21-check end-to-end staking/fee validation suite |
+| `scripts/validate-staking-localnet.cjs` | End-to-end staking/fee validation suite (one of the suites `ci-e2e.sh` runs) |
 | `server.cjs` | Express server for Railway (frontend + oracle + monitor + faucet API) |
 | `landing.html` | Project homepage with live mint counter |
 | `index.html` | Main frontend (mint + collection + burns) |
