@@ -239,7 +239,18 @@ No migration needed unless Machine struct changed.
 
 | File | Purpose |
 |---|---|
-| `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
+| `programs/gumball_nft/src/lib.rs` | `declare_id!`, module declarations, root `pub use` re-exports, and the `#[program]` mod: thin wrappers (with the `///` docs the IDL needs) that call the handlers in `instructions/` |
+| `programs/gumball_nft/src/constants.rs` | All constants (limits, fee splits, lock tiers, trait name tables) |
+| `programs/gumball_nft/src/errors.rs` | `GumballError` (variant order = error code; `scripts/lib/gumball-errors.cjs` reads this file) |
+| `programs/gumball_nft/src/events.rs` | All `#[event]` structs |
+| `programs/gumball_nft/src/state/` | `#[account]` structs: `machine`, `mint` (OracleCommit, MintRequest), `gumball` (GumballData, GumballSvg), `market` (Listing, Offer), `auction`, `staking` (StakeConfig, StakeAccount, LpStakeAccount), `lp_mint_config`, `xnt` (XntPool, XntFeeState, XntDebt), `season` |
+| `programs/gumball_nft/src/instructions/` | Handler bodies + `#[derive(Accounts)]` structs by domain: `admin`, `mint`, `burn` (burns + reroll), `market` (list/buy/offers/update_owner), `auction`, `staking`, `lp`, `xnt`, `metadata` |
+| `programs/gumball_nft/src/svg.rs` | `generate_svg` |
+| `programs/gumball_nft/src/pricing.rs` | `get_mint_price` curve, `stake_weight` |
+| `programs/gumball_nft/src/randomness.rs` | SlotHashes lookup, trait resolution, season remap |
+| `programs/gumball_nft/src/accumulators.rs` | NFT / LP / XNT reward accumulators and fee-settlement helpers |
+| `scripts/check-idl.sh` | Rebuilds the IDL (`cargo test --features idl-build`) and diffs it against `tests/idl.golden.json`; `--update` regenerates. Run after any program change that should not alter the interface |
+| `tests/cu-baseline.txt` | Compute units per marketplace instruction at the pre-split base |
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
 | `scripts/initialize.cjs` | RETIRED (2026-11-08); use `scripts/admin.cjs` |

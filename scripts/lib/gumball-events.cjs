@@ -3,7 +3,7 @@
 //
 // Anchor `emit!` writes events as "Program data: <base64>" log lines:
 //   [8-byte discriminator = sha256("event:<Name>")[0..8]] [borsh fields]
-// Field layouts mirror the #[event] structs in programs/gumball_nft/src/lib.rs.
+// Field layouts mirror the #[event] structs in programs/gumball_nft/src/events.rs.
 
 const { PublicKey } = require("@solana/web3.js");
 const crypto = require("crypto");

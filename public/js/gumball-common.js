@@ -5,7 +5,7 @@
 //
 // Everything here is top-level `const`/`function` on purpose (same scope the
 // pages used before extraction) — a page must NOT re-declare any of these.
-// Trait arrays mirror programs/gumball_nft/src/lib.rs — if the contract
+// Trait arrays mirror programs/gumball_nft/src/constants.rs — if the contract
 // changes, this is now the ONLY frontend copy to update.
 
 const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram, LAMPORTS_PER_SOL } = solanaWeb3;

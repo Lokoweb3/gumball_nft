@@ -60,7 +60,7 @@ const stakerGumAta = ata(GUM_MINT, wallet.publicKey);
 const lpRewardVault = pda([Buffer.from("lp_reward_vault")]);
 const lpMintConfig  = pda([Buffer.from("lp_mint_config")]);
 const METAPLEX_PID  = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-// Anchor custom error codes are 6000 + enum index, read from lib.rs (scripts/lib/gumball-errors.cjs).
+// Anchor custom error codes are 6000 + enum index, read from errors.rs (scripts/lib/gumball-errors.cjs).
 const { errHex } = require("./lib/gumball-errors.cjs");
 const ERR_INVALID_LP_MINT = errHex("InvalidLpMint");
 const ERR_INVALID_ACCOUNT = errHex("InvalidAccount");

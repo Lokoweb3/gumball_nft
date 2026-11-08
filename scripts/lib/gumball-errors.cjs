@@ -1,10 +1,10 @@
 // Anchor custom error codes are 6000 + the variant's index in GumballError.
-// Read the index from lib.rs so adding or moving a variant can't leave a test
+// Read the index from errors.rs so adding or moving a variant can't leave a test
 // asserting a stale number.
 const fs = require("fs");
 const path = require("path");
 
-const SRC = path.join(__dirname, "..", "..", "programs", "gumball_nft", "src", "lib.rs");
+const SRC = path.join(__dirname, "..", "..", "programs", "gumball_nft", "src", "errors.rs");
 
 function errorNames() {
   const src = fs.readFileSync(SRC, "utf8");
