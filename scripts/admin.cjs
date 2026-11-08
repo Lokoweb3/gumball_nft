@@ -75,7 +75,9 @@ async function build(conn) {
     const authority = new PublicKey(sc.data.subarray(8, 40)); // StakeConfig: authority is the first field
     if (!authority.equals(signer.publicKey)) fail(`signer is not stake_config.authority ${authority.toBase58()}`);
     const mintInfo = await conn.getAccountInfo(lpMint);
-    if (!mintInfo || mintInfo.data.length < 82) fail(`${lpMint.toBase58()} is not a token mint on this cluster`);
+    // stake_lp uses classic SPL Token: require a Tokenkeg-owned account of exactly mint size
+    if (!mintInfo || !mintInfo.owner.equals(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")) || mintInfo.data.length !== 82)
+      fail(`${lpMint.toBase58()} is not a classic SPL token mint on this cluster`);
     const cur = await conn.getAccountInfo(lpMintConfig);
     console.log(`lp_mint_config ${lpMintConfig.toBase58()}: ${cur ? "currently " + new PublicKey(cur.data.subarray(8, 40)).toBase58() : "not created yet"}`);
     return {

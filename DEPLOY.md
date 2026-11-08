@@ -99,19 +99,22 @@ ordinary user with its own wallet and seeds.
 Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_ID>`).
 
 - [ ] **(a) Drain requests.** `node scripts/admin.cjs --cluster <testnet|mainnet> set-active false` (preview, then
-      `--live`; signer = machine authority), then wait out
-      the timeout (> 150 s; allow 5 min). Confirm there are **0 unfulfilled MintRequests of either
-      size (164 and 156 bytes)**. Run `RPC=<RPC> node scripts/refund-legacy-mints.cjs` (preview, sends
-      nothing) and refund anything it lists. Refund order: before (c), the OLD program's `refund_mint`
-      handles 156-byte requests (the minter, or anyone building the tx, calls it); `refund-legacy-mints.cjs --live`
-      sends `refund_legacy_mint`, which exists only in the NEW program, so it is the tool for any
-      156-byte request still outstanding AFTER (c). 164-byte requests are refunded with `refund_mint`.
+      `--live`; signer = machine authority). Then wait **more than 300 s (allow 6 min)**: until (c) the
+      deployed program is the OLD one, whose `MINT_TIMEOUT` is 300 s (strict `>`); the new 150 s applies
+      only after (c). The old oracle keeps revealing while you wait, so most requests simply complete.
+      Primary path — no old-program refunds needed: anything still unfulfilled is a 156-byte request;
+      after (c), refund each with `RPC=<RPC> node scripts/refund-legacy-mints.cjs` (preview) then `--live`
+      (sends the NEW program's `refund_legacy_mint`; anyone may send it, funds go to the stored minter).
+      Step (e) refuses to resume minting while any 156-byte request is unrefunded, so this can't be skipped.
+      164-byte requests only exist after (c); those are refunded with `refund_mint` after 150 s.
       Have a non-oracle party do the refunds; do not wait for the oracle operator.
 - [ ] **(b) Scan LP stakes.** Every `lp_stake_v2` account must use the real LP mint (GUM/XNT LP
       `D2bJsDoWVuvykQbMgwFeH7cvuvXZjL2scsjPMVGwNXiV` on testnet; on 2026-11-08 all 14 testnet accounts use it,
       read on chain in this pass). Re-run right before deploy:
       `RPC=<RPC> node -e 'const{Connection,PublicKey}=require("@solana/web3.js");(async()=>{const c=new Connection(process.env.RPC);const a=await c.getProgramAccounts(new PublicKey("<PROGRAM_ID>"),{filters:[{dataSize:140}]});const m={};for(const x of a){const k=new PublicKey(x.account.data.subarray(40,72)).toBase58();m[k]=(m[k]||0)+1}console.log(a.length,m)})()'`
-      (`LpStakeAccount` is 140 bytes with the discriminator, `lp_mint` at offset 40.) Any other mint in the
+      (`LpStakeAccount` is 140 bytes with the discriminator, `lp_mint` at offset 40.) **Mainnet:** write the real
+      mainnet LP mint here before launch; D2bJ… is the testnet value only. `set-lp-mint` cannot tell a real LP
+      mint from any other mint, so the value you pass is the check. Any other mint in the
       output means a position staked with a fake mint: stop and investigate before deploy.
 - [ ] **(c) Deploy program + oracle + frontend together** (MintRequest grew to 164 bytes; the old oracle
       and frontends cannot read it; `stake_lp` callers must pass the new trailing `lp_mint_config`).
