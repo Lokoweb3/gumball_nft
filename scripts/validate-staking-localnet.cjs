@@ -60,8 +60,16 @@ const stakerGumAta = ata(GUM_MINT, wallet.publicKey);
 const lpRewardVault = pda([Buffer.from("lp_reward_vault")]);
 const lpMintConfig  = pda([Buffer.from("lp_mint_config")]);
 const METAPLEX_PID  = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-// Anchor custom error codes are 6000 + enum index; InvalidLpMint is index 27.
-const ERR_INVALID_LP_MINT = "0x" + (6027).toString(16);
+// Anchor custom error codes are 6000 + enum index. Read the index from the
+// GumballError enum in lib.rs so adding another error elsewhere can't break this.
+const ERR_INVALID_LP_MINT = (() => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "programs", "gumball_nft", "src", "lib.rs"), "utf8");
+  const body = src.slice(src.indexOf("pub enum GumballError"));
+  const names = [...body.slice(body.indexOf("{") + 1, body.indexOf("\n}")).matchAll(/(?:^|[\s\]])([A-Z][A-Za-z0-9]*)\s*,/g)].map((m) => m[1]);
+  const idx = names.indexOf("InvalidLpMint");
+  if (idx < 0) throw new Error("InvalidLpMint not found in GumballError");
+  return "0x" + (6000 + idx).toString(16);
+})();
 
 let passed = 0, failed = 0;
 function check(name, cond, detail = "") {
