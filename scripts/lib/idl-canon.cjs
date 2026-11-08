@@ -12,6 +12,19 @@ for (let i = 0; i < lines.length; i++) {
   const json = JSON.parse(body.join('\n'));
   blocks.push({ label: m[1], json });
 }
+// The raw idl-build output names types by module path ("gumball_nft::XntDebt", or
+// "gumball_nft::state::xnt::XntDebt" once code moves into modules); anchor-cli strips the
+// prefix in the final IDL, so do the same or a pure module move would show as a diff.
+const strip = (v) =>
+  typeof v === 'string' ? v.replace(/^(\w+::)+(\w+)$/, '$2')
+  : Array.isArray(v) ? v.map(strip)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, strip(x)]))
+  : v;
+for (const b of blocks) b.json = strip(b.json);
+// accounts/types arrive in module-path order (also path-dependent), so sort them by name.
+for (const b of blocks) for (const k of ['accounts', 'types']) {
+  if (Array.isArray(b.json[k])) b.json[k].sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+}
 const key = (b) => b.label + ':' + (b.json.name || b.json.event || b.json.address || '');
 blocks.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 process.stdout.write(JSON.stringify(blocks, null, 2) + '\n');

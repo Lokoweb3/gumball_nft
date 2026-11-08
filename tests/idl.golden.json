@@ -167,11 +167,11 @@
           156,
           233
         ],
-        "name": "gumball_nft::AuctionBidEvent"
+        "name": "AuctionBidEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::AuctionBidEvent",
+          "name": "AuctionBidEvent",
           "type": {
             "fields": [
               {
@@ -211,11 +211,11 @@
           88,
           99
         ],
-        "name": "gumball_nft::AuctionCreatedEvent"
+        "name": "AuctionCreatedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::AuctionCreatedEvent",
+          "name": "AuctionCreatedEvent",
           "type": {
             "fields": [
               {
@@ -255,11 +255,11 @@
           18,
           14
         ],
-        "name": "gumball_nft::CommitmentSubmittedEvent"
+        "name": "CommitmentSubmittedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::CommitmentSubmittedEvent",
+          "name": "CommitmentSubmittedEvent",
           "type": {
             "fields": [
               {
@@ -296,11 +296,11 @@
           233,
           219
         ],
-        "name": "gumball_nft::CosmeticsRerolledEvent"
+        "name": "CosmeticsRerolledEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::CosmeticsRerolledEvent",
+          "name": "CosmeticsRerolledEvent",
           "type": {
             "fields": [
               {
@@ -344,11 +344,11 @@
           218,
           144
         ],
-        "name": "gumball_nft::GumballDelistedEvent"
+        "name": "GumballDelistedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::GumballDelistedEvent",
+          "name": "GumballDelistedEvent",
           "type": {
             "fields": [
               {
@@ -380,11 +380,11 @@
           79,
           98
         ],
-        "name": "gumball_nft::GumballListedEvent"
+        "name": "GumballListedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::GumballListedEvent",
+          "name": "GumballListedEvent",
           "type": {
             "fields": [
               {
@@ -420,11 +420,11 @@
           197,
           239
         ],
-        "name": "gumball_nft::GumballMintedEvent"
+        "name": "GumballMintedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::GumballMintedEvent",
+          "name": "GumballMintedEvent",
           "type": {
             "fields": [
               {
@@ -480,11 +480,11 @@
           13,
           24
         ],
-        "name": "gumball_nft::GumballSoldEvent"
+        "name": "GumballSoldEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::GumballSoldEvent",
+          "name": "GumballSoldEvent",
           "type": {
             "fields": [
               {
@@ -528,11 +528,11 @@
           70,
           174
         ],
-        "name": "gumball_nft::GumballUpgradedEvent"
+        "name": "GumballUpgradedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::GumballUpgradedEvent",
+          "name": "GumballUpgradedEvent",
           "type": {
             "fields": [
               {
@@ -592,11 +592,11 @@
           48,
           243
         ],
-        "name": "gumball_nft::LpRewardsClaimedEvent"
+        "name": "LpRewardsClaimedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::LpRewardsClaimedEvent",
+          "name": "LpRewardsClaimedEvent",
           "type": {
             "fields": [
               {
@@ -628,11 +628,11 @@
           234,
           89
         ],
-        "name": "gumball_nft::LpStakedEvent"
+        "name": "LpStakedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::LpStakedEvent",
+          "name": "LpStakedEvent",
           "type": {
             "fields": [
               {
@@ -664,11 +664,11 @@
           154,
           159
         ],
-        "name": "gumball_nft::LpUnstakedEvent"
+        "name": "LpUnstakedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::LpUnstakedEvent",
+          "name": "LpUnstakedEvent",
           "type": {
             "fields": [
               {
@@ -704,11 +704,11 @@
           118,
           49
         ],
-        "name": "gumball_nft::MachineInitializedEvent"
+        "name": "MachineInitializedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::MachineInitializedEvent",
+          "name": "MachineInitializedEvent",
           "type": {
             "fields": [
               {
@@ -748,11 +748,11 @@
           193,
           13
         ],
-        "name": "gumball_nft::MintRefundedEvent"
+        "name": "MintRefundedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::MintRefundedEvent",
+          "name": "MintRefundedEvent",
           "type": {
             "fields": [
               {
@@ -784,11 +784,11 @@
           149,
           223
         ],
-        "name": "gumball_nft::MintRequestedEvent"
+        "name": "MintRequestedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::MintRequestedEvent",
+          "name": "MintRequestedEvent",
           "type": {
             "fields": [
               {
@@ -828,11 +828,11 @@
           68,
           15
         ],
-        "name": "gumball_nft::MintSeedEvent"
+        "name": "MintSeedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::MintSeedEvent",
+          "name": "MintSeedEvent",
           "type": {
             "fields": [
               {
@@ -881,11 +881,11 @@
           92,
           24
         ],
-        "name": "gumball_nft::NftStakedEvent"
+        "name": "NftStakedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::NftStakedEvent",
+          "name": "NftStakedEvent",
           "type": {
             "fields": [
               {
@@ -921,11 +921,11 @@
           229,
           10
         ],
-        "name": "gumball_nft::NftUnstakedEvent"
+        "name": "NftUnstakedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::NftUnstakedEvent",
+          "name": "NftUnstakedEvent",
           "type": {
             "fields": [
               {
@@ -961,11 +961,11 @@
           50,
           196
         ],
-        "name": "gumball_nft::OfferCancelledEvent"
+        "name": "OfferCancelledEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::OfferCancelledEvent",
+          "name": "OfferCancelledEvent",
           "type": {
             "fields": [
               {
@@ -997,11 +997,11 @@
           83,
           200
         ],
-        "name": "gumball_nft::OfferMadeEvent"
+        "name": "OfferMadeEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::OfferMadeEvent",
+          "name": "OfferMadeEvent",
           "type": {
             "fields": [
               {
@@ -1037,11 +1037,11 @@
           202,
           190
         ],
-        "name": "gumball_nft::OracleUpdatedEvent"
+        "name": "OracleUpdatedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::OracleUpdatedEvent",
+          "name": "OracleUpdatedEvent",
           "type": {
             "fields": [
               {
@@ -1069,11 +1069,11 @@
           157,
           146
         ],
-        "name": "gumball_nft::RewardsClaimedEvent"
+        "name": "RewardsClaimedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::RewardsClaimedEvent",
+          "name": "RewardsClaimedEvent",
           "type": {
             "fields": [
               {
@@ -1109,11 +1109,11 @@
           208,
           67
         ],
-        "name": "gumball_nft::XntFeeClaimedEvent"
+        "name": "XntFeeClaimedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::XntFeeClaimedEvent",
+          "name": "XntFeeClaimedEvent",
           "type": {
             "fields": [
               {
@@ -1149,11 +1149,11 @@
           59,
           187
         ],
-        "name": "gumball_nft::XntFeeDistributedEvent"
+        "name": "XntFeeDistributedEvent"
       },
       "types": [
         {
-          "name": "gumball_nft::XntFeeDistributedEvent",
+          "name": "XntFeeDistributedEvent",
           "type": {
             "fields": [
               {
@@ -3714,7 +3714,7 @@
       ],
       "accounts": [
         {
-          "name": "gumball_nft::Auction",
+          "name": "Auction",
           "discriminator": [
             218,
             94,
@@ -3727,7 +3727,7 @@
           ]
         },
         {
-          "name": "gumball_nft::GumballData",
+          "name": "GumballData",
           "discriminator": [
             120,
             47,
@@ -3740,7 +3740,7 @@
           ]
         },
         {
-          "name": "gumball_nft::GumballSvg",
+          "name": "GumballSvg",
           "discriminator": [
             221,
             206,
@@ -3753,7 +3753,7 @@
           ]
         },
         {
-          "name": "gumball_nft::Listing",
+          "name": "Listing",
           "discriminator": [
             218,
             32,
@@ -3766,7 +3766,7 @@
           ]
         },
         {
-          "name": "gumball_nft::LpMintConfig",
+          "name": "LpMintConfig",
           "discriminator": [
             151,
             16,
@@ -3779,7 +3779,7 @@
           ]
         },
         {
-          "name": "gumball_nft::LpStakeAccount",
+          "name": "LpStakeAccount",
           "discriminator": [
             76,
             50,
@@ -3792,7 +3792,7 @@
           ]
         },
         {
-          "name": "gumball_nft::Machine",
+          "name": "Machine",
           "discriminator": [
             25,
             102,
@@ -3805,7 +3805,7 @@
           ]
         },
         {
-          "name": "gumball_nft::MintRequest",
+          "name": "MintRequest",
           "discriminator": [
             60,
             88,
@@ -3818,7 +3818,7 @@
           ]
         },
         {
-          "name": "gumball_nft::Offer",
+          "name": "Offer",
           "discriminator": [
             215,
             88,
@@ -3831,7 +3831,7 @@
           ]
         },
         {
-          "name": "gumball_nft::OracleCommit",
+          "name": "OracleCommit",
           "discriminator": [
             48,
             47,
@@ -3844,7 +3844,7 @@
           ]
         },
         {
-          "name": "gumball_nft::SeasonConfig",
+          "name": "SeasonConfig",
           "discriminator": [
             199,
             22,
@@ -3857,7 +3857,7 @@
           ]
         },
         {
-          "name": "gumball_nft::StakeAccount",
+          "name": "StakeAccount",
           "discriminator": [
             80,
             158,
@@ -3870,7 +3870,7 @@
           ]
         },
         {
-          "name": "gumball_nft::StakeConfig",
+          "name": "StakeConfig",
           "discriminator": [
             238,
             151,
@@ -3883,7 +3883,7 @@
           ]
         },
         {
-          "name": "gumball_nft::XntDebt",
+          "name": "XntDebt",
           "discriminator": [
             23,
             223,
@@ -3896,7 +3896,7 @@
           ]
         },
         {
-          "name": "gumball_nft::XntFeeState",
+          "name": "XntFeeState",
           "discriminator": [
             76,
             138,
@@ -3909,7 +3909,7 @@
           ]
         },
         {
-          "name": "gumball_nft::XntPool",
+          "name": "XntPool",
           "discriminator": [
             83,
             36,
@@ -3924,7 +3924,7 @@
       ],
       "types": [
         {
-          "name": "gumball_nft::Auction",
+          "name": "Auction",
           "docs": [
             "English auction — NFT escrowed in the shared listing escrow; the highest",
             "bid escrows as lamports in this PDA (refunded on outbid)."
@@ -3968,7 +3968,7 @@
           }
         },
         {
-          "name": "gumball_nft::GumballData",
+          "name": "GumballData",
           "type": {
             "kind": "struct",
             "fields": [
@@ -4039,7 +4039,7 @@
           }
         },
         {
-          "name": "gumball_nft::GumballSvg",
+          "name": "GumballSvg",
           "docs": [
             "Separate PDA holding the on-chain SVG — not loaded by burn instructions"
           ],
@@ -4054,7 +4054,7 @@
           }
         },
         {
-          "name": "gumball_nft::Listing",
+          "name": "Listing",
           "docs": [
             "Marketplace listing — seller lists NFT at a fixed price"
           ],
@@ -4085,7 +4085,7 @@
           }
         },
         {
-          "name": "gumball_nft::LpMintConfig",
+          "name": "LpMintConfig",
           "docs": [
             "The one LP mint stake_lp accepts. Sibling PDA (seeds [b\"lp_mint_config\"]) so",
             "StakeConfig keeps its layout. Written only by set_lp_mint."
@@ -4105,7 +4105,7 @@
           }
         },
         {
-          "name": "gumball_nft::LpStakeAccount",
+          "name": "LpStakeAccount",
           "type": {
             "kind": "struct",
             "fields": [
@@ -4157,7 +4157,7 @@
           }
         },
         {
-          "name": "gumball_nft::Machine",
+          "name": "Machine",
           "type": {
             "kind": "struct",
             "fields": [
@@ -4201,7 +4201,7 @@
           }
         },
         {
-          "name": "gumball_nft::MintRequest",
+          "name": "MintRequest",
           "docs": [
             "Pending mint request linking user payment to a commitment"
           ],
@@ -4261,7 +4261,7 @@
           }
         },
         {
-          "name": "gumball_nft::Offer",
+          "name": "Offer",
           "docs": [
             "Marketplace offer — buyer bids on an NFT with escrowed XNT"
           ],
@@ -4296,7 +4296,7 @@
           }
         },
         {
-          "name": "gumball_nft::OracleCommit",
+          "name": "OracleCommit",
           "docs": [
             "Stores oracle commitment before randomness is needed — C-2 fix"
           ],
@@ -4336,7 +4336,7 @@
           }
         },
         {
-          "name": "gumball_nft::SeasonConfig",
+          "name": "SeasonConfig",
           "docs": [
             "Seasonal trait window — while ends_at is in the future, new mints draw",
             "flavor/color from [start, start+count) sub-ranges of the trait arrays."
@@ -4381,7 +4381,7 @@
           }
         },
         {
-          "name": "gumball_nft::StakeAccount",
+          "name": "StakeAccount",
           "type": {
             "kind": "struct",
             "fields": [
@@ -4421,7 +4421,7 @@
           }
         },
         {
-          "name": "gumball_nft::StakeConfig",
+          "name": "StakeConfig",
           "type": {
             "kind": "struct",
             "fields": [
@@ -4481,7 +4481,7 @@
           }
         },
         {
-          "name": "gumball_nft::XntDebt",
+          "name": "XntDebt",
           "docs": [
             "Per-position XNT debt — created lazily on first claim_xnt_fees call.",
             "Sibling PDA to the v2 StakeAccount / LpStakeAccount so we don't have to",
@@ -4502,7 +4502,7 @@
           }
         },
         {
-          "name": "gumball_nft::XntFeeState",
+          "name": "XntFeeState",
           "docs": [
             "Accumulator state for one fee-sharing stream (NFT or LP).",
             "`last_seen_balance` lets us know how many new lamports arrived since the",
@@ -4531,7 +4531,7 @@
           }
         },
         {
-          "name": "gumball_nft::XntPool",
+          "name": "XntPool",
           "docs": [
             "Lamport-holding PDA for a fee-sharing pool. Owned by the program.",
             "Two instances:",
