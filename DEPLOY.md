@@ -55,17 +55,17 @@ These are committed to `main` but **not on chain** yet:
 - [ ] marketplace suite guard scenarios report **6025 / 6026** on the fresh build (codes unchanged: new errors were appended, 6027 InvalidLpMint, 6028 SeedSlotNotReached)
 - [ ] Verifiable build hash recorded (Phase 3)
 
-### 0.3 Decide the mainnet economics (all `lib.rs` constants — need a rebuild)
-| constant | testnet value | line | decide |
+### 0.3 Decide the mainnet economics (all in `programs/gumball_nft/src/constants.rs` — need a rebuild)
+| constant | testnet value | constants.rs line | decide |
 |---|---|---|---|
-| `BASE_PRICE` / `MAX_PRICE` | 0.01 → 0.04 XNT | 28–29 | mainnet curve (testnet was set low for the faucet) |
-| `MAX_SUPPLY` | 10 000 | 19 | final |
-| `MAX_PER_TX` | 10 | 20 | final |
-| `MINT_TIMEOUT` | 150 s | 22 | refund window; oracle SLA must beat it |
-| `ROYALTY_BPS` + 50/25/25 split | 5 % | 32, 112–113 | final |
-| `REROLL_COST_GUM` | 25 GUM | 47 | GUM sink price |
-| `EMISSION_BPS_PER_DAY` | 0.3 % | 75 | staking emission |
-| `METADATA_BASE_URI` | Railway URL | 52 | **see 0.4** |
+| `BASE_PRICE` / `MAX_PRICE` | 0.01 → 0.04 XNT | 39–41 | mainnet curve (testnet was set low for the faucet) |
+| `MAX_SUPPLY` | 10 000 | 11 | final |
+| `MAX_PER_TX` | 10 | 13 | final |
+| `MINT_TIMEOUT` | 150 s | 25 | refund window; oracle SLA must beat it |
+| `ROYALTY_BPS` + 50/25/25 split | 5 % | 45, 126–128 | final |
+| `REROLL_COST_GUM` | 25 GUM | 60 | GUM sink price |
+| `EMISSION_BPS_PER_DAY` | 0.3 % | 81 | staking emission |
+| `METADATA_BASE_URI` | Railway URL | 65 | **see 0.4** |
 
 ### 0.4 Metadata URI is a permanent dependency on one host
 `METADATA_BASE_URI` is baked into every NFT's Metaplex metadata and there is
