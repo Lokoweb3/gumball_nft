@@ -1,3 +1,10 @@
+// RETIRED 2026-11-08. This script declared and called main() twice (the second, "FORCE" variant won
+// both calls) and does not pass the program/program_data accounts the gated initialize_machine now
+// requires. Use scripts/admin.cjs (init-machine, set-active, set-lp-mint) and scripts/set-oracle.cjs.
+if (!process.env.I_KNOW_INITIALIZE_IS_RETIRED) {
+  console.error("scripts/initialize.cjs is retired: use scripts/admin.cjs / scripts/set-oracle.cjs (see DEPLOY.md 0.6)");
+  process.exit(1);
+}
 const {
   Connection, PublicKey, Transaction, TransactionInstruction,
   Keypair, sendAndConfirmTransaction, SystemProgram,

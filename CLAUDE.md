@@ -210,7 +210,7 @@ Timeouts: `MINT_TIMEOUT` 150 s (refund window; oracle `MAX_AGE_S` 130 s), `REVEA
 4. Add new `dataSize` filter in frontend alongside existing v5 filter
 5. Update SVG offset parsing if fields added before SVG
 6. Update leaderboard `GD_SIZE` constant
-7. Run `node scripts/initialize.cjs --migrate` if Machine struct changed
+7. If the Machine struct changed, `migrate_machine` needs a client: `scripts/initialize.cjs` is retired and `admin.cjs` has no migrate command yet
 8. For clean slate: deploy new Program ID + `reset_counts` or fresh `initialize_machine`
 
 ### Deploying contract changes
@@ -242,7 +242,8 @@ No migration needed unless Machine struct changed.
 | `programs/gumball_nft/src/lib.rs` | Anchor smart contract (mint, burn, marketplace) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (Node.js, encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring bot + remote commands |
-| `scripts/initialize.cjs` | Machine init / migration script |
+| `scripts/initialize.cjs` | RETIRED (2026-11-08); use `scripts/admin.cjs` |
+| `scripts/admin.cjs` | init-machine / set-active / set-lp-mint, preview by default, genesis-checked |
 | `scripts/validate-marketplace-litesvm.cjs` | Marketplace + auction suite (LiteSVM, in-process, no validator) |
 | `scripts/validate-staking-localnet.cjs` | Staking + XNT fee suite (needs solana-test-validator) |
 | `scripts/validate-auction-localnet.cjs` | Auction suite (validator; LiteSVM crashes on bids). Settle runs on a pre-ended auction fixture |
@@ -314,7 +315,7 @@ anchor build
 anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet ~/.config/solana/id.json
 
 # Migrate machine (after Machine struct changes only)
-node scripts/initialize.cjs --migrate
+# migrate_machine: no client yet (scripts/initialize.cjs is retired)
 
 # Tests
 cargo test --manifest-path programs/gumball_nft/Cargo.toml   # unit (incl. generate_svg golden)
@@ -325,7 +326,7 @@ node scripts/refund-legacy-mints.cjs                         # preview stranded 
 node scripts/set-oracle.cjs --cluster <testnet|mainnet> --oracle <PUBKEY>   # preview; --live sends
 ```
 
-Toolchain: use the 3.1 Solana tools for the test build; LiteSVM 0.7 cannot load 4.3-built binaries (owner-reported, not re-checked 2026-11-08). `cargo test` = 11 passed (run 2026-11-08). Owner-reported validator-suite counts, UNVERIFIED as of 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
+Toolchain: use the 3.1 Solana tools for the test build; LiteSVM 0.7 cannot load 4.3-built binaries (seen 2026-11-08: addProgramFromFile fails with "invalid account data" on a 4.3 build). `cargo test` = 11 passed (run 2026-11-08). Validator-suite counts (lead run + independent fresh-clone run, 2026-11-08): staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
 
 ### Testing notes
 
@@ -368,8 +369,8 @@ recomputes); L3 `create_auction` start_price >= rent-exempt minimum; new `refund
 
 **Why:** independent audit findings S1-S3, B1-B3, L3. Remaining by design: the oracle can withhold a
 reveal (selective abort); users are refunded after 150 s. Deploy order and the pre-deploy checks are in
-DEPLOY.md 0.5-0.6. `scripts/initialize.cjs` still sends 3 accounts and will fail against the gated
-`initialize_machine` (open item).
+DEPLOY.md 0.5-0.6. Admin steps: `scripts/admin.cjs` (init-machine, set-active, set-lp-mint) and
+`scripts/set-oracle.cjs`; `scripts/initialize.cjs` is retired (it exits unless I_KNOW_INITIALIZE_IS_RETIRED is set).
 
 ---
 

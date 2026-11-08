@@ -375,11 +375,11 @@ Load env before starting: `export $(cat .env | xargs) && pm2 start ecosystem.con
 anchor build
 anchor deploy --provider.cluster https://rpc.testnet.x1.xyz --provider.wallet ~/.config/solana/id.json
 
-# Initialize machine (first time only)
-node scripts/initialize.cjs
-
-# Migrate machine account (after Machine struct changes)
-node scripts/initialize.cjs --migrate
+# Initialize machine (first time only; signer = upgrade authority). Preview, then --live
+node scripts/admin.cjs --cluster testnet init-machine <TREASURY>
+node scripts/set-oracle.cjs --cluster testnet --oracle <ORACLE_PUBKEY>
+node scripts/admin.cjs --cluster testnet set-active true
+# (scripts/initialize.cjs, incl. --migrate, is retired; migrate_machine has no client yet)
 
 # Staking setup — REQUIRED before any stake/unstake on a fresh Program ID
 # (all four staking instructions require the XNT fee PDAs to exist)
@@ -399,7 +399,7 @@ OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
 FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh            # all validator suites below
 ```
 
-`scripts/ci-e2e.sh` runs, against one `solana-test-validator` (program loaded as upgradeable): `validate-staking-localnet.cjs` (staking, XNT fees, B1-B3 attacks), `validate-fairseed-localnet.cjs` (S1/S3), `validate-legacy-refund-localnet.cjs` (`refund_legacy_mint`), `validate-auction-localnet.cjs` (auctions incl. L3) and `validate-init-gate-localnet.cjs` (S2). Per-suite check counts reported by the owner for this branch (UNVERIFIED as of 2026-11-08, validator suites not re-run by the docs pass): staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
+`scripts/ci-e2e.sh` runs, against one `solana-test-validator` (program loaded as upgradeable): `validate-staking-localnet.cjs` (staking, XNT fees, B1-B3 attacks), `validate-fairseed-localnet.cjs` (S1/S3), `validate-legacy-refund-localnet.cjs` (`refund_legacy_mint`), `validate-auction-localnet.cjs` (auctions incl. L3) and `validate-init-gate-localnet.cjs` (S2). Per-suite check counts from the lead's run and an independent fresh-clone run, 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8.
 
 Toolchain: use the **3.1 Solana tools** for the test build and runs; LiteSVM 0.7 cannot load binaries built with the 4.3 tools (owner-reported, not re-checked in this pass).
 
@@ -623,7 +623,8 @@ Live URL: `https://gumballnft-production.up.railway.app`
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |
 | `scripts/monitor.cjs` | Telegram monitoring + remote commands (private ops) |
 | `scripts/announcer.cjs` | Public Telegram channel bot (mints, upgrades, sales) |
-| `scripts/initialize.cjs` | Machine init / migration script |
+| `scripts/initialize.cjs` | RETIRED (2026-11-08); use `scripts/admin.cjs` |
+| `scripts/admin.cjs` | init-machine / set-active / set-lp-mint, preview by default, genesis-checked |
 | `scripts/init-staking.cjs` | Staking init (stake config + GUM reward vaults) |
 | `scripts/init-xnt-fees.cjs` | XNT fee-sharing init (pools + accumulator state) |
 | `scripts/sweep-xnt-pool.cjs` | Admin sweep of unattributed XNT pool lamports |

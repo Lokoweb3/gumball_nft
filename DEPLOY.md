@@ -31,7 +31,7 @@ this checklist: `node scripts/set-oracle.cjs --cluster mainnet --oracle <NEW_ORA
 (preview by default; `--live` sends it, signed by the machine authority; refuses a wrong-cluster RPC via
 a genesis-hash check, and refuses `--live` while any MintRequest is pending unless `--force-pending`).
 Then restart the oracle with `ORACLE_WALLET` pointing at the new key. (Upgrade-authority claim for the
-TEST vault is the owner's statement; not re-read on chain in this docs pass: UNVERIFIED as of 2026-11-08.)
+TEST vault was read on chain 2026-11-08: X1 mainnet programData 8TwYZi2zFMs1hg5xTHAYyaTyMCp4xR6wUqoCLq5jmFzt, upgrade authority 53fT…RxKy.)
 
 - [ ] Generate a **dedicated oracle keypair** (hot, on the oracle host only, funded with just fees)
 - [ ] Generate a **deployer/upgrade keypair** (cold — hardware wallet or offline machine)
@@ -51,7 +51,7 @@ These are committed to `main` but **not on chain** yet:
 | `generate_svg` rewrite | −86 % heap allocations on the burn path; golden-tested byte-identical |
 
 - [ ] `cargo test` green (11 passed on 2026-11-08 at security-fixes HEAD 0855f78, incl. the SVG golden test)
-- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Owner-reported counts, UNVERIFIED as of 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8
+- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Counts from the lead's run and an independent fresh-clone run on 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8
 - [ ] marketplace suite guard scenarios report **6025 / 6026** on the fresh build (codes unchanged: new errors were appended, 6027 InvalidLpMint, 6028 SeedSlotNotReached)
 - [ ] Verifiable build hash recorded (Phase 3)
 
@@ -98,7 +98,8 @@ ordinary user with its own wallet and seeds.
 ### 0.6 Pre-deploy checklist for the security batch (owner runs; order matters)
 Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_ID>`).
 
-- [ ] **(a) Drain requests.** Send `set_active(false)` from the machine authority, then wait out
+- [ ] **(a) Drain requests.** `node scripts/admin.cjs --cluster <testnet|mainnet> set-active false` (preview, then
+      `--live`; signer = machine authority), then wait out
       the timeout (> 150 s; allow 5 min). Confirm there are **0 unfulfilled MintRequests of either
       size (164 and 156 bytes)**. Run `RPC=<RPC> node scripts/refund-legacy-mints.cjs` (preview, sends
       nothing) and refund anything it lists. Refund order: before (c), the OLD program's `refund_mint`
@@ -116,16 +117,15 @@ Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_I
       and frontends cannot read it; `stake_lp` callers must pass the new trailing `lp_mint_config`).
 - [ ] **(d) Immediately call `set_lp_mint(<real LP mint>)`** (signer: `stake_config.authority`; accounts:
       authority, `stake_config_v2`, `lp_mint_config` PDA, system program). `stake_lp` is **off** until this
-      is done. No script for this exists in `scripts/` (checked 2026-11-08); it needs a one-off client.
-- [ ] **(e) `set_active(true)`.** No standalone script either; `scripts/initialize.cjs` sends it only as
-      part of first-time setup.
+      is done. `node scripts/admin.cjs --cluster <testnet|mainnet> set-lp-mint <LP_MINT>` (preview, then `--live`;
+      it reads the value back).
+- [ ] **(e) `set_active(true)`.** `node scripts/admin.cjs --cluster <testnet|mainnet> set-active true --live`
+      (it refuses while any 156-byte legacy request is still unrefunded). `scripts/initialize.cjs` is retired.
 
 **On mainnet, `initialize_machine` must be sent by the program's upgrade authority** (the account passed
-as `program_data` is checked against the signer). Do this in Phase 4, before Phase 5 hands the
-upgrade authority to the multisig. **Doc/code mismatch:** `scripts/initialize.cjs` builds the
-instruction with only 3 accounts (authority, machine, system program); the new program also needs
-`program` and `program_data` (see `InitializeMachine`), so that script will fail against the new
-binary until it is updated. UNRESOLVED as of 2026-11-08.
+as `program_data` is checked against the signer): `node scripts/admin.cjs --cluster mainnet init-machine <TREASURY>`. Do this in Phase 4, before Phase 5 hands the
+upgrade authority to the multisig. (`scripts/initialize.cjs` is retired: it sent only 3 accounts and
+ran its "FORCE" `main()` twice; `admin.cjs init-machine` passes `program` + `program_data`.)
 
 ---
 
@@ -201,7 +201,7 @@ solana-verify verify-from-repo -u <MAINNET_RPC> --program-id <MAINNET_PROGRAM_ID
 
 Run with `RPC=<MAINNET_RPC> WALLET=<deployer.json>` unless noted. Each script is idempotent-ish but **do not** re-run `initialize`.
 
-1. `node scripts/initialize.cjs` — creates the Machine PDA. Pass the **mainnet treasury** (multisig) and the **dedicated oracle** pubkey. `is_active` starts `false`.
+1. `node scripts/admin.cjs --cluster mainnet init-machine <TREASURY>` (signer = upgrade authority) — creates the Machine PDA; then `node scripts/set-oracle.cjs --cluster mainnet --oracle <DEDICATED_ORACLE>`. `is_active` starts `false`.
 2. `node scripts/create-gum-token.cjs` — mint GUM, then **revoke mint + freeze authority** (testnet `2Kjd…` has both revoked; confirm the same on mainnet with `spl-token display`)
 3. `node scripts/init-staking.cjs` — `GUM_MINT=<mainnet mint>`; funds reward vaults via `NFT_FUND` / `LP_FUND`
 4. `node scripts/init-xnt-fees.cjs` — **must precede any stake/unstake**; creates the XNT pool PDAs

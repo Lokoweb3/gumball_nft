@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the staking/fee validation suite (25 checks) plus the vulnerability
-# regression tests (B1/B2/B3) against a local validator seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
+# Runs the staking/fee suite (with the B1/B2/B3 regression tests), then the fair-seed,
+# legacy-refund, auction and init-gate suites, against a local validator seeded with fixtures (see scripts/make-localnet-fixtures.cjs).
 # Used by CI (.github/workflows/tests.yml); also works locally on Linux/WSL:
 #   OUT_DIR=localnet-fixtures node scripts/make-localnet-fixtures.cjs
 #   FIXTURES=localnet-fixtures bash scripts/ci-e2e.sh
