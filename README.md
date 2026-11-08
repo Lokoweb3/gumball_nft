@@ -117,7 +117,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burns now auto-reclaim rent in the same transaction. No zombie PDAs are created, and the frontend's zombie-PDA scan and reclaim button were removed (2026-11-08).
+Burned gumballs' `GumballData` and `GumballSvg` accounts stay on chain with a zeroed owner; their rent is **not** reclaimable (burns move no lamports, and the `reclaim_burned` instruction and the reclaim UI are gone). The frontend's zombie-PDA scan and dead reclaim button were removed (2026-11-08).
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 

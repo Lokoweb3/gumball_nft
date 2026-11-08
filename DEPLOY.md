@@ -62,7 +62,7 @@ These are committed to `main` but **not on chain** yet:
 | `MAX_SUPPLY` | 10 000 | 11 | final |
 | `MAX_PER_TX` | 10 | 13 | final |
 | `MINT_TIMEOUT` | 150 s | 25 | refund window; oracle SLA must beat it |
-| `ROYALTY_BPS` + 50/25/25 split | 5 % | 45, 126–128 | final |
+| `ROYALTY_BPS` + 50/25/25 split | 5 % | 45, 124–128 | final |
 | `REROLL_COST_GUM` | 25 GUM | 60 | GUM sink price |
 | `EMISSION_BPS_PER_DAY` | 0.3 % | 81 | staking emission |
 | `METADATA_BASE_URI` | Railway URL | 65 | **see 0.4** |

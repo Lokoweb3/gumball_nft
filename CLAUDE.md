@@ -308,7 +308,7 @@ No migration needed unless Machine struct changed.
   generated HTML. The CSP sets `script-src-attr 'none'`, so they silently do
   nothing. Use `data-click="fn" data-args='[...]'` (see `public/js/actions.js`;
   in templates `data-args="${actArgs(a, b)}"`) or `addEventListener`
-- **Never add accounts or data to `burn_multi`** without re-measuring the serialized transaction size. A 5-ball `burn_multi` is 1,231 of the 1,232-byte limit (measured by the round-2 implementer; the frontend therefore sends the `update_owner` sync as a separate transaction first). One extra account or byte overflows it
+- **Never add accounts or data to `burn_multi`** without re-measuring the serialized transaction size. A 5-ball `burn_multi` is 1,231 of the 1,232-byte limit (measured by the lead, 2026-11-08: web3.js serialize, dummy keys, 5-ball `burn_multi` with no `update_owner`: 1,231 bytes; with one `update_owner`: 1,248). One extra account or byte overflows it
 - **Never commit private keys** under an innocuous filename — an OpenSSH key was
   committed as `yes` and sat in the public repo
 
@@ -692,6 +692,8 @@ edge cases, and injection vectors. All findings fixed and verified.
 gumball PDAs directly to the burner. No more zombie PDAs requiring separate `reclaim_burned`
 calls. `reclaim_burned` instruction kept for legacy testnet zombies only.
 
+**Correction (2026-11-08, read from `instructions/burn.rs`):** burns do NOT reclaim rent. `burn_to_upgrade` / `burn_multi` burn the token and zero the owner bytes of each burned `GumballData`; no lamports move and nothing is closed, so each burned ball's `GumballData` and `GumballSvg` stay on chain with their rent, and that rent is unrecoverable (`reclaim_burned` and the reclaim UI are gone). Recovering it would be a program change.
+
 **Why:** Users had to manually call `reclaim_burned` to recover rent from extra PDAs left by
 `burn_multi`. This was confusing UX. Auto-reclaim eliminates the extra step.
 
@@ -734,7 +736,7 @@ prevents grinding for specific cosmetic combos on upgrades.
 the smart contract. Removed zombie PDA scanning, reclaim button, and `reclaimBurned()`
 function from frontend.
 
-**Why:** Burns now auto-reclaim rent in the same transaction (lamports returned + data
+**Why (as written then — see the correction under the earlier burn entry: burns do NOT reclaim rent):** Burns now auto-reclaim rent in the same transaction (lamports returned + data
 zeroed). No zombie PDAs are created. `reclaim_burned` was only needed for legacy testnet
 zombies and had an authorization gap (anyone could claim rent, not just the original
 burner). Removing it eliminates the attack surface for mainnet.

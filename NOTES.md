@@ -231,7 +231,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] **Review:** `update_owner` safe — reads ATA balance, only syncs to actual token holder
 - [x] `reveal_and_mint` — timeout path sets fulfilled = true (prevents double refund)
 - [x] Bounds checks on all raw account data reads (InvalidAccount error)
-- [x] Auto rent reclaim on burns (no zombie PDAs)
+- [ ] ~~Auto rent reclaim on burns~~ — NOT implemented: burns zero the owner and move no lamports; burned GumballData/GumballSvg rent is stranded (checked in `instructions/burn.rs`, 2026-11-08)
 
 ### Code Safety (Audit Rounds 3-5)
 - [x] No unsafe `.unwrap()` on fallible operations — all use `.map_err()`
@@ -242,7 +242,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] All array access bounds-checked via modulo or explicit require
 - [x] No reentrancy risk (token program CPI does not callback)
 - [x] MED-4: burn_to_upgrade standardized to 32-byte slot hash [16..48] (was 8-byte)
-- [x] `reclaim_burned` removed — eliminates attack surface, burns auto-reclaim
+- [x] `reclaim_burned` removed — eliminates attack surface (but burns do NOT auto-reclaim; see above)
 - [x] Final audit (round 5): CLEAN — no remaining issues
 
 ### Economic
