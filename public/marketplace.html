@@ -783,6 +783,8 @@ async function createAuctionUi(mintKeyStr) {
   if (!walletPubkey) return;
   const priceXNT = parseFloat(prompt("Start price (XNT):", "0.05"));
   if (!priceXNT || priceXNT <= 0) { toast("INVALID START PRICE", "error"); return; }
+  // Program requires start_price >= rent-exempt minimum for a 0-byte account (890,880 lamports)
+  if (priceXNT < 0.001) { toast("START PRICE MUST BE AT LEAST 0.001 XNT", "error"); return; }
   const hours = parseFloat(prompt("Duration in hours (1 - 168):", "24"));
   if (!hours || hours < 1 || hours > 168) { toast("DURATION MUST BE 1-168 HOURS", "error"); return; }
 

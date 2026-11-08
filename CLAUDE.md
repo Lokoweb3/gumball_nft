@@ -211,6 +211,8 @@ No migration needed unless Machine struct changed.
 | `scripts/initialize.cjs` | Machine init / migration script |
 | `scripts/validate-marketplace-litesvm.cjs` | Marketplace + auction suite (LiteSVM, in-process, no validator) |
 | `scripts/validate-staking-localnet.cjs` | Staking + XNT fee suite (needs solana-test-validator) |
+| `scripts/validate-auction-localnet.cjs` | Auction suite (validator; LiteSVM crashes on bids). Settle runs on a pre-ended auction fixture |
+| `scripts/validate-init-gate-localnet.cjs` | `initialize_machine` upgrade-authority gate (clean validator, no Machine PDA) |
 | `server.cjs` | Express server for Railway deployment + faucet API |
 | `public/landing.html` | Project homepage with live mint counter |
 | `public/index.html` | Main frontend (mint + collection + burns) |

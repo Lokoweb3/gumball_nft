@@ -382,6 +382,14 @@ pub mod gumball_nft {
             return Ok(());
         }
 
+        // S1 FIX: request_mint only sees minted supply, not pending requests, so
+        // concurrent requests near sell-out can exceed the cap. Enforce it here;
+        // the user then recovers payment via the timeout refund above.
+        require!(
+            ctx.accounts.machine.total_minted < ctx.accounts.machine.max_supply,
+            GumballError::SoldOut
+        );
+
         // C-2 FIX: verify commitment on-chain
         // commitment = sha256(secret || oracle_pubkey)
         let oracle_pubkey = ctx.accounts.oracle.key();
@@ -1346,7 +1354,12 @@ pub mod gumball_nft {
     /// price listings), bids escrow lamports in the Auction PDA. Duration is
     /// bounded to 1 hour – 7 days.
     pub fn create_auction(ctx: Context<CreateAuction>, start_price: u64, duration_secs: i64) -> Result<()> {
-        require!(start_price > 0, GumballError::InvalidPrice);
+        // L3 FIX: a bid below the rent-exempt minimum for a 0-byte account can't
+        // be refunded to an emptied wallet, which would freeze every later outbid.
+        require!(
+            start_price >= Rent::get()?.minimum_balance(0),
+            GumballError::InvalidPrice
+        );
         require!((3600..=7 * 86400).contains(&duration_secs), GumballError::InvalidPrice);
 
         anchor_spl::token::transfer(
@@ -2577,6 +2590,12 @@ pub struct InitializeMachine<'info> {
     #[account(init, payer = authority, space = 8 + Machine::LEN, seeds = [b"machine"], bump)]
     pub machine: Account<'info, Machine>,
     pub system_program: Program<'info, System>,
+    /// S2 FIX: only the program's upgrade authority may create the Machine,
+    /// otherwise the first caller becomes machine.authority.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ GumballError::Unauthorized)]
+    pub program: Program<'info, crate::program::GumballNft>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ GumballError::Unauthorized)]
+    pub program_data: Account<'info, ProgramData>,
 }
 
 #[derive(Accounts)]
