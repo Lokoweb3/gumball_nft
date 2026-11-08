@@ -28,6 +28,8 @@ const MAX_SVG_LEN:    usize = 1400;
 // of margin for slot-time jitter. If the entry still ages out first, reveal_and_mint
 // refunds the request itself.
 const MINT_TIMEOUT:   i64   = 150;
+/// Size of a MintRequest created before `request_slot` was appended (8 disc + 148).
+const LEGACY_MINT_REQUEST_LEN: usize = 156;
 /// The seed slot is the first recorded slot STRICTLY AFTER request_slot + this delay,
 /// so its hash did not exist when request_mint landed (SlotHashes at slot R only
 /// holds slots < R) and cannot be known to the minter or oracle at request time.
@@ -563,6 +565,58 @@ pub mod gumball_nft {
         let total = req_info.lamports();
         **req_info.try_borrow_mut_lamports()? = 0;
         **ctx.accounts.minter.try_borrow_mut_lamports()? += total;
+        req_info.try_borrow_mut_data()?.fill(0);
+
+        emit!(MintRefundedEvent { minter: minter_key, amount: paid_amount });
+        Ok(())
+    }
+
+    /// Refund a pre-upgrade 156-byte MintRequest (before `request_slot` was appended).
+    /// `Account<MintRequest>` cannot deserialize those, so reveal_and_mint and
+    /// refund_mint reject them. Anyone may call this after MINT_TIMEOUT; all lamports
+    /// go to the stored minter. Layout (incl. 8-byte discriminator): minter 8..40,
+    /// machine 40..72, commitment 72..104, quantity 104, remaining 105, paid 106..114,
+    /// requested_at 114..122, fulfilled 122, bump 123, user_seed 124..156.
+    pub fn refund_legacy_mint(ctx: Context<RefundLegacyMint>) -> Result<()> {
+        let req_info = ctx.accounts.mint_request.to_account_info();
+        require!(req_info.owner == ctx.program_id, GumballError::InvalidAccount);
+
+        let (minter_key, paid_amount) = {
+            let data = req_info.try_borrow_data()?;
+            require!(data.len() == LEGACY_MINT_REQUEST_LEN, GumballError::InvalidAccount);
+            require!(
+                &data[0..8] == <MintRequest as anchor_lang::Discriminator>::DISCRIMINATOR,
+                GumballError::InvalidAccount
+            );
+            let minter = Pubkey::try_from(&data[8..40])
+                .map_err(|_| error!(GumballError::InvalidAccount))?;
+            let commitment = Pubkey::try_from(&data[72..104])
+                .map_err(|_| error!(GumballError::InvalidAccount))?;
+            let (expected, _) = Pubkey::find_program_address(
+                &[b"mint_request", minter.as_ref(), commitment.as_ref()],
+                ctx.program_id,
+            );
+            require!(expected == req_info.key(), GumballError::InvalidAccount);
+
+            let paid = u64::from_le_bytes(
+                data[106..114].try_into().map_err(|_| error!(GumballError::InvalidAccount))?);
+            let requested_at = i64::from_le_bytes(
+                data[114..122].try_into().map_err(|_| error!(GumballError::InvalidAccount))?);
+            require!(data[122] == 0, GumballError::AlreadyFulfilled);
+            let clock = Clock::get()?;
+            require!(
+                clock.unix_timestamp.saturating_sub(requested_at) > MINT_TIMEOUT,
+                GumballError::RequestExpired
+            );
+            (minter, paid)
+        };
+        require!(ctx.accounts.minter.key() == minter_key, GumballError::Unauthorized);
+
+        let total = req_info.lamports();
+        **req_info.try_borrow_mut_lamports()? = 0;
+        let new_bal = ctx.accounts.minter.lamports().checked_add(total)
+            .ok_or(GumballError::MathOverflow)?;
+        **ctx.accounts.minter.try_borrow_mut_lamports()? = new_bal;
         req_info.try_borrow_mut_data()?.fill(0);
 
         emit!(MintRefundedEvent { minter: minter_key, amount: paid_amount });
@@ -2824,6 +2878,17 @@ pub struct RevealAndMint<'info> {
 }
 
 #[derive(Accounts)]
+pub struct RefundLegacyMint<'info> {
+    /// CHECK: must equal the minter stored in the legacy request (checked in the handler)
+    #[account(mut)]
+    pub minter: AccountInfo<'info>,
+    /// CHECK: legacy 156-byte MintRequest, validated by hand (owner, length,
+    /// discriminator, PDA seeds) because Account<MintRequest> cannot read it
+    #[account(mut)]
+    pub mint_request: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
 pub struct RefundMint<'info> {
     /// CHECK: verified via mint_request.minter constraint
     #[account(mut, constraint = minter.key() == mint_request.minter @ GumballError::Unauthorized)]
@@ -4091,7 +4156,6 @@ pub enum GumballError {
     #[msg("Invalid slot hash")]                      InvalidSlotHash,
     #[msg("Invalid account data")]                   InvalidAccount,
     #[msg("Mint request has expired")]               RequestExpired,
-    #[msg("Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS")] SeedSlotNotReached,
     #[msg("Offer has expired")]                      OfferExpired,
     #[msg("GUM supply exhausted")]                   GumSupplyExhausted,
     #[msg("Invalid lock tier — must be 0 (Flexible), 1 (Bronze), 2 (Silver), 3 (Gold), or 4 (Diamond)")] InvalidLockPeriod,
@@ -4102,6 +4166,7 @@ pub enum GumballError {
     #[msg("Listing price is higher than the maximum the buyer accepted")] PriceAboveMax,
     #[msg("Offer amount is lower than the minimum the seller accepted")]  AmountBelowMin,
     #[msg("LP mint is not the one registered via set_lp_mint")] InvalidLpMint,
+    #[msg("Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS")] SeedSlotNotReached,
 }
 
 // ─── Unit tests (pure math — run with `cargo test`) ─────────────────────────

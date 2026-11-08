@@ -274,8 +274,9 @@ const settleIx = (e, payer, winner) => new TransactionInstruction({
   ],
 });
 
-// Anchor custom error codes (6000 + variant index in GumballError)
-const ERR = { PriceAboveMax: 6025, AmountBelowMin: 6026 };
+// Anchor custom error codes (6000 + variant index in GumballError), read from lib.rs
+const { errCode } = require("./lib/gumball-errors.cjs");
+const ERR = { PriceAboveMax: errCode("PriceAboveMax"), AmountBelowMin: errCode("AmountBelowMin") };
 
 // Run `fn`, expecting it to fail with a SPECIFIC program error. Asserting on
 // the code matters here: against a program built before these arguments

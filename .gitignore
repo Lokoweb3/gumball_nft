@@ -39,3 +39,4 @@ id_ed25519*
 *.key
 ci-fairseed-fixtures/
 ci-test-ledger/
+ci-legacy-fixtures/

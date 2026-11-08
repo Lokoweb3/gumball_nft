@@ -219,6 +219,9 @@ No migration needed unless Machine struct changed.
 | `scripts/validate-marketplace-litesvm.cjs` | Marketplace + auction suite (LiteSVM, in-process, no validator) |
 | `scripts/validate-staking-localnet.cjs` | Staking + XNT fee suite (needs solana-test-validator) |
 | `scripts/validate-auction-localnet.cjs` | Auction suite (validator; LiteSVM crashes on bids). Settle runs on a pre-ended auction fixture |
+| `scripts/validate-legacy-refund-localnet.cjs` | `refund_legacy_mint` on hand-built 156-byte legacy MintRequests (fixtures from `make-legacy-request-fixtures.cjs`) |
+| `scripts/refund-legacy-mints.cjs` | Lists / refunds stranded 156-byte MintRequests (preview by default) |
+| `scripts/lib/gumball-errors.cjs` | Reads error codes from the `GumballError` enum (tests must use this, never hardcode) |
 | `scripts/validate-init-gate-localnet.cjs` | `initialize_machine` upgrade-authority gate (clean validator, no Machine PDA) |
 | `server.cjs` | Express server for Railway deployment + faucet API |
 | `public/landing.html` | Project homepage with live mint counter |

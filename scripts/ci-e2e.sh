@@ -24,6 +24,11 @@ FAIR_DIR=ci-fairseed-fixtures
 rm -rf "$FAIR_DIR"
 node scripts/make-fairseed-fixtures.cjs "$FIXTURES" "$FAIR_DIR"
 
+# Legacy 156-byte MintRequests for the refund_legacy_mint test (hand-built, old layout).
+LEGACY_DIR=$(pwd)/ci-legacy-fixtures
+rm -rf "$LEGACY_DIR"
+node scripts/make-legacy-request-fixtures.cjs "$LEGACY_DIR"
+
 # Account fixtures are the JSONs with a .pubkey field (skips treasury-keypair.json)
 ARGS=()
 for f in "$FIXTURES"/*.json; do
@@ -35,6 +40,9 @@ done
 for f in "$ATTACK_DIR"/*.json; do
   PK=$(node -pe "require('$f').pubkey ?? ''" 2>/dev/null || true)
   [ -n "$PK" ] && ARGS+=(--account "$PK" "$f")
+done
+for f in "$LEGACY_DIR"/legacy-*.json; do
+  ARGS+=(--account "$(node -pe "require('$f').pubkey")" "$f")
 done
 echo "Loaded ${#ARGS[@]} validator args from $FIXTURES"
 
@@ -51,7 +59,7 @@ dump_log() {
   echo "── validator.log tail ──"
   tail -40 ci-test-ledger/validator.log 2>/dev/null || echo "(no validator log)"
 }
-trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR" "$FAIR_DIR"' EXIT
+trap 'kill $VALIDATOR_PID 2>/dev/null || true; rm -rf "$ATTACK_DIR" "$FAIR_DIR" "$LEGACY_DIR"' EXIT
 
 # start_validator [extra args...]; $FRESH=1 resets the ledger and loads the program
 start_validator() {
@@ -92,6 +100,12 @@ fi
 
 # Fair-seed mints: seed slot fixed at request time (see DEPLOY.md 0.5). ~3 min: includes the 150 s timeout refund.
 if ! RPC="$RPC_URL" ORACLE_KEYPAIR="$FAIR_DIR/oracle.json" node scripts/validate-fairseed-localnet.cjs; then
+  dump_log
+  exit 1
+fi
+
+# refund_legacy_mint: pre-upgrade 156-byte MintRequests (fixtures loaded at validator start).
+if ! RPC="$RPC_URL" LEGACY_DIR="$LEGACY_DIR" node scripts/validate-legacy-refund-localnet.cjs; then
   dump_log
   exit 1
 fi
