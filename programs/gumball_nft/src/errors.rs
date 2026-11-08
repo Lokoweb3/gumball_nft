@@ -33,4 +33,6 @@ pub enum GumballError {
     #[msg("Offer amount is lower than the minimum the seller accepted")]  AmountBelowMin,
     #[msg("LP mint is not the one registered via set_lp_mint")] InvalidLpMint,
     #[msg("Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS")] SeedSlotNotReached,
+    #[msg("Gumball is not burned")]                  NotBurned,
+    #[msg("Mint is not a gumball mint")]             NotGumballMint,
 }

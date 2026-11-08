@@ -231,7 +231,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] **Review:** `update_owner` safe — reads ATA balance, only syncs to actual token holder
 - [x] `reveal_and_mint` — timeout path sets fulfilled = true (prevents double refund)
 - [x] Bounds checks on all raw account data reads (InvalidAccount error)
-- [ ] ~~Auto rent reclaim on burns~~ — NOT implemented: burns zero the owner and move no lamports; burned GumballData/GumballSvg rent is stranded (checked in `instructions/burn.rs`, 2026-11-08)
+- [x] Burned-ball rent: burns still do NOT reclaim it (they zero the owner and move no lamports, and `burn_multi` has no room for more accounts), but the new permissionless `close_burned` closes a burned ball's GumballData + GumballSvg and sends ALL their lamports to `machine.treasury` (never to the caller or burner: users pay 0.01 XNT per mint while the oracle paid ~0.013 XNT of rent, so a burner refund would pay users to mint and burn). Sweep with `node scripts/close-burned.cjs --cluster <testnet|mainnet>` (preview, then `--live`). Needs a program upgrade to exist on-chain.
 
 ### Code Safety (Audit Rounds 3-5)
 - [x] No unsafe `.unwrap()` on fallible operations — all use `.map_err()`
@@ -242,7 +242,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] All array access bounds-checked via modulo or explicit require
 - [x] No reentrancy risk (token program CPI does not callback)
 - [x] MED-4: burn_to_upgrade standardized to 32-byte slot hash [16..48] (was 8-byte)
-- [x] `reclaim_burned` removed — eliminates attack surface (but burns do NOT auto-reclaim; see above)
+- [x] `reclaim_burned` removed — eliminates attack surface (burns do NOT auto-reclaim; `close_burned` is its replacement, with a fixed treasury destination; see above)
 - [x] Final audit (round 5): CLEAN — no remaining issues
 
 ### Economic

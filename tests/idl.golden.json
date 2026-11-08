@@ -150,6 +150,16 @@
         "code": 6028,
         "name": "SeedSlotNotReached",
         "msg": "Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS"
+      },
+      {
+        "code": 6029,
+        "name": "NotBurned",
+        "msg": "Gumball is not burned"
+      },
+      {
+        "code": 6030,
+        "name": "NotGumballMint",
+        "msg": "Mint is not a gumball mint"
       }
     ]
   },
@@ -233,6 +243,42 @@
               {
                 "name": "ends_at",
                 "type": "i64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          70,
+          185,
+          127,
+          74,
+          49,
+          134,
+          41,
+          52
+        ],
+        "name": "BurnedClosedEvent"
+      },
+      "types": [
+        {
+          "name": "BurnedClosedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "lamports",
+                "type": "u64"
               }
             ],
             "kind": "struct"
@@ -1824,6 +1870,50 @@
               }
             }
           ]
+        },
+        {
+          "name": "close_burned",
+          "docs": [
+            "Permissionless: close ONE burned ball's GumballData + GumballSvg PDAs and",
+            "send all their lamports to machine.treasury (never to the caller)."
+          ],
+          "discriminator": [
+            150,
+            108,
+            156,
+            29,
+            11,
+            236,
+            178,
+            0
+          ],
+          "accounts": [
+            {
+              "name": "machine"
+            },
+            {
+              "name": "machine_authority"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "nft_mint",
+              "docs": [
+                "Classic SPL mint (Account<Mint> enforces the token program as owner)"
+              ]
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "gumball_svg",
+              "writable": true
+            }
+          ],
+          "args": []
         },
         {
           "name": "migrate_machine",

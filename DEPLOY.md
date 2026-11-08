@@ -51,7 +51,7 @@ These are committed to `main` but **not on chain** yet:
 | `generate_svg` rewrite | −86 % heap allocations on the burn path; golden-tested byte-identical |
 
 - [ ] `cargo test` green (11 passed on 2026-11-08 at security-fixes HEAD 0855f78, incl. the SVG golden test)
-- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Counts from the lead's run and an independent fresh-clone run on 2026-11-08: staking 35, fairseed 22, legacy refund 15, auction 11+6, init-gate 8
+- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Counts from the lead's run and an independent fresh-clone run on 2026-11-08: staking 35, fairseed 22, legacy refund 15, close-burned 45 (added on branch close-burned), auction 11+6, init-gate 8
 - [ ] marketplace suite guard scenarios report **6025 / 6026** on the fresh build (codes unchanged: new errors were appended, 6027 InvalidLpMint, 6028 SeedSlotNotReached)
 - [ ] Verifiable build hash recorded (Phase 3)
 
@@ -259,6 +259,7 @@ A wrong address in (a) permanently bricks admin ops. A lost upgrade authority pe
 - [ ] Auction: bid, outbid (refund arrives), settle after end; settle-early rejected
 - [ ] Stake NFT, deposit fee, claim; unstake closes `XntDebt` and refunds rent
 - [ ] Burn-to-upgrade ×1 and `burn_multi` ×5 — no heap OOM
+- [ ] After those burns: `node scripts/close-burned.cjs --cluster <testnet|mainnet>` (preview) lists the burned balls and their reclaimable rent; `--live` closes them and the rent lands in `machine.treasury` (the signer only pays fees; `close_burned` never pays the caller or the burner). Burns themselves do not reclaim rent
 - [ ] Re-roll costs exactly 25 GUM; rarity unchanged
 - [ ] `set_active(false)` from the multisig halts minting (**note: it halts minting only** — marketplace/staking/auctions have no pause; add one if you want a real circuit breaker)
 

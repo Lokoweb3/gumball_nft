@@ -499,3 +499,86 @@ pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> R
     });
     Ok(())
 }
+
+/// Permissionless cleanup of ONE burned ball: closes its GumballData and
+/// GumballSvg PDAs and sends ALL their lamports to `machine.treasury` (never to
+/// the caller: the oracle or the burner paid that rent, not the caller, and a
+/// refund to the burner would pay users to mint-and-burn). Takes no signer
+/// account of its own, so anyone (a bot, the site, the owner) can send it.
+///
+/// GumballData is read raw (UncheckedAccount) so legacy, shorter layouts work.
+#[derive(Accounts)]
+pub struct CloseBurned<'info> {
+    #[account(seeds = [b"machine"], bump = machine.bump)]
+    pub machine: Account<'info, Machine>,
+    /// CHECK: PDA authority — only compared against the mint's mint_authority
+    #[account(seeds = [b"machine_authority"], bump)]
+    pub machine_authority: AccountInfo<'info>,
+    /// CHECK: treasury validated against machine
+    #[account(mut, constraint = treasury.key() == machine.treasury @ GumballError::InvalidTreasury)]
+    pub treasury: AccountInfo<'info>,
+    /// Classic SPL mint (Account<Mint> enforces the token program as owner)
+    pub nft_mint: Account<'info, Mint>,
+    /// CHECK: owner, discriminator, burned marker and machine checked in the body
+    #[account(mut, seeds = [b"gumball", nft_mint.key().as_ref()], bump)]
+    pub gumball_data: UncheckedAccount<'info>,
+    /// CHECK: owner and discriminator checked in the body
+    #[account(mut, seeds = [b"svg", nft_mint.key().as_ref()], bump)]
+    pub gumball_svg: UncheckedAccount<'info>,
+}
+
+/// Move every lamport of a program-owned account to `dest` and make it unrevivable
+/// (assign to the system program, zero-size the data). Mirrors Anchor's close.
+fn close_to<'info>(info: &AccountInfo<'info>, dest: &AccountInfo<'info>) -> Result<()> {
+    let moved = info.lamports();
+    **dest.try_borrow_mut_lamports()? = dest.lamports().checked_add(moved).ok_or(GumballError::MathOverflow)?;
+    **info.try_borrow_mut_lamports()? = 0;
+    info.assign(&System::id());
+    info.resize(0)?;
+    Ok(())
+}
+
+pub fn close_burned(ctx: Context<CloseBurned>) -> Result<()> {
+    let mint = &ctx.accounts.nft_mint;
+    // The token is burned, and this is a gumball mint (minted by this program)
+    require!(mint.supply == 0, GumballError::NotBurned);
+    require!(
+        mint.mint_authority.contains(&ctx.accounts.machine_authority.key()),
+        GumballError::NotGumballMint
+    );
+
+    {
+        let gd = &ctx.accounts.gumball_data;
+        require!(gd.owner == ctx.program_id, GumballError::InvalidAccount);
+        let data = gd.try_borrow_data()?;
+        // disc(8) + owner(32) + machine(32); legacy layouts are shorter than 189 bytes
+        require!(data.len() >= GD_MACHINE_OFFSET + 32, GumballError::InvalidAccount);
+        require!(data[..8] == *GumballData::DISCRIMINATOR, GumballError::InvalidAccount);
+        require!(
+            data[GD_MACHINE_OFFSET..GD_MACHINE_OFFSET + 32] == *ctx.accounts.machine.key().as_ref(),
+            GumballError::InvalidAccount
+        );
+        // burn_to_upgrade / burn_multi zero the owner field
+        require!(
+            data[GD_OWNER_OFFSET..GD_OWNER_OFFSET + 32].iter().all(|b| *b == 0),
+            GumballError::NotBurned
+        );
+    }
+    {
+        let svg = &ctx.accounts.gumball_svg;
+        require!(svg.owner == ctx.program_id, GumballError::InvalidAccount);
+        let data = svg.try_borrow_data()?;
+        require!(data.len() >= 8 && data[..8] == *GumballSvg::DISCRIMINATOR, GumballError::InvalidAccount);
+    }
+
+    let lamports = ctx.accounts.gumball_data.lamports()
+        .checked_add(ctx.accounts.gumball_svg.lamports())
+        .ok_or(GumballError::MathOverflow)?;
+    let treasury = ctx.accounts.treasury.to_account_info();
+    // Same steps as Anchor `close = treasury`: every lamport moves, owner becomes the system program, data is zero-sized
+    close_to(&ctx.accounts.gumball_data.to_account_info(), &treasury)?;
+    close_to(&ctx.accounts.gumball_svg.to_account_info(), &treasury)?;
+
+    emit!(BurnedClosedEvent { nft_mint: ctx.accounts.nft_mint.key(), lamports });
+    Ok(())
+}
