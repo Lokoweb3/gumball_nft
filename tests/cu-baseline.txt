@@ -1,0 +1,22 @@
+# CU per instruction at base 4cc2653 (3.1-built .so), from scripts/validate-marketplace-litesvm.cjs.
+# 3 runs; the script is flaky (std::bad_alloc) and some CU vary run to run (bump search / account state),
+# so compare the stable ones tightly: delist 16615, make_offer 10110, buy 65266.
+## run 1
+    47453  list_gumball
+    16615  delist_gumball
+    65266  buy_gumball
+    10110  make_offer
+    64184  accept_offer
+
+## run 2
+    45953  list_gumball
+    16615  delist_gumball
+    13110  make_offer
+    55184  accept_offer
+
+## run 3
+    48953  list_gumball
+    65266  buy_gumball
+    10110  make_offer
+    77684  accept_offer
+

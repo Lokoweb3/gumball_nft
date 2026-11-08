@@ -1,0 +1,4554 @@
+[
+  {
+    "label": "address",
+    "json": "\"AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy\""
+  },
+  {
+    "label": "errors",
+    "json": [
+      {
+        "code": 6000,
+        "name": "MachineInactive",
+        "msg": "Machine is not active"
+      },
+      {
+        "code": 6001,
+        "name": "SoldOut",
+        "msg": "Sold out — no new serials can be issued"
+      },
+      {
+        "code": 6002,
+        "name": "InvalidQuantity",
+        "msg": "Quantity must be 1-5"
+      },
+      {
+        "code": 6003,
+        "name": "InvalidPrice",
+        "msg": "Price must be > 0"
+      },
+      {
+        "code": 6004,
+        "name": "InvalidTreasury",
+        "msg": "Invalid treasury"
+      },
+      {
+        "code": 6005,
+        "name": "Unauthorized",
+        "msg": "Unauthorized"
+      },
+      {
+        "code": 6006,
+        "name": "MathOverflow",
+        "msg": "Arithmetic overflow"
+      },
+      {
+        "code": 6007,
+        "name": "InsufficientFunds",
+        "msg": "Insufficient funds"
+      },
+      {
+        "code": 6008,
+        "name": "AlreadyLegendary",
+        "msg": "Already Legendary — cannot upgrade"
+      },
+      {
+        "code": 6009,
+        "name": "RarityMismatch",
+        "msg": "All gumballs must be same rarity"
+      },
+      {
+        "code": 6010,
+        "name": "WrongBurnCount",
+        "msg": "Wrong number of gumballs to burn"
+      },
+      {
+        "code": 6011,
+        "name": "UseMultiBurn",
+        "msg": "Use burn_multi for this rarity tier"
+      },
+      {
+        "code": 6012,
+        "name": "AlreadyFulfilled",
+        "msg": "Mint already fulfilled"
+      },
+      {
+        "code": 6013,
+        "name": "CommitmentAlreadyUsed",
+        "msg": "Commitment already used"
+      },
+      {
+        "code": 6014,
+        "name": "InvalidCommitment",
+        "msg": "Invalid commitment — secret mismatch"
+      },
+      {
+        "code": 6015,
+        "name": "InvalidSlotHash",
+        "msg": "Invalid slot hash"
+      },
+      {
+        "code": 6016,
+        "name": "InvalidAccount",
+        "msg": "Invalid account data"
+      },
+      {
+        "code": 6017,
+        "name": "RequestExpired",
+        "msg": "Mint request has expired"
+      },
+      {
+        "code": 6018,
+        "name": "OfferExpired",
+        "msg": "Offer has expired"
+      },
+      {
+        "code": 6019,
+        "name": "GumSupplyExhausted",
+        "msg": "GUM supply exhausted"
+      },
+      {
+        "code": 6020,
+        "name": "InvalidLockPeriod",
+        "msg": "Invalid lock tier — must be 0 (Flexible), 1 (Bronze), 2 (Silver), 3 (Gold), or 4 (Diamond)"
+      },
+      {
+        "code": 6021,
+        "name": "PoolHasStakers",
+        "msg": "Cannot sweep while stakers are active"
+      },
+      {
+        "code": 6022,
+        "name": "AuctionEnded",
+        "msg": "Auction has ended"
+      },
+      {
+        "code": 6023,
+        "name": "AuctionNotEnded",
+        "msg": "Auction has not ended yet"
+      },
+      {
+        "code": 6024,
+        "name": "BidTooLow",
+        "msg": "Bid below minimum (start price or +5% raise)"
+      },
+      {
+        "code": 6025,
+        "name": "PriceAboveMax",
+        "msg": "Listing price is higher than the maximum the buyer accepted"
+      },
+      {
+        "code": 6026,
+        "name": "AmountBelowMin",
+        "msg": "Offer amount is lower than the minimum the seller accepted"
+      },
+      {
+        "code": 6027,
+        "name": "InvalidLpMint",
+        "msg": "LP mint is not the one registered via set_lp_mint"
+      },
+      {
+        "code": 6028,
+        "name": "SeedSlotNotReached",
+        "msg": "Seed slot not reached yet: retry a few slots after request_slot + REVEAL_DELAY_SLOTS"
+      }
+    ]
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          25,
+          254,
+          111,
+          94,
+          154,
+          29,
+          156,
+          233
+        ],
+        "name": "gumball_nft::AuctionBidEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::AuctionBidEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "bidder",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "ends_at",
+                "type": "i64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          22,
+          215,
+          117,
+          209,
+          30,
+          81,
+          88,
+          99
+        ],
+        "name": "gumball_nft::AuctionCreatedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::AuctionCreatedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "start_price",
+                "type": "u64"
+              },
+              {
+                "name": "ends_at",
+                "type": "i64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          43,
+          243,
+          162,
+          93,
+          99,
+          26,
+          18,
+          14
+        ],
+        "name": "gumball_nft::CommitmentSubmittedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::CommitmentSubmittedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "oracle",
+                "type": "pubkey"
+              },
+              {
+                "name": "commitment",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          83,
+          32,
+          68,
+          121,
+          195,
+          88,
+          233,
+          219
+        ],
+        "name": "gumball_nft::CosmeticsRerolledEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::CosmeticsRerolledEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "owner",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "flavor",
+                "type": "u8"
+              },
+              {
+                "name": "color",
+                "type": "u8"
+              },
+              {
+                "name": "special",
+                "type": "u8"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          93,
+          38,
+          71,
+          36,
+          236,
+          159,
+          218,
+          144
+        ],
+        "name": "gumball_nft::GumballDelistedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::GumballDelistedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          241,
+          57,
+          88,
+          19,
+          235,
+          20,
+          79,
+          98
+        ],
+        "name": "gumball_nft::GumballListedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::GumballListedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "price",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          217,
+          143,
+          12,
+          21,
+          112,
+          69,
+          197,
+          239
+        ],
+        "name": "gumball_nft::GumballMintedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::GumballMintedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "minter",
+                "type": "pubkey"
+              },
+              {
+                "name": "serial",
+                "type": "u64"
+              },
+              {
+                "name": "mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "flavor",
+                "type": "u8"
+              },
+              {
+                "name": "color",
+                "type": "u8"
+              },
+              {
+                "name": "rarity",
+                "type": "u8"
+              },
+              {
+                "name": "special",
+                "type": "u8"
+              },
+              {
+                "name": "total_minted",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          72,
+          181,
+          146,
+          211,
+          242,
+          84,
+          13,
+          24
+        ],
+        "name": "gumball_nft::GumballSoldEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::GumballSoldEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "buyer",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "price",
+                "type": "u64"
+              },
+              {
+                "name": "royalty",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          233,
+          157,
+          164,
+          64,
+          63,
+          56,
+          70,
+          174
+        ],
+        "name": "gumball_nft::GumballUpgradedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::GumballUpgradedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "burner",
+                "type": "pubkey"
+              },
+              {
+                "name": "burned_rarity",
+                "type": "u8"
+              },
+              {
+                "name": "burned_count",
+                "type": "u8"
+              },
+              {
+                "name": "new_serial",
+                "type": "u64"
+              },
+              {
+                "name": "new_rarity",
+                "type": "u8"
+              },
+              {
+                "name": "new_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "flavor",
+                "type": "u8"
+              },
+              {
+                "name": "color",
+                "type": "u8"
+              },
+              {
+                "name": "special",
+                "type": "u8"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          154,
+          82,
+          22,
+          211,
+          192,
+          147,
+          48,
+          243
+        ],
+        "name": "gumball_nft::LpRewardsClaimedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::LpRewardsClaimedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          252,
+          184,
+          223,
+          79,
+          43,
+          124,
+          234,
+          89
+        ],
+        "name": "gumball_nft::LpStakedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::LpStakedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          187,
+          211,
+          63,
+          67,
+          250,
+          224,
+          154,
+          159
+        ],
+        "name": "gumball_nft::LpUnstakedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::LpUnstakedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "reward",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          230,
+          192,
+          2,
+          134,
+          140,
+          26,
+          118,
+          49
+        ],
+        "name": "gumball_nft::MachineInitializedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::MachineInitializedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "authority",
+                "type": "pubkey"
+              },
+              {
+                "name": "treasury",
+                "type": "pubkey"
+              },
+              {
+                "name": "mint_price",
+                "type": "u64"
+              },
+              {
+                "name": "max_supply",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          133,
+          215,
+          176,
+          231,
+          79,
+          146,
+          193,
+          13
+        ],
+        "name": "gumball_nft::MintRefundedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::MintRefundedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "minter",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          53,
+          17,
+          232,
+          228,
+          162,
+          53,
+          149,
+          223
+        ],
+        "name": "gumball_nft::MintRequestedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::MintRequestedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "minter",
+                "type": "pubkey"
+              },
+              {
+                "name": "commitment",
+                "type": "pubkey"
+              },
+              {
+                "name": "quantity",
+                "type": "u8"
+              },
+              {
+                "name": "paid",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          132,
+          145,
+          13,
+          84,
+          113,
+          23,
+          68,
+          15
+        ],
+        "name": "gumball_nft::MintSeedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::MintSeedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "request_slot",
+                "type": "u64"
+              },
+              {
+                "name": "seed_slot",
+                "type": "u64"
+              },
+              {
+                "name": "slot_hash",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "mint_index",
+                "type": "u8"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          171,
+          232,
+          8,
+          48,
+          245,
+          87,
+          92,
+          24
+        ],
+        "name": "gumball_nft::NftStakedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::NftStakedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "rarity",
+                "type": "u8"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          37,
+          69,
+          204,
+          84,
+          106,
+          147,
+          229,
+          10
+        ],
+        "name": "gumball_nft::NftUnstakedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::NftUnstakedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "reward",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          28,
+          92,
+          211,
+          104,
+          195,
+          62,
+          50,
+          196
+        ],
+        "name": "gumball_nft::OfferCancelledEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::OfferCancelledEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "buyer",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          206,
+          97,
+          61,
+          193,
+          90,
+          177,
+          83,
+          200
+        ],
+        "name": "gumball_nft::OfferMadeEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::OfferMadeEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "buyer",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          243,
+          170,
+          206,
+          180,
+          16,
+          29,
+          202,
+          190
+        ],
+        "name": "gumball_nft::OracleUpdatedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::OracleUpdatedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "new_oracle",
+                "type": "pubkey"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          22,
+          1,
+          42,
+          183,
+          250,
+          8,
+          157,
+          146
+        ],
+        "name": "gumball_nft::RewardsClaimedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::RewardsClaimedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "staker",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          244,
+          117,
+          8,
+          234,
+          18,
+          180,
+          208,
+          67
+        ],
+        "name": "gumball_nft::XntFeeClaimedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::XntFeeClaimedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "claimer",
+                "type": "pubkey"
+              },
+              {
+                "name": "stake_type",
+                "type": "u8"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "event",
+    "json": {
+      "event": {
+        "discriminator": [
+          72,
+          118,
+          167,
+          238,
+          238,
+          41,
+          59,
+          187
+        ],
+        "name": "gumball_nft::XntFeeDistributedEvent"
+      },
+      "types": [
+        {
+          "name": "gumball_nft::XntFeeDistributedEvent",
+          "type": {
+            "fields": [
+              {
+                "name": "source",
+                "type": "u8"
+              },
+              {
+                "name": "treasury",
+                "type": "u64"
+              },
+              {
+                "name": "nft_pool",
+                "type": "u64"
+              },
+              {
+                "name": "lp_pool",
+                "type": "u64"
+              }
+            ],
+            "kind": "struct"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "label": "program",
+    "json": {
+      "address": "",
+      "metadata": {
+        "name": "gumball_nft",
+        "version": "0.1.0",
+        "spec": "0.1.0"
+      },
+      "instructions": [
+        {
+          "name": "initialize_machine",
+          "discriminator": [
+            61,
+            88,
+            18,
+            21,
+            148,
+            196,
+            155,
+            32
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "program",
+              "docs": [
+                "S2 FIX: only the program's upgrade authority may create the Machine,",
+                "otherwise the first caller becomes machine.authority."
+              ]
+            },
+            {
+              "name": "program_data"
+            }
+          ],
+          "args": [
+            {
+              "name": "mint_price",
+              "type": "u64"
+            },
+            {
+              "name": "treasury",
+              "type": "pubkey"
+            }
+          ]
+        },
+        {
+          "name": "set_oracle",
+          "discriminator": [
+            186,
+            128,
+            81,
+            104,
+            74,
+            79,
+            18,
+            224
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            }
+          ],
+          "args": [
+            {
+              "name": "new_oracle",
+              "type": "pubkey"
+            }
+          ]
+        },
+        {
+          "name": "set_active",
+          "discriminator": [
+            29,
+            16,
+            225,
+            132,
+            38,
+            216,
+            206,
+            33
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            }
+          ],
+          "args": [
+            {
+              "name": "active",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "set_mint_price",
+          "discriminator": [
+            105,
+            146,
+            251,
+            12,
+            72,
+            223,
+            220,
+            66
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            }
+          ],
+          "args": [
+            {
+              "name": "new_price",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "submit_commitment",
+          "discriminator": [
+            48,
+            171,
+            16,
+            125,
+            219,
+            133,
+            58,
+            87
+          ],
+          "accounts": [
+            {
+              "name": "oracle",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "oracle_commit",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "commitment",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "slot",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "request_mint",
+          "discriminator": [
+            130,
+            38,
+            27,
+            69,
+            46,
+            211,
+            135,
+            145
+          ],
+          "accounts": [
+            {
+              "name": "minter",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "oracle_commit",
+              "writable": true
+            },
+            {
+              "name": "mint_request",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "quantity",
+              "type": "u8"
+            },
+            {
+              "name": "user_seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reveal_and_mint",
+          "discriminator": [
+            107,
+            200,
+            254,
+            144,
+            182,
+            52,
+            37,
+            50
+          ],
+          "accounts": [
+            {
+              "name": "oracle",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "machine_authority"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "minter",
+              "writable": true
+            },
+            {
+              "name": "mint_request",
+              "writable": true
+            },
+            {
+              "name": "oracle_commit",
+              "writable": true
+            },
+            {
+              "name": "nft_mint",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "minter_ata",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "gumball_svg",
+              "writable": true
+            },
+            {
+              "name": "slot_hashes"
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "PHASE 2: NFT staker fee pool — receives 40% of mint revenue"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "PHASE 2: LP staker fee pool — receives 10% of mint revenue"
+              ],
+              "writable": true
+            },
+            {
+              "name": "season_config",
+              "docs": [
+                "UNINITIALIZED account means \"no active season\", so mints keep working",
+                "even before set_season is ever called (no deploy-order lockout). The",
+                "seeds constraint pins the address, so only set_season can put data here."
+              ]
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "secret",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "refund_mint",
+          "docs": [
+            "Burn 2 gumballs of rarity X → receive 1 guaranteed rarity X+1",
+            "C-1 FIX: gumball accounts validated by PDA seeds",
+            "Allow the minter to reclaim XNT if the oracle failed to reveal within MINT_TIMEOUT.",
+            "Anyone can call this after the timeout — funds always go back to the original minter."
+          ],
+          "discriminator": [
+            171,
+            26,
+            84,
+            214,
+            113,
+            33,
+            74,
+            11
+          ],
+          "accounts": [
+            {
+              "name": "minter",
+              "writable": true
+            },
+            {
+              "name": "mint_request",
+              "writable": true
+            },
+            {
+              "name": "oracle_commit"
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "refund_legacy_mint",
+          "docs": [
+            "Refund a pre-upgrade 156-byte MintRequest (before `request_slot` was appended).",
+            "`Account<MintRequest>` cannot deserialize those, so reveal_and_mint and",
+            "refund_mint reject them. Anyone may call this after MINT_TIMEOUT; all lamports",
+            "go to the stored minter. Layout (incl. 8-byte discriminator): minter 8..40,",
+            "machine 40..72, commitment 72..104, quantity 104, remaining 105, paid 106..114,",
+            "requested_at 114..122, fulfilled 122, bump 123, user_seed 124..156."
+          ],
+          "discriminator": [
+            67,
+            14,
+            45,
+            83,
+            10,
+            137,
+            113,
+            175
+          ],
+          "accounts": [
+            {
+              "name": "minter",
+              "writable": true
+            },
+            {
+              "name": "mint_request",
+              "docs": [
+                "discriminator, PDA seeds) because Account<MintRequest> cannot read it"
+              ],
+              "writable": true
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "burn_to_upgrade",
+          "discriminator": [
+            66,
+            98,
+            22,
+            78,
+            25,
+            41,
+            50,
+            76
+          ],
+          "accounts": [
+            {
+              "name": "burner",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "machine_authority"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "gumball_a",
+              "writable": true
+            },
+            {
+              "name": "mint_a",
+              "writable": true
+            },
+            {
+              "name": "ata_a",
+              "writable": true
+            },
+            {
+              "name": "gumball_b",
+              "writable": true
+            },
+            {
+              "name": "mint_b",
+              "writable": true
+            },
+            {
+              "name": "ata_b",
+              "writable": true
+            },
+            {
+              "name": "new_mint",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "new_ata",
+              "writable": true
+            },
+            {
+              "name": "new_gumball_data",
+              "writable": true
+            },
+            {
+              "name": "new_gumball_svg",
+              "writable": true
+            },
+            {
+              "name": "slot_hashes"
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "PHASE 2: NFT staker fee pool — receives 40% of upgrade fee"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "PHASE 2: LP staker fee pool — receives 10% of upgrade fee"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "user_seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "burn_multi",
+          "docs": [
+            "Burn N gumballs of rarity X → receive 1 of rarity X+1",
+            "Handles Common→Uncommon (5 burns) and Uncommon→Rare (3 burns)",
+            "remaining_accounts = [(mint_1, ata_1, gumball_pda_1), (mint_2, ata_2, gumball_pda_2), ...]",
+            "gumball_a/mint_a/ata_a are the \"base\" accounts (first burn)"
+          ],
+          "discriminator": [
+            192,
+            239,
+            158,
+            117,
+            233,
+            117,
+            22,
+            155
+          ],
+          "accounts": [
+            {
+              "name": "burner",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "machine_authority"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "gumball_a",
+              "writable": true
+            },
+            {
+              "name": "mint_a",
+              "writable": true
+            },
+            {
+              "name": "ata_a",
+              "writable": true
+            },
+            {
+              "name": "new_mint",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "new_ata",
+              "writable": true
+            },
+            {
+              "name": "new_gumball_data",
+              "writable": true
+            },
+            {
+              "name": "new_gumball_svg",
+              "writable": true
+            },
+            {
+              "name": "slot_hashes"
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "PHASE 2: NFT staker fee pool — receives 40% of upgrade fee"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "PHASE 2: LP staker fee pool — receives 10% of upgrade fee"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "user_seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "migrate_machine",
+          "docs": [
+            "Migrate machine account to new struct size (adds total_burned field).",
+            "Safe to call multiple times — idempotent."
+          ],
+          "discriminator": [
+            158,
+            0,
+            135,
+            207,
+            226,
+            252,
+            112,
+            150
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "set_season",
+          "docs": [
+            "Admin: configure a seasonal trait window. While `ends_at` is in the",
+            "future, new mints draw flavor/color from the given sub-ranges of the",
+            "trait arrays (rarity odds untouched). Set ends_at = 0 to end a season",
+            "early. count = 0 leaves that trait unwindowed."
+          ],
+          "discriminator": [
+            186,
+            168,
+            212,
+            35,
+            125,
+            205,
+            106,
+            174
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "season_config",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "flavor_start",
+              "type": "u8"
+            },
+            {
+              "name": "flavor_count",
+              "type": "u8"
+            },
+            {
+              "name": "color_start",
+              "type": "u8"
+            },
+            {
+              "name": "color_count",
+              "type": "u8"
+            },
+            {
+              "name": "ends_at",
+              "type": "i64"
+            },
+            {
+              "name": "label",
+              "type": {
+                "array": [
+                  "u8",
+                  12
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "attach_metadata",
+          "docs": [
+            "Permissionless: attach Metaplex metadata to an existing gumball NFT so",
+            "wallets display it (name + image). Name derives from on-chain serial;",
+            "the URI points at the metadata API, which serves the on-chain SVG as a",
+            "data-URI image — no off-chain storage of the artwork itself.",
+            "Anyone can pay to attach; Metaplex rejects the CPI if metadata exists."
+          ],
+          "discriminator": [
+            108,
+            247,
+            212,
+            125,
+            7,
+            240,
+            165,
+            112
+          ],
+          "accounts": [
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine_authority"
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "gumball_data",
+              "docs": [
+                "Proves this mint is a real gumball (PDA exists) + provides the serial"
+              ]
+            },
+            {
+              "name": "metadata_account",
+              "docs": [
+                "program in the CPI; creation fails if it already exists"
+              ],
+              "writable": true
+            },
+            {
+              "name": "metadata_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "transfer_authority",
+          "docs": [
+            "Transfer machine admin rights and treasury to a new key — the mainnet",
+            "path to a multisig (point both at a Squads-style multisig authority).",
+            "Irreversible unless the new authority signs a transfer back."
+          ],
+          "discriminator": [
+            48,
+            169,
+            76,
+            72,
+            229,
+            180,
+            55,
+            161
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "signer": true
+            },
+            {
+              "name": "machine",
+              "writable": true
+            }
+          ],
+          "args": [
+            {
+              "name": "new_authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "new_treasury",
+              "type": "pubkey"
+            }
+          ]
+        },
+        {
+          "name": "update_owner",
+          "docs": [
+            "H2 FIX: Sync gumball owner to current SPL token holder.",
+            "Anyone can call this — it just reads the ATA balance and updates the field."
+          ],
+          "discriminator": [
+            164,
+            188,
+            124,
+            254,
+            132,
+            26,
+            198,
+            178
+          ],
+          "accounts": [
+            {
+              "name": "holder",
+              "signer": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "holder_ata"
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "list_gumball",
+          "docs": [
+            "List a gumball NFT for sale at a fixed price.",
+            "Token is escrowed in a PDA-owned ATA until sold or delisted."
+          ],
+          "discriminator": [
+            147,
+            156,
+            131,
+            147,
+            120,
+            180,
+            253,
+            180
+          ],
+          "accounts": [
+            {
+              "name": "seller",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "seller_ata",
+              "writable": true
+            },
+            {
+              "name": "escrow_authority"
+            },
+            {
+              "name": "escrow_ata",
+              "writable": true
+            },
+            {
+              "name": "listing",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "price",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "delist_gumball",
+          "docs": [
+            "Cancel a listing and return the NFT to the seller."
+          ],
+          "discriminator": [
+            94,
+            97,
+            251,
+            164,
+            183,
+            196,
+            14,
+            157
+          ],
+          "accounts": [
+            {
+              "name": "seller",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "listing",
+              "writable": true
+            },
+            {
+              "name": "escrow_authority"
+            },
+            {
+              "name": "escrow_ata",
+              "writable": true
+            },
+            {
+              "name": "seller_ata",
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "buy_gumball",
+          "docs": [
+            "Buy a listed gumball. `max_price` is the most the buyer is willing to",
+            "pay, in lamports — pass the price that was displayed to them.",
+            "",
+            "Without it this instruction was front-runnable. The Listing PDA address",
+            "is derived from the mint alone, so a seller who sees a buy in flight can",
+            "delist and relist at any price: the PDA is recreated at the SAME",
+            "address, the victim's instruction still resolves, and it settles at the",
+            "new price. Binding the caller's expectation is the fix."
+          ],
+          "discriminator": [
+            49,
+            186,
+            48,
+            145,
+            239,
+            119,
+            139,
+            85
+          ],
+          "accounts": [
+            {
+              "name": "buyer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "seller",
+              "writable": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "listing",
+              "writable": true
+            },
+            {
+              "name": "escrow_authority"
+            },
+            {
+              "name": "escrow_ata",
+              "writable": true
+            },
+            {
+              "name": "buyer_ata",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "PHASE 2: NFT staker fee pool — receives 25% of royalty"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "PHASE 2: LP staker fee pool — receives 25% of royalty"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "max_price",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "make_offer",
+          "docs": [
+            "Place an offer on a gumball (listed or not). XNT escrowed in Offer PDA."
+          ],
+          "discriminator": [
+            214,
+            98,
+            97,
+            35,
+            59,
+            12,
+            44,
+            178
+          ],
+          "accounts": [
+            {
+              "name": "buyer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "offer",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            },
+            {
+              "name": "expire_seconds",
+              "type": "i64"
+            }
+          ]
+        },
+        {
+          "name": "cancel_offer",
+          "docs": [
+            "Cancel an offer and return escrowed XNT to buyer.",
+            "Anchor `close = buyer` handles lamport return + account cleanup."
+          ],
+          "discriminator": [
+            92,
+            203,
+            223,
+            40,
+            92,
+            89,
+            53,
+            119
+          ],
+          "accounts": [
+            {
+              "name": "buyer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "offer",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "accept_offer",
+          "docs": [
+            "Accept an offer — seller receives XNT (minus royalty), buyer gets NFT.",
+            "`min_amount` is the least the seller is willing to accept, in lamports —",
+            "pass the amount that was displayed to them.",
+            "",
+            "Mirror of the buy_gumball case: the Offer PDA is keyed by (mint, buyer),",
+            "so a buyer can cancel and re-make a smaller offer at the same address",
+            "under a pending accept_offer."
+          ],
+          "discriminator": [
+            227,
+            82,
+            234,
+            131,
+            1,
+            18,
+            48,
+            2
+          ],
+          "accounts": [
+            {
+              "name": "seller",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "buyer",
+              "writable": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "offer",
+              "writable": true
+            },
+            {
+              "name": "seller_ata",
+              "writable": true
+            },
+            {
+              "name": "buyer_ata",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "PHASE 2: NFT staker fee pool — receives 25% of royalty"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "PHASE 2: LP staker fee pool — receives 25% of royalty"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "min_amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "reroll_cosmetics",
+          "docs": [
+            "Burn a flat GUM fee to re-randomize a gumball's COSMETICS (flavor,",
+            "color, special) — rarity never changes. Entropy is the slot hash mixed",
+            "with a caller-supplied seed (prevents validator grinding, same model as",
+            "burns). Respects any active season window; the on-chain SVG regenerates.",
+            "This is GUM's demand sink: supply is fixed, burned GUM is gone forever."
+          ],
+          "discriminator": [
+            94,
+            217,
+            0,
+            97,
+            209,
+            107,
+            254,
+            7
+          ],
+          "accounts": [
+            {
+              "name": "owner",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "owner_nft_ata",
+              "docs": [
+                "Caller must actually HOLD the NFT (stronger than the tracked owner",
+                "field, and staked/escrowed gumballs can't be rerolled)"
+              ]
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "gumball_svg",
+              "writable": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "gum_mint",
+              "writable": true
+            },
+            {
+              "name": "owner_gum_ata",
+              "writable": true
+            },
+            {
+              "name": "slot_hashes"
+            },
+            {
+              "name": "season_config"
+            },
+            {
+              "name": "token_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "user_seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create_auction",
+          "docs": [
+            "Start an English auction: NFT escrowed (same escrow authority as fixed-",
+            "price listings), bids escrow lamports in the Auction PDA. Duration is",
+            "bounded to 1 hour – 7 days."
+          ],
+          "discriminator": [
+            234,
+            6,
+            201,
+            246,
+            47,
+            219,
+            176,
+            107
+          ],
+          "accounts": [
+            {
+              "name": "seller",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "seller_ata",
+              "writable": true
+            },
+            {
+              "name": "escrow_authority"
+            },
+            {
+              "name": "escrow_ata",
+              "writable": true
+            },
+            {
+              "name": "auction",
+              "writable": true
+            },
+            {
+              "name": "gumball_data"
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "start_price",
+              "type": "u64"
+            },
+            {
+              "name": "duration_secs",
+              "type": "i64"
+            }
+          ]
+        },
+        {
+          "name": "bid",
+          "docs": [
+            "Bid on a live auction. Lamports escrow in the Auction PDA; the previous",
+            "highest bidder is refunded in the same transaction. Minimum raise is 5%.",
+            "Anti-snipe: a bid in the final 5 minutes extends the auction to now+5min."
+          ],
+          "discriminator": [
+            199,
+            56,
+            85,
+            38,
+            146,
+            243,
+            37,
+            158
+          ],
+          "accounts": [
+            {
+              "name": "bidder",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "auction",
+              "writable": true
+            },
+            {
+              "name": "prev_bidder",
+              "docs": [
+                "handler (any account is accepted when there is no previous bid)"
+              ],
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "settle_auction",
+          "docs": [
+            "Settle an ended auction — permissionless (anyone can crank it).",
+            "With bids: NFT → winner, 95% → seller, 5% royalty split 50/25/25 to",
+            "treasury/NFT pool/LP pool (same routing as buy_gumball). Without bids:",
+            "NFT returns to the seller (pass seller as `winner`). Auction PDA closes",
+            "to the seller either way."
+          ],
+          "discriminator": [
+            246,
+            196,
+            183,
+            98,
+            222,
+            139,
+            46,
+            133
+          ],
+          "accounts": [
+            {
+              "name": "payer",
+              "docs": [
+                "Anyone can crank a settle; the payer covers winner-ATA rent if needed"
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "auction",
+              "writable": true
+            },
+            {
+              "name": "seller",
+              "writable": true
+            },
+            {
+              "name": "winner",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "escrow_authority"
+            },
+            {
+              "name": "escrow_ata",
+              "writable": true
+            },
+            {
+              "name": "winner_ata",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "writable": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "initialize_staking",
+          "docs": [
+            "Initialize the staking system. Stores the (already-existing, fixed-supply)",
+            "GUM mint pubkey and creates two reward-vault ATAs owned by stake_config.",
+            "The admin must transfer GUM into both vaults after init (regular SPL transfer)."
+          ],
+          "discriminator": [
+            184,
+            41,
+            251,
+            154,
+            146,
+            145,
+            197,
+            77
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "docs": [
+                "HIGH-2 FIX: only the Machine.authority (the legitimate admin who deployed",
+                "the program and initialized the Machine PDA) can initialize staking.",
+                "Without this check, any wallet could front-run the admin and seize control",
+                "of stake_config.authority — bricking the staking deploy permanently."
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "gum_mint",
+              "docs": [
+                "The (already-existing, fixed-supply) GUM mint. Authority should be revoked",
+                "before initialization — admin must transfer GUM into the vaults out-of-band."
+              ]
+            },
+            {
+              "name": "nft_reward_vault",
+              "docs": [
+                "Reward vault for NFT stakers — PDA-owned token account (admin funds via SPL transfer)."
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_reward_vault",
+              "docs": [
+                "Reward vault for LP stakers — PDA-owned token account (admin funds via SPL transfer)."
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "stake",
+          "docs": [
+            "Stake a gumball NFT — transfer to vault, start earning GUM via Pattern B."
+          ],
+          "discriminator": [
+            206,
+            176,
+            202,
+            18,
+            200,
+            209,
+            179,
+            108
+          ],
+          "accounts": [
+            {
+              "name": "staker",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "stake_account",
+              "writable": true
+            },
+            {
+              "name": "gumball_data",
+              "docs": [
+                "The gumball data PDA — used to read rarity"
+              ]
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "user_ata",
+              "docs": [
+                "User's NFT token account (source)"
+              ],
+              "writable": true
+            },
+            {
+              "name": "vault_ata",
+              "docs": [
+                "Vault token account (destination) — owned by stake_config PDA"
+              ],
+              "writable": true
+            },
+            {
+              "name": "nft_reward_vault",
+              "docs": [
+                "NFT reward vault — read for accumulator update (vault_balance term)"
+              ]
+            },
+            {
+              "name": "nft_xnt_state",
+              "docs": [
+                "HIGH-1 FIX: XNT fee state — accumulator must advance before total_nft_weight changes."
+              ],
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "HIGH-1 FIX: XNT fee pool — lamports are only READ here (accumulator",
+                "update); no mut, so stakes don't write-lock the shared pool."
+              ]
+            },
+            {
+              "name": "xnt_debt",
+              "docs": [
+                "CRIT-3 FIX: per-position XNT debt initialized at stake-time so historical",
+                "accumulator value is NOT credited to this position on first claim.",
+                "init_if_needed: the PDA may survive from an unstake under the previous",
+                "deploy (which didn't close it) — we overwrite it either way."
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "claim",
+          "docs": [
+            "Claim pending GUM rewards without unstaking. Pays from nft_reward_vault."
+          ],
+          "discriminator": [
+            62,
+            198,
+            214,
+            193,
+            213,
+            159,
+            108,
+            210
+          ],
+          "accounts": [
+            {
+              "name": "staker",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "stake_account",
+              "writable": true
+            },
+            {
+              "name": "gum_mint",
+              "docs": [
+                "The fixed-supply GUM mint — must match what's stored in stake_config"
+              ]
+            },
+            {
+              "name": "nft_reward_vault",
+              "docs": [
+                "NFT reward vault — transfer source"
+              ],
+              "writable": true
+            },
+            {
+              "name": "staker_gum_ata",
+              "docs": [
+                "Staker's GUM token account (destination)"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "unstake",
+          "docs": [
+            "Unstake — claim final rewards and return NFT to owner. Closes StakeAccount.",
+            "Also settles any pending XNT fee share and closes the XntDebt PDA (rent",
+            "refunded to the staker; stake() re-creates it on a future re-stake)."
+          ],
+          "discriminator": [
+            90,
+            95,
+            107,
+            42,
+            205,
+            124,
+            50,
+            225
+          ],
+          "accounts": [
+            {
+              "name": "staker",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "stake_account",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "vault_ata",
+              "docs": [
+                "Vault token account holding the staked NFT"
+              ],
+              "writable": true
+            },
+            {
+              "name": "user_ata",
+              "docs": [
+                "User's NFT token account (destination)"
+              ],
+              "writable": true
+            },
+            {
+              "name": "gum_mint",
+              "docs": [
+                "The fixed-supply GUM mint"
+              ]
+            },
+            {
+              "name": "nft_reward_vault",
+              "docs": [
+                "NFT reward vault — final reward source"
+              ],
+              "writable": true
+            },
+            {
+              "name": "staker_gum_ata",
+              "docs": [
+                "Staker's GUM token account for final rewards"
+              ],
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_state",
+              "docs": [
+                "HIGH-1 FIX: XNT fee state — accumulator must advance before total_nft_weight shrinks."
+              ],
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "docs": [
+                "XNT pool — settles any pending XNT to the staker on unstake, then we update last_seen."
+              ],
+              "writable": true
+            },
+            {
+              "name": "xnt_debt",
+              "docs": [
+                "XntDebt is settled then CLOSED on unstake (rent back to staker);",
+                "init_if_needed covers legacy positions that never had one."
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "stake_lp",
+          "docs": [
+            "Stake LP tokens with a lock tier. lock_tier: 0=Flexible, 1=Bronze (30d),",
+            "2=Silver (90d), 3=Gold (180d), 4=Diamond (365d).",
+            "Mints a tradeable position NFT — whoever holds it controls the position."
+          ],
+          "discriminator": [
+            48,
+            168,
+            125,
+            78,
+            82,
+            71,
+            152,
+            117
+          ],
+          "accounts": [
+            {
+              "name": "staker",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "lp_stake_account",
+              "writable": true
+            },
+            {
+              "name": "position_mint",
+              "docs": [
+                "Position NFT mint — created fresh for each new position"
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "position_ata",
+              "docs": [
+                "Position NFT ATA for the staker"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_mint",
+              "docs": [
+                "B3 FIX: only the LP mint registered via set_lp_mint may be staked."
+              ]
+            },
+            {
+              "name": "user_lp_ata",
+              "writable": true
+            },
+            {
+              "name": "vault_lp_ata",
+              "writable": true
+            },
+            {
+              "name": "lp_reward_vault",
+              "docs": [
+                "LP reward vault — read for accumulator update"
+              ]
+            },
+            {
+              "name": "lp_xnt_state",
+              "docs": [
+                "HIGH-1 FIX: XNT fee state for LP — accumulator must advance before total_lp_weight grows."
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "HIGH-1 FIX: LP XNT pool — lamports are only READ here (accumulator",
+                "update); no mut, so stakes don't write-lock the shared pool."
+              ]
+            },
+            {
+              "name": "xnt_debt",
+              "docs": [
+                "CRIT-3 FIX: per-position XNT debt initialized at stake-time. Plain",
+                "`init` — position_mint is a fresh keypair created in this same",
+                "instruction, so this PDA can never pre-exist."
+              ],
+              "writable": true
+            },
+            {
+              "name": "metadata_account",
+              "writable": true
+            },
+            {
+              "name": "metadata_program"
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            },
+            {
+              "name": "lp_mint_config",
+              "docs": [
+                "Appended LAST so existing clients only need to add one trailing account."
+              ]
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            },
+            {
+              "name": "lock_tier",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "claim_lp",
+          "docs": [
+            "Claim GUM rewards from LP staking — must hold the position NFT.",
+            "Pays from lp_reward_vault using Pattern B accumulator."
+          ],
+          "discriminator": [
+            4,
+            196,
+            142,
+            10,
+            43,
+            200,
+            164,
+            3
+          ],
+          "accounts": [
+            {
+              "name": "claimer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "lp_stake_account",
+              "writable": true
+            },
+            {
+              "name": "position_ata",
+              "docs": [
+                "Caller must hold the position NFT — verified in instruction body"
+              ]
+            },
+            {
+              "name": "gum_mint",
+              "docs": [
+                "The fixed-supply GUM mint"
+              ]
+            },
+            {
+              "name": "lp_reward_vault",
+              "docs": [
+                "LP reward vault — transfer source"
+              ],
+              "writable": true
+            },
+            {
+              "name": "claimer_gum_ata",
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "unstake_lp",
+          "docs": [
+            "Unstake LP — must hold position NFT.",
+            "Partial: reduces position, keeps NFT. Full: burns NFT, closes account.",
+            "Early exit (before lock_until): per-tier penalty, of which 50% is burned",
+            "and 50% retained in the vault as deferred rewards. No GUM emitted on early exit."
+          ],
+          "discriminator": [
+            114,
+            4,
+            7,
+            206,
+            251,
+            176,
+            233,
+            119
+          ],
+          "accounts": [
+            {
+              "name": "claimer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config",
+              "writable": true
+            },
+            {
+              "name": "lp_stake_account",
+              "writable": true
+            },
+            {
+              "name": "position_mint",
+              "docs": [
+                "Position NFT mint — burned on full withdrawal"
+              ],
+              "writable": true
+            },
+            {
+              "name": "position_ata",
+              "docs": [
+                "Caller must hold the position NFT"
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_mint",
+              "docs": [
+                "B2 FIX: must be the mint this position was staked with; vault_lp_ata",
+                "derives from it, so an unbound mint let a junk-mint position drain the",
+                "real LP vault."
+              ],
+              "writable": true
+            },
+            {
+              "name": "vault_lp_ata",
+              "writable": true
+            },
+            {
+              "name": "user_lp_ata",
+              "writable": true
+            },
+            {
+              "name": "gum_mint",
+              "docs": [
+                "The fixed-supply GUM mint"
+              ]
+            },
+            {
+              "name": "lp_reward_vault",
+              "docs": [
+                "LP reward vault — pending GUM rewards source"
+              ],
+              "writable": true
+            },
+            {
+              "name": "claimer_gum_ata",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_state",
+              "docs": [
+                "HIGH-1 FIX: XNT fee state — accumulator must advance on weight changes."
+              ],
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "docs": [
+                "XNT pool — settles pending XNT to claimer on full unstake; HIGH-3 sync on partial."
+              ],
+              "writable": true
+            },
+            {
+              "name": "xnt_debt",
+              "docs": [
+                "HIGH-3 FIX: xnt_debt is settled and re-snapshotted on partial unstake."
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "recover_legacy_v1_stake",
+          "docs": [
+            "Recover an NFT staked under the v1 (pre-Phase-1) StakeAccount layout.",
+            "Reads the OLD 8+82-byte StakeAccount via raw bytes, transfers the NFT",
+            "from the OLD vault back to the owner, closes the OLD PDA. No GUM",
+            "rewards (v1 GUM PDA mint is no longer authoritative)."
+          ],
+          "discriminator": [
+            217,
+            149,
+            195,
+            254,
+            4,
+            31,
+            88,
+            178
+          ],
+          "accounts": [
+            {
+              "name": "user",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "legacy_stake_config"
+            },
+            {
+              "name": "legacy_stake_account",
+              "writable": true
+            },
+            {
+              "name": "nft_mint"
+            },
+            {
+              "name": "legacy_vault_ata",
+              "docs": [
+                "v1 vault ATA — owned by legacy_stake_config, holds the staked NFT"
+              ],
+              "writable": true
+            },
+            {
+              "name": "user_ata",
+              "docs": [
+                "User's NFT destination — created if missing"
+              ],
+              "writable": true
+            },
+            {
+              "name": "token_program"
+            },
+            {
+              "name": "associated_token_program"
+            },
+            {
+              "name": "system_program"
+            },
+            {
+              "name": "rent"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "initialize_xnt_fees",
+          "docs": [
+            "One-time admin call: creates the four PDAs that power XNT fee sharing",
+            "(two lamport-holding pools + two accumulator state accounts)."
+          ],
+          "discriminator": [
+            217,
+            111,
+            145,
+            159,
+            248,
+            36,
+            34,
+            5
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "nft_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "claim_xnt_fees_nft",
+          "docs": [
+            "NFT staker claims their accumulated XNT share. Creates the per-position",
+            "XntDebt PDA on first call (lazy-init for legacy positions; new positions",
+            "have it initialized at stake-time so this path is mostly redundant)."
+          ],
+          "discriminator": [
+            106,
+            159,
+            38,
+            218,
+            103,
+            222,
+            211,
+            66
+          ],
+          "accounts": [
+            {
+              "name": "staker",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "stake_account"
+            },
+            {
+              "name": "nft_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "xnt_debt",
+              "docs": [
+                "Per-position debt — created on first claim"
+              ],
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "claim_xnt_fees_lp",
+          "docs": [
+            "LP staker claims their accumulated XNT share."
+          ],
+          "discriminator": [
+            152,
+            233,
+            87,
+            52,
+            87,
+            21,
+            122,
+            243
+          ],
+          "accounts": [
+            {
+              "name": "claimer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "lp_stake_account"
+            },
+            {
+              "name": "position_ata",
+              "docs": [
+                "Caller must hold the position NFT"
+              ]
+            },
+            {
+              "name": "lp_xnt_pool",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "xnt_debt",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "sweep_xnt_pool_nft",
+          "docs": [
+            "Admin: recover unattributed lamports from the NFT XNT fee pool while",
+            "NO ONE is staked (total_nft_weight == 0). Unattributed lamports come",
+            "from sources with no owner: fees absorbed while the pool had zero",
+            "stakers, shares forfeited by pre-XntDebt legacy positions, unpayable",
+            "remainders of closed positions, and accumulator rounding dust. With",
+            "zero weight there are no live entitlements, so the sweep cannot touch",
+            "any staker's share. Leaves the rent-exempt minimum in place and",
+            "re-baselines last_seen so accounting starts clean."
+          ],
+          "discriminator": [
+            27,
+            203,
+            56,
+            136,
+            157,
+            30,
+            45,
+            56
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "nft_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "nft_xnt_pool",
+              "writable": true
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "sweep_xnt_pool_lp",
+          "docs": [
+            "Admin: same as sweep_xnt_pool_nft, for the LP pool (total_lp_weight == 0)."
+          ],
+          "discriminator": [
+            160,
+            84,
+            61,
+            115,
+            175,
+            216,
+            240,
+            221
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "machine"
+            },
+            {
+              "name": "treasury",
+              "writable": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "lp_xnt_state",
+              "writable": true
+            },
+            {
+              "name": "lp_xnt_pool",
+              "writable": true
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "set_lp_mint",
+          "docs": [
+            "Admin: register (or change) the single LP mint that stake_lp accepts.",
+            "Kept in its own PDA so the StakeConfig layout does not change. Existing",
+            "positions keep the mint recorded in their LpStakeAccount; changing this",
+            "only affects NEW stakes."
+          ],
+          "discriminator": [
+            189,
+            11,
+            158,
+            122,
+            176,
+            207,
+            231,
+            132
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "stake_config"
+            },
+            {
+              "name": "lp_mint_config",
+              "writable": true
+            },
+            {
+              "name": "system_program"
+            }
+          ],
+          "args": [
+            {
+              "name": "lp_mint",
+              "type": "pubkey"
+            }
+          ]
+        }
+      ],
+      "accounts": [
+        {
+          "name": "gumball_nft::Auction",
+          "discriminator": [
+            218,
+            94,
+            247,
+            242,
+            126,
+            233,
+            131,
+            81
+          ]
+        },
+        {
+          "name": "gumball_nft::GumballData",
+          "discriminator": [
+            120,
+            47,
+            220,
+            38,
+            147,
+            189,
+            163,
+            155
+          ]
+        },
+        {
+          "name": "gumball_nft::GumballSvg",
+          "discriminator": [
+            221,
+            206,
+            206,
+            19,
+            30,
+            212,
+            28,
+            100
+          ]
+        },
+        {
+          "name": "gumball_nft::Listing",
+          "discriminator": [
+            218,
+            32,
+            50,
+            73,
+            43,
+            134,
+            26,
+            58
+          ]
+        },
+        {
+          "name": "gumball_nft::LpMintConfig",
+          "discriminator": [
+            151,
+            16,
+            205,
+            137,
+            4,
+            162,
+            123,
+            36
+          ]
+        },
+        {
+          "name": "gumball_nft::LpStakeAccount",
+          "discriminator": [
+            76,
+            50,
+            96,
+            57,
+            223,
+            129,
+            1,
+            185
+          ]
+        },
+        {
+          "name": "gumball_nft::Machine",
+          "discriminator": [
+            25,
+            102,
+            22,
+            13,
+            58,
+            243,
+            138,
+            79
+          ]
+        },
+        {
+          "name": "gumball_nft::MintRequest",
+          "discriminator": [
+            60,
+            88,
+            16,
+            213,
+            180,
+            138,
+            14,
+            225
+          ]
+        },
+        {
+          "name": "gumball_nft::Offer",
+          "discriminator": [
+            215,
+            88,
+            60,
+            71,
+            170,
+            162,
+            73,
+            229
+          ]
+        },
+        {
+          "name": "gumball_nft::OracleCommit",
+          "discriminator": [
+            48,
+            47,
+            166,
+            158,
+            247,
+            76,
+            182,
+            92
+          ]
+        },
+        {
+          "name": "gumball_nft::SeasonConfig",
+          "discriminator": [
+            199,
+            22,
+            167,
+            203,
+            199,
+            231,
+            215,
+            137
+          ]
+        },
+        {
+          "name": "gumball_nft::StakeAccount",
+          "discriminator": [
+            80,
+            158,
+            67,
+            124,
+            50,
+            189,
+            192,
+            255
+          ]
+        },
+        {
+          "name": "gumball_nft::StakeConfig",
+          "discriminator": [
+            238,
+            151,
+            43,
+            3,
+            11,
+            151,
+            63,
+            176
+          ]
+        },
+        {
+          "name": "gumball_nft::XntDebt",
+          "discriminator": [
+            23,
+            223,
+            5,
+            36,
+            70,
+            119,
+            93,
+            139
+          ]
+        },
+        {
+          "name": "gumball_nft::XntFeeState",
+          "discriminator": [
+            76,
+            138,
+            16,
+            91,
+            127,
+            4,
+            45,
+            146
+          ]
+        },
+        {
+          "name": "gumball_nft::XntPool",
+          "discriminator": [
+            83,
+            36,
+            242,
+            97,
+            153,
+            234,
+            25,
+            191
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "gumball_nft::Auction",
+          "docs": [
+            "English auction — NFT escrowed in the shared listing escrow; the highest",
+            "bid escrows as lamports in this PDA (refunded on outbid)."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "start_price",
+                "type": "u64"
+              },
+              {
+                "name": "ends_at",
+                "type": "i64"
+              },
+              {
+                "name": "highest_bid",
+                "type": "u64"
+              },
+              {
+                "name": "highest_bidder",
+                "type": "pubkey"
+              },
+              {
+                "name": "settled",
+                "type": "bool"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::GumballData",
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "owner",
+                "type": "pubkey"
+              },
+              {
+                "name": "machine",
+                "type": "pubkey"
+              },
+              {
+                "name": "serial",
+                "type": "u64"
+              },
+              {
+                "name": "flavor",
+                "type": "u8"
+              },
+              {
+                "name": "color",
+                "type": "u8"
+              },
+              {
+                "name": "rarity",
+                "type": "u8"
+              },
+              {
+                "name": "special",
+                "type": "u8"
+              },
+              {
+                "name": "minted_at",
+                "type": "u64"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              },
+              {
+                "name": "commitment_hash",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "user_seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "oracle_secret",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::GumballSvg",
+          "docs": [
+            "Separate PDA holding the on-chain SVG — not loaded by burn instructions"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "svg",
+                "type": "bytes"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::Listing",
+          "docs": [
+            "Marketplace listing — seller lists NFT at a fixed price"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "seller",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "price",
+                "type": "u64"
+              },
+              {
+                "name": "created_at",
+                "type": "i64"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::LpMintConfig",
+          "docs": [
+            "The one LP mint stake_lp accepts. Sibling PDA (seeds [b\"lp_mint_config\"]) so",
+            "StakeConfig keeps its layout. Written only by set_lp_mint."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "lp_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::LpStakeAccount",
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "position_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "lp_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "staked_at",
+                "type": "i64"
+              },
+              {
+                "name": "last_claimed",
+                "type": "i64"
+              },
+              {
+                "name": "lock_until",
+                "type": "i64"
+              },
+              {
+                "name": "lock_multiplier",
+                "type": "u16"
+              },
+              {
+                "name": "lock_tier",
+                "type": "u8"
+              },
+              {
+                "name": "weight",
+                "type": "u128"
+              },
+              {
+                "name": "reward_debt",
+                "type": "u128"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::Machine",
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "authority",
+                "type": "pubkey"
+              },
+              {
+                "name": "treasury",
+                "type": "pubkey"
+              },
+              {
+                "name": "oracle",
+                "type": "pubkey"
+              },
+              {
+                "name": "mint_price",
+                "type": "u64"
+              },
+              {
+                "name": "total_minted",
+                "type": "u64"
+              },
+              {
+                "name": "max_supply",
+                "type": "u64"
+              },
+              {
+                "name": "is_active",
+                "type": "bool"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              },
+              {
+                "name": "total_burned",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::MintRequest",
+          "docs": [
+            "Pending mint request linking user payment to a commitment"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "minter",
+                "type": "pubkey"
+              },
+              {
+                "name": "machine",
+                "type": "pubkey"
+              },
+              {
+                "name": "commitment",
+                "type": "pubkey"
+              },
+              {
+                "name": "quantity",
+                "type": "u8"
+              },
+              {
+                "name": "remaining_quantity",
+                "type": "u8"
+              },
+              {
+                "name": "paid_amount",
+                "type": "u64"
+              },
+              {
+                "name": "requested_at",
+                "type": "i64"
+              },
+              {
+                "name": "fulfilled",
+                "type": "bool"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              },
+              {
+                "name": "user_seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "request_slot",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::Offer",
+          "docs": [
+            "Marketplace offer — buyer bids on an NFT with escrowed XNT"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "buyer",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "created_at",
+                "type": "i64"
+              },
+              {
+                "name": "expires_at",
+                "type": "i64"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::OracleCommit",
+          "docs": [
+            "Stores oracle commitment before randomness is needed — C-2 fix"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "oracle",
+                "type": "pubkey"
+              },
+              {
+                "name": "commitment",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "submitted_at",
+                "type": "i64"
+              },
+              {
+                "name": "submitted_slot",
+                "type": "u64"
+              },
+              {
+                "name": "used",
+                "type": "bool"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::SeasonConfig",
+          "docs": [
+            "Seasonal trait window — while ends_at is in the future, new mints draw",
+            "flavor/color from [start, start+count) sub-ranges of the trait arrays."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "flavor_start",
+                "type": "u8"
+              },
+              {
+                "name": "flavor_count",
+                "type": "u8"
+              },
+              {
+                "name": "color_start",
+                "type": "u8"
+              },
+              {
+                "name": "color_count",
+                "type": "u8"
+              },
+              {
+                "name": "ends_at",
+                "type": "i64"
+              },
+              {
+                "name": "label",
+                "type": {
+                  "array": [
+                    "u8",
+                    12
+                  ]
+                }
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::StakeAccount",
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "owner",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "rarity",
+                "type": "u8"
+              },
+              {
+                "name": "weight",
+                "type": "u64"
+              },
+              {
+                "name": "staked_at",
+                "type": "i64"
+              },
+              {
+                "name": "last_claimed",
+                "type": "i64"
+              },
+              {
+                "name": "reward_debt",
+                "type": "u128"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::StakeConfig",
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "authority",
+                "type": "pubkey"
+              },
+              {
+                "name": "gum_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "nft_reward_vault",
+                "type": "pubkey"
+              },
+              {
+                "name": "lp_reward_vault",
+                "type": "pubkey"
+              },
+              {
+                "name": "total_staked",
+                "type": "u64"
+              },
+              {
+                "name": "total_claimed",
+                "type": "u64"
+              },
+              {
+                "name": "total_nft_weight",
+                "type": "u128"
+              },
+              {
+                "name": "total_lp_weight",
+                "type": "u128"
+              },
+              {
+                "name": "acc_nft_reward_per_weight",
+                "type": "u128"
+              },
+              {
+                "name": "acc_lp_reward_per_weight",
+                "type": "u128"
+              },
+              {
+                "name": "last_nft_emission_update",
+                "type": "i64"
+              },
+              {
+                "name": "last_lp_emission_update",
+                "type": "i64"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::XntDebt",
+          "docs": [
+            "Per-position XNT debt — created lazily on first claim_xnt_fees call.",
+            "Sibling PDA to the v2 StakeAccount / LpStakeAccount so we don't have to",
+            "migrate existing positions to add a field."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "debt",
+                "type": "u128"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::XntFeeState",
+          "docs": [
+            "Accumulator state for one fee-sharing stream (NFT or LP).",
+            "`last_seen_balance` lets us know how many new lamports arrived since the",
+            "last accumulator update, even though deposits happen out-of-band."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "stake_type",
+                "type": "u8"
+              },
+              {
+                "name": "acc_xnt_per_weight",
+                "type": "u128"
+              },
+              {
+                "name": "last_seen_balance",
+                "type": "u64"
+              },
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gumball_nft::XntPool",
+          "docs": [
+            "Lamport-holding PDA for a fee-sharing pool. Owned by the program.",
+            "Two instances:",
+            "nft_xnt_pool — accrues NFT-staker share of all fees",
+            "lp_xnt_pool  — accrues LP-staker share of all fees"
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "bump",
+                "type": "u8"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
