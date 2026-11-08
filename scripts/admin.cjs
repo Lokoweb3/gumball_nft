@@ -118,7 +118,10 @@ async function build(conn) {
 
 (async () => {
   const rpc = process.env.RPC || CLUSTERS[clusterName].rpc;
-  if (clusterName === "localnet" && !/^http:\/\/(127\.0\.0\.1|localhost):/.test(rpc)) fail("localnet requires a loopback RPC");
+  if (clusterName === "localnet") {
+    let host; try { host = new URL(rpc).hostname; } catch { host = ""; }
+    if (!["127.0.0.1", "localhost", "[::1]"].includes(host)) fail("localnet requires a loopback RPC");
+  }
   const conn = new Connection(rpc, "confirmed");
   const genesis = await conn.getGenesisHash();
   const known = Object.entries(CLUSTERS).find(([, c]) => c.genesis === genesis);
