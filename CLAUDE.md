@@ -6,10 +6,10 @@ This file helps Claude understand the project context, architecture decisions, a
 
 ## Project Purpose
 
-A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
+An NFT gumball machine on the X1 (Solana-compatible) blockchain, with traits stored on-chain and the art drawn from them. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
 
 **Key properties:**
-- SVG artwork stored 100% on-chain (no IPFS, no centralized storage)
+- Traits stored on-chain; the SVG picture is drawn from them by one shared renderer (`public/js/gumball-svg.js`), not stored (no IPFS, no stored image)
 - Provably fair randomness — oracle cannot manipulate outcomes
 - Burn-to-upgrade mechanic across 5 rarity tiers
 - Single wallet approval for up to 10 mints
@@ -42,20 +42,26 @@ A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users
 
 ## Key Architecture Decisions
 
-### 1. GumballData is split into two PDAs
+### 1. No on-chain SVG (traits-art, 2026-11-09)
 
-Each NFT creates two on-chain accounts:
+Each NFT creates one on-chain account:
 
 ```
-GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, metadata + proof fields + oracle_secret)
-GumballSvg   seeds: [b"svg", mint.key()]       — 1,412 bytes (8 + 4 + MAX_SVG_LEN 1,400; on-chain SVG)
+GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, traits + proof fields + oracle_secret)
 ```
+
+The picture is a pure function of (serial, flavor, color, rarity, special) and is drawn by
+`public/js/gumball-svg.js` (site and `server.cjs`). `programs/gumball_nft/src/svg.rs` is the
+test-only Rust reference; `node scripts/test-svg-identity.cjs` proves the JS byte-identical.
+Balls minted before this change still have a legacy `GumballSvg` PDA (`[b"svg", mint.key()]`, 1,412
+bytes); nothing reads it, and `close_burned` closes it when present (see README). History of the
+earlier two-PDA design follows.
 
 **Why:** Burn instructions load 3–5 GumballData accounts simultaneously. The SBF runtime
 has a 32KB heap. With SVG inline (~865 bytes each), 5 accounts = heap overflow at ~5K CUs.
 With SVG separate (93 bytes each), 5 accounts = 465 bytes — no problem.
 
-The SVG is still 100% on-chain. It's just in a sibling PDA that burn instructions never load.
+(Historical: the SVG then lived in a sibling PDA that burn instructions never load. It no longer exists for new balls.)
 
 ### 2. GumballData is v5 only
 
@@ -286,7 +292,7 @@ No migration needed unless Machine struct changed.
 ## What NOT to do
 
 - **Never commit** `oracle-secrets.json`, `oracle-wallet.json`, `faucet-wallet.json`, `*.pem`, `.env`, `target/`
-- **Never add SVG back inline** to `GumballData` — it will cause heap OOM in burns
+- **Never add SVG back inline** to `GumballData` — it will cause heap OOM in burns; and never change `gumball-svg.js` without changing `svg.rs` the same way (the identity test and golden hashes will fail)
 - **Never change GumballData struct** without adding a new dataSize filter for the new size
 - **Never call `.close()`** manually on Anchor accounts that have `close = X` in struct
 - **Never use `Box<Account<'info, GumballData>>`** in burn instruction structs — use `UncheckedAccount` and validate manually
@@ -357,7 +363,7 @@ trustworthy, but the process dies. Consequences for anyone extending the suite:
 - the abort is far more frequent on small machines: stable at 39/39 locally, but
   8 of 10 scenarios died on a 2-CPU GitHub runner. CI therefore runs it
   **non-blocking** until it moves to LiteSVM 1.x (@solana/kit) or solana-bankrun
-- `generate_svg` output is pinned by `generate_svg_golden_output` — if it fails,
+- `generate_svg` (test-only, `svg.rs`) output is pinned by `generate_svg_golden_output` — if it fails,
   the rendered artwork changed. Do not re-bake the hashes unless that was intended.
 
 ---
@@ -435,7 +441,7 @@ the separate PDA when a user opens the modal.
 **Why:** Burn instructions load 3–5 GumballData accounts simultaneously. With inline SVG
 (~865 bytes each), this caused heap overflow (OOM) at ~5K compute units before any logic
 ran. Separating the SVG shrinks GumballData to 93 bytes, making burns fast and reliable.
-The SVG is still 100% on-chain — just in a sibling PDA.
+(Superseded 2026-11-09: no SVG is stored any more; see Architecture decision 1.)
 
 ---
 
@@ -950,3 +956,22 @@ metadata for all existing gumballs (~0.0056 XNT each, payer-funded).
 re-roll is GUM's first demand sink — emissions now have a burn counterweight, and
 cosmetics get replay value without touching rarity fairness.
 
+---
+
+### [2026-11-09] traits-art: no on-chain SVG, base price 0.03 XNT
+
+**Branch:** `traits-art` off `security-fixes` d9aff88.
+
+**What:**
+- `reveal_and_mint`, `burn_to_upgrade`, `burn_multi` no longer create a `GumballSvg`; `reroll_cosmetics`
+  no longer writes one. Each lost one account (IDL golden updated; nothing else in the interface changed
+  except doc strings, and the unused `GumballSvg` type left the IDL).
+- `close_burned` keeps the svg PDA in its account list (seed-checked) and branches on its state:
+  program-owned with the `GumballSvg` discriminator -> closed too (legacy ball); system-owned and empty
+  (new ball, or donated lamports) -> left alone, only `GumballData` closes; anything else -> `InvalidAccount`.
+- Renderer: `public/js/gumball-svg.js` (UMD) replaces every svg PDA read in `index`, `marketplace`,
+  `leaderboard`, `verify` and `server.cjs` `/api/metadata`. `svg.rs` is `#[cfg(test)]`.
+- `BASE_PRICE` 30,000,000, `MAX_PRICE` 120,000,000 (0.03 -> 0.12 XNT); site price tables updated.
+- Per-mint oracle rent 0.017943 -> 0.007224 XNT (rent model).
+
+**Deploy notes:** program, `scripts/oracle.cjs`, the pages and `server.cjs` must deploy together.

@@ -26,7 +26,9 @@ impl GumballData {
     pub fn special_name(&self) -> &'static str { SPECIALS[self.special as usize % SPECIALS.len()] }
 }
 
-/// Separate PDA holding the on-chain SVG — not loaded by burn instructions
+/// LEGACY: held the on-chain SVG of balls minted before the artwork moved off chain. No longer
+/// created or written (the picture is drawn from the traits); kept so `close_burned` can recognise
+/// and close existing accounts.
 #[account]
 pub struct GumballSvg {
     pub svg: Vec<u8>,

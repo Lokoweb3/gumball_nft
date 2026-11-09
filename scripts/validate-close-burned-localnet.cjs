@@ -1,7 +1,8 @@
 // close_burned validation against a LOCAL validator (see scripts/ci-e2e.sh).
 //
-// close_burned is permissionless: it closes ONE burned ball's GumballData + GumballSvg and sends all
-// their lamports to machine.treasury (never to the caller). This suite proves
+// close_burned is permissionless: it closes ONE burned ball's GumballData (+ the GumballSvg of a
+// LEGACY ball; new balls have none) and sends all their lamports to machine.treasury (never to the
+// caller). This suite proves
 //   1. every refusal, with its exact error code, and that a refused call moves nothing:
 //        live ball, token burned but owner field still set, mint authority not machine_authority
 //        or revoked, forged GumballData / GumballSvg (not program-owned, other machine, bad
@@ -15,7 +16,10 @@
 //   5. a caller that is NOT the burner works and only pays the fee; the burner's balance is unchanged
 //   6. several balls close in one transaction
 //   7. balls burned by the real burn_to_upgrade (2 balls) and burn_multi (5 balls) are closable, and
-//      the upgrade's output ball is refused (it is not burned)
+//      the upgrade's output ball is refused (it is not burned); the burns no longer create a GumballSvg
+//   8. NEW-style balls (no svg PDA) close, the treasury gaining exactly the GumballData lamports;
+//      lamports donated to the empty svg address are neither moved nor allowed to block the close;
+//      a foreign-owned or program-owned-but-empty svg address is refused
 //
 // Usage: RPC=http://127.0.0.1:8899 CB_DIR=<make-close-burned-fixtures.cjs outDir> node scripts/validate-close-burned-localnet.cjs
 // The wallet (default key, or WALLET) must be the one the fixtures were built for: it owns the live
@@ -61,7 +65,7 @@ const gdOf = (mint) => pda([Buffer.from("gumball"), mint.toBuffer()]);
 const svgOf = (mint) => pda([Buffer.from("svg"), mint.toBuffer()]);
 const bal = (a) => c.getBalance(typeof a === "string" ? pk(a) : a);
 
-// close_burned accounts: machine, machine_authority, treasury(w), nft_mint, gumball_data(w), gumball_svg(w)
+// close_burned accounts: machine, machine_authority, treasury(w), nft_mint, gumball_data(w), gumball_svg(w; may not exist)
 function closeIx(ball, o = {}) {
   const mint = o.mint || pk(ball.mint);
   return new TransactionInstruction({
@@ -95,7 +99,13 @@ function closedEvents(logs) {
     .filter((b) => b.subarray(0, 8).equals(d))
     .map((b) => ({ mint: new PublicKey(b.subarray(8, 40)).toBase58(), lamports: Number(b.readBigUInt64LE(40)) }));
 }
-const lamportsOf = async (ball) => (await bal(ball.gd)) + (await bal(ball.svg));
+// lamports close_burned moves for a ball: GumballData, plus the svg PDA only when it is a program-owned GumballSvg
+// (lamports sitting on an empty system-owned svg address are not ours and are never moved)
+const lamportsOf = async (ball) => {
+  const svg = await c.getAccountInfo(pk(ball.svg));
+  return (await bal(ball.gd)) + (svg && svg.owner.equals(PROGRAM_ID) ? svg.lamports : 0);
+};
+const rawLamports = async (ball) => (await bal(ball.gd)) + (await bal(ball.svg));
 const gone = async (a) => (await c.getAccountInfo(typeof a === "string" ? pk(a) : a)) === null;
 const machineBurned = async () => Number((await c.getAccountInfo(MACHINE)).data.readBigUInt64LE(130));
 
@@ -120,7 +130,6 @@ async function burn(kind, balls) {
     { pubkey: newMint.publicKey, isSigner: true, isWritable: true },
     { pubkey: newAta, isSigner: false, isWritable: true },
     { pubkey: gdOf(newMint.publicKey), isSigner: false, isWritable: true },
-    { pubkey: svgOf(newMint.publicKey), isSigner: false, isWritable: true },
     { pubkey: SLOT_HASHES, isSigner: false, isWritable: false },
     { pubkey: pda([Buffer.from("nft_xnt_pool")]), isSigner: false, isWritable: true },
     { pubkey: pda([Buffer.from("lp_xnt_pool")]), isSigner: false, isWritable: true },
@@ -148,6 +157,8 @@ async function burn(kind, balls) {
   const K = info.cases;
 
   console.log("\nfixtures are in the on-chain layout");
+  check("n1 has no svg account at all; n2's svg address is an empty system account with 777 lamports",
+    (await c.getAccountInfo(pk(K.n1.svg))) === null && (await bal(K.n2.svg)) === 777 && (await c.getAccountInfo(pk(K.n2.svg))).data.length === 0);
   for (const n of ["b1", "b2", "live"]) {
     const gd = await c.getAccountInfo(pk(K[n].gd)), svg = await c.getAccountInfo(pk(K[n].svg));
     check(`${n}: GumballData ${n === "b2" ? 93 : 189} bytes + GumballSvg 1412 bytes, both program-owned`,
@@ -156,8 +167,8 @@ async function burn(kind, balls) {
   check("b1 holds the donated 1000 lamports on top of rent", (await bal(K.b1.gd)) === (128 + 189) * 6960 + 1000);
 
   console.log("\nrefusals (exact codes) — nothing may move");
-  const tracked = ["b1", "b3", "live", "stale", "foreign", "noauth", "fgd_sys", "fgd_machine", "fgd_disc", "fsvg_sys", "fsvg_disc"];
-  const snap = async () => { const o = { treasury: await bal(TREASURY) }; for (const n of tracked) o[n] = await lamportsOf(K[n]); return o; };
+  const tracked = ["b1", "b3", "n1", "n2", "live", "stale", "foreign", "noauth", "fgd_sys", "fgd_machine", "fgd_disc", "fsvg_sys", "fsvg_disc", "fsvg_foreign", "fsvg_prog"];
+  const snap = async () => { const o = { treasury: await bal(TREASURY) }; for (const n of tracked) o[n] = await rawLamports(K[n]); return o; };
   const before = await snap();
   const refuse = async (label, ix, code) => {
     const r = await attempt([ix]);
@@ -176,9 +187,12 @@ async function burn(kind, balls) {
   await named("GumballData with the wrong discriminator", "fgd_disc", "InvalidAccount");
   await named("GumballSvg not program-owned", "fsvg_sys", "InvalidAccount");
   await named("GumballSvg with the wrong discriminator", "fsvg_disc", "InvalidAccount");
+  await named("svg address owned by another program (empty)", "fsvg_foreign", "InvalidAccount");
+  await named("svg address owned by this program but without a GumballSvg discriminator (empty)", "fsvg_prog", "InvalidAccount");
   await named("wrong treasury (the burner)", "b1", "InvalidTreasury", { treasury: wallet.publicKey });
   await refuse("GumballData of another ball", closeIx(K.b3, { gd: pk(K.b1.gd) }), CONSTRAINT_SEEDS);
   await refuse("GumballSvg of another ball", closeIx(K.b3, { svg: pk(K.b1.svg) }), CONSTRAINT_SEEDS);
+  await refuse("a legacy ball's svg swapped for another ball's empty svg address (cannot skip its GumballSvg)", closeIx(K.b3, { svg: pk(K.n1.svg) }), CONSTRAINT_SEEDS);
   await refuse("GumballData and GumballSvg swapped", closeIx(K.b3, { gd: pk(K.b3.svg), svg: pk(K.b3.gd) }), CONSTRAINT_SEEDS);
   await refuse("machine_authority that is not the PDA", closeIx(K.b3, { machineAuth: wallet.publicKey }), CONSTRAINT_SEEDS);
   const notMint = closeIx(K.b3, { mint: wallet.publicKey, gd: gdOf(wallet.publicKey), svg: svgOf(wallet.publicKey) });
@@ -234,19 +248,39 @@ async function burn(kind, balls) {
   check("treasury gained both balls' lamports, all four accounts gone", (await bal(TREASURY)) - t45 === want45 && (await gone(K.b4.gd)) && (await gone(K.b4.svg)) && (await gone(K.b5.gd)) && (await gone(K.b5.svg)), `+${(await bal(TREASURY)) - t45} of ${want45}`);
   if (r.ok) console.log(`     (${(await logsOf(r.sig)).cu} compute units for 2 closes)`);
 
+  console.log("\nNEW-style ball: no svg PDA (n1)");
+  const wantN1 = await bal(K.n1.gd), tN1 = await bal(TREASURY);
+  r = await attempt([closeIx(K.n1)]);
+  check("new-style ball closed", r.ok, r.ok ? "" : r.text.slice(0, 200));
+  check("treasury gained exactly the GumballData lamports", (await bal(TREASURY)) - tN1 === wantN1 && wantN1 === (128 + 189) * 6960, `+${(await bal(TREASURY)) - tN1} of ${wantN1}`);
+  check("GumballData gone, svg address still does not exist", (await gone(K.n1.gd)) && (await gone(K.n1.svg)));
+  const evN1 = closedEvents((await logsOf(r.sig)).logs);
+  check("BurnedClosedEvent reports only the GumballData lamports", evN1.length === 1 && evN1[0].lamports === wantN1, JSON.stringify(evN1));
+
+  console.log("\nNEW-style ball whose empty svg address received donated lamports (n2)");
+  const wantN2 = await bal(K.n2.gd), tN2 = await bal(TREASURY);
+  r = await attempt([closeIx(K.n2)]);
+  check("closed despite the donation (it cannot block the close)", r.ok, r.ok ? "" : r.text.slice(0, 200));
+  check("treasury gained exactly the GumballData lamports, not the donation", (await bal(TREASURY)) - tN2 === wantN2, `+${(await bal(TREASURY)) - tN2} of ${wantN2}`);
+  const donated = await c.getAccountInfo(pk(K.n2.svg));
+  check("the donated 777 lamports were left untouched on a plain system account", (await gone(K.n2.gd)) && donated && donated.lamports === 777 && donated.owner.equals(SystemProgram.programId) && donated.data.length === 0);
+
   console.log("\nballs burned by burn_to_upgrade (2 balls)");
   const [ra, rb] = info.rare;
   const burned0 = await machineBurned();
   let b = await burn("burn_to_upgrade", [ra, rb]);
   check("burn_to_upgrade ran; Machine.total_burned +2", (await machineBurned()) - burned0 === 2);
-  check("burned GumballData/GumballSvg are still on chain until closed", !(await gone(ra.gd)) && !(await gone(ra.svg)) && !(await gone(rb.gd)));
+  check("burned legacy GumballData/GumballSvg are still on chain until closed", !(await gone(ra.gd)) && !(await gone(ra.svg)) && !(await gone(rb.gd)));
+  check("the burn did not create an svg PDA for its output ball", await gone(svgOf(b.newMint)));
+  const outRent = (128 + 189) * 6960;
+  check("the output ball's GumballData holds exactly its rent", (await bal(gdOf(b.newMint))) === outRent);
   const wantR = (await lamportsOf(ra)) + (await lamportsOf(rb)), tR = await bal(TREASURY);
   r = await attempt([closeIx(ra), closeIx(rb)]);
   check("both burned balls closed", r.ok, r.ok ? "" : r.text.slice(0, 200));
   check("treasury gained exactly their lamports", (await bal(TREASURY)) - tR === wantR && (await gone(ra.gd)) && (await gone(ra.svg)) && (await gone(rb.gd)) && (await gone(rb.svg)), `+${(await bal(TREASURY)) - tR} of ${wantR}`);
   const out = { mint: b.newMint.toBase58(), gd: gdOf(b.newMint).toBase58(), svg: svgOf(b.newMint).toBase58() };
   r = await attempt([closeIx(out)]);
-  check("the upgrade's output ball is refused (NotBurned)", !r.ok && hasCode(r.text, errCode("NotBurned")) && !(await gone(out.gd)) && !(await gone(out.svg)));
+  check("the upgrade's output ball is refused (NotBurned)", !r.ok && hasCode(r.text, errCode("NotBurned")) && !(await gone(out.gd)));
 
   console.log("\nballs burned by burn_multi (5 balls)");
   const burned1 = await machineBurned();
@@ -260,7 +294,7 @@ async function burn(kind, balls) {
   check("treasury gained exactly their lamports, ten accounts gone", (await bal(TREASURY)) - tC === wantC && allGone, `+${(await bal(TREASURY)) - tC} of ${wantC}`);
   if (r.ok) console.log(`     (${(await logsOf(r.sig)).cu} compute units for 5 closes)`);
   const outM = { mint: b.newMint.toBase58(), gd: gdOf(b.newMint).toBase58(), svg: svgOf(b.newMint).toBase58() };
-  check("the upgrade output of burn_multi is intact", !(await gone(outM.gd)) && !(await gone(outM.svg)));
+  check("the upgrade output of burn_multi is intact, and has no svg PDA", !(await gone(outM.gd)) && (await gone(outM.svg)));
 
   console.log(`\nRESULT: ${passed} passed, ${failed} failed`);
   process.exit(failed === 0 ? 0 : 1);

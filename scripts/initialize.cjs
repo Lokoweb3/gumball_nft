@@ -61,7 +61,7 @@ async function main() {
   if (!currentInfo) {
     console.log("\nInitializing new Machine...");
     const mintPrice = Buffer.alloc(8);
-    mintPrice.writeBigUInt64LE(BigInt(10_000_000), 0);
+    mintPrice.writeBigUInt64LE(BigInt(30_000_000), 0);
     const treasury = wallet.publicKey.toBuffer();
     const data = Buffer.concat([disc("initialize_machine"), mintPrice, treasury]);
     const ix = new TransactionInstruction({
@@ -179,7 +179,7 @@ async function main() {
   if (!existing) {
     console.log("\nInitializing new Machine...");
     const mintPrice = Buffer.alloc(8);
-    mintPrice.writeBigUInt64LE(BigInt(10_000_000), 0); // 0.01 XNT
+    mintPrice.writeBigUInt64LE(BigInt(30_000_000), 0); // 0.03 XNT
     const treasury = wallet.publicKey.toBuffer();
     const data = Buffer.concat([disc("initialize_machine"), mintPrice, treasury]);
 

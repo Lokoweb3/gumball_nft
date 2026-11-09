@@ -318,10 +318,6 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
     [Buffer.from("gumball"), nftMint.publicKey.toBytes()], PROGRAM_ID
   );
 
-  const [gumballSvg] = PublicKey.findProgramAddressSync(
-    [Buffer.from("svg"), nftMint.publicKey.toBytes()], PROGRAM_ID
-  );
-
   const minterAta = getAta(nftMint.publicKey, request.minter);
 
   const machineInfo    = await connection.getAccountInfo(MACHINE_PDA);
@@ -352,7 +348,6 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
       { pubkey: nftMint.publicKey,          isSigner: true,  isWritable: true  }, // nft_mint
       { pubkey: minterAta,                  isSigner: false, isWritable: true  }, // minter_ata
       { pubkey: gumballData,                isSigner: false, isWritable: true  }, // gumball_data
-      { pubkey: gumballSvg,                 isSigner: false, isWritable: true  }, // gumball_svg
       { pubkey: SLOT_HASHES,                isSigner: false, isWritable: false }, // slot_hashes
       { pubkey: nftXntPool,                 isSigner: false, isWritable: true  }, // nft_xnt_pool (PHASE 2)
       { pubkey: lpXntPool,                  isSigner: false, isWritable: true  }, // lp_xnt_pool  (PHASE 2)
@@ -377,7 +372,6 @@ async function revealAndMint(connection, mintRequestPubkey, request, commitPda, 
   console.log(`  ✅ Revealed and minted!`);
   console.log(`  Mint:    ${nftMint.publicKey.toBase58()}`);
   console.log(`  Gumball: ${gumballData.toBase58()}`);
-  console.log(`  Svg PDA: ${gumballSvg.toBase58()}`);
   console.log(`  TX:      ${sig}`);
   return sig;
 }

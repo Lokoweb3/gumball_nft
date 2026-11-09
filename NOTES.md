@@ -68,8 +68,14 @@ AFTER (two accounts per NFT, 93 + 788 bytes; historical figures from the 768-byt
 The `GumballSvg` PDA exists on-chain permanently but is only fetched by the frontend
 when a user clicks a gumball to view it.
 
-**The SVG is still 100% on-chain** — stored in a program-owned PDA on X1 blockchain.
-It cannot be changed. Anyone can read it directly from the chain.
+**Update (traits-art):** this design has since been replaced. The program no longer stores any
+SVG at all: `reveal_and_mint`, `burn_to_upgrade` and `burn_multi` create only `GumballData`, and
+`reroll_cosmetics` only updates traits. The picture is a pure function of the on-chain traits and is
+drawn by `public/js/gumball-svg.js` (site and `/api/metadata`), proven byte-identical to the Rust
+reference renderer in `programs/gumball_nft/src/svg.rs` (test-only). Reason: the `GumballSvg` rent
+(1,412 bytes, ~0.0107 XNT) was 60% of the ~0.0179 XNT the oracle paid per mint. Balls minted
+earlier keep their legacy `GumballSvg` until it is closed with `close_burned`; nothing reads it. A legacy ball's on-chain GumballSvg is frozen at its pre-upgrade picture (it is not rewritten by `reroll_cosmetics`), so third-party readers of the svg PDA may show an old image; our site and `/api/metadata` always draw from the traits.
+The text below is the history of why the SVG was split out.
 
 Burn instructions now load: 85 bytes x 5 accounts = 425 bytes. Well within heap limits.
 
@@ -122,7 +128,7 @@ gumballs with no user input needed.
 price = BASE_PRICE * 4^(total_minted / 10,000) XNT
 ```
 
-Testnet: starts at 0.01 XNT, ends at 0.04 XNT. The multiplier is 4x over the full supply.
+Starts at 0.03 XNT, ends at 0.12 XNT (`BASE_PRICE` 30,000,000, `MAX_PRICE` 120,000,000 lamports; was 0.01 → 0.04 until 2026-11-09). The multiplier is 4x over the full supply.
 
 ### On-chain Implementation
 
@@ -158,13 +164,13 @@ price matches the on-chain calculation to the lamport.
 
 | Sellout % | Revenue |
 |---|---|
-Testnet (0.01 base):
+Cumulative mint revenue at the 0.03 base (sum of `get_mint_price` over mints 0..N, computed with the on-chain integer formula; the earlier 0.01-base table in this file did not match that sum):
 | Sellout % | Revenue |
 |---|---|
-| 25% (2,500) | ~28 XNT |
-| 50% (5,000) | ~71 XNT |
-| 75% (7,500) | ~112 XNT |
-| 100% (10,000) | ~163 XNT |
+| 25% (2,500) | ~89.8 XNT |
+| 50% (5,000) | ~216.7 XNT |
+| 75% (7,500) | ~396.3 XNT |
+| 100% (10,000) | ~650.2 XNT |
 
 ---
 
@@ -211,7 +217,7 @@ const GD_V5 = 8+32+32+8+1+1+1+1+8+1+32+32+32; // 189 - current (with oracle_secr
 
 Wallet gumballs are loaded by `loadWalletGumballAccounts` in `public/js/gumball-rpc.js`: token accounts (amount 1, decimals 0) -> GumballData PDAs, checked for program owner, dataSize 189 and this machine. `GumballData.owner` can be stale after a plain transfer; burns sync it with `update_owner` in a separate transaction first (a 5-ball `burn_multi` is 1,231 of 1,232 bytes).
 
-SVG is always fetched lazily from the separate `GumballSvg` PDA when the user opens a modal.
+The SVG is never fetched: pages draw it locally from the traits they already loaded (`GumballSvg.generateSvg` in `public/js/gumball-svg.js`), with no per-ball RPC call.
 
 ---
 
@@ -231,7 +237,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] **Review:** `update_owner` safe — reads ATA balance, only syncs to actual token holder
 - [x] `reveal_and_mint` — timeout path sets fulfilled = true (prevents double refund)
 - [x] Bounds checks on all raw account data reads (InvalidAccount error)
-- [x] Burned-ball rent: burns still do NOT reclaim it (they zero the owner and move no lamports, and `burn_multi` has no room for more accounts), but the new permissionless `close_burned` closes a burned ball's GumballData + GumballSvg and sends ALL their lamports to `machine.treasury` (never to the caller or burner: users pay 0.01 XNT per mint while the oracle paid ~0.013 XNT of rent, so a burner refund would pay users to mint and burn). Sweep with `node scripts/close-burned.cjs --cluster <testnet|mainnet>` (preview, then `--live`). Needs a program upgrade to exist on-chain.
+- [x] Burned-ball rent: burns still do NOT reclaim it (they zero the owner and move no lamports, and `burn_multi` has no room for more accounts), but the new permissionless `close_burned` closes a burned ball's GumballData (+ the GumballSvg of a legacy ball; new balls have none) and sends ALL their lamports to `machine.treasury` (never to the caller or burner: users paid 0.01 XNT per mint while the oracle paid ~0.013 XNT of rent when this was written, so a burner refund would pay users to mint and burn). Missing svg account: a program-owned GumballSvg is closed too; an absent or empty system-owned address is left alone (lamports donated to it are not ours and are never moved or allowed to block the close); any other owner or contents is refused with InvalidAccount. Sweep with `node scripts/close-burned.cjs --cluster <testnet|mainnet>` (preview, then `--live`). Needs a program upgrade to exist on-chain.
 
 ### Code Safety (Audit Rounds 3-5)
 - [x] No unsafe `.unwrap()` on fallible operations — all use `.map_err()`
@@ -246,7 +252,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 - [x] Final audit (round 5): CLEAN — no remaining issues
 
 ### Economic
-- [x] Mint pricing — exponential curve 0.01 → 0.04 XNT testnet (deployed)
+- [x] Mint pricing — exponential curve, now 0.03 → 0.12 XNT (code; the earlier 0.01 → 0.04 curve is what is deployed until the redeploy)
 - [ ] Decide max supply (currently 10,000)
 - [ ] Decide burn ratios (currently 5/3/2/2)
 - [x] Upgrade fee = current mint price (deployed)
@@ -270,7 +276,7 @@ SVG is always fetched lazily from the separate `GumballSvg` PDA when the user op
 
 - [x] Add proof fields to GumballData (v4 upgrade — deployed)
 - [x] Add oracle_secret to GumballData (v5 upgrade — trustless verification)
-- [x] Dynamic exponential mint pricing (0.01 → 0.04 XNT testnet — deployed)
+- [x] Dynamic exponential mint pricing (0.03 → 0.12 XNT in code; 0.01 → 0.04 deployed on testnet until the redeploy)
 - [x] Testnet faucet (0.1 XNT per wallet per 24h, separate faucet wallet)
 - [x] Security audit rounds 1-3 — all findings fixed, final audit clean
 - [x] Oracle monitoring via Telegram

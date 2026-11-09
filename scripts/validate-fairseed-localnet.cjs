@@ -131,7 +131,6 @@ async function buildReveal(reqPda, commitPda, secret, nftMint) {
       { pubkey: nftMint.publicKey, isSigner: true, isWritable: true },
       { pubkey: ata(nftMint.publicKey, minter.publicKey), isSigner: false, isWritable: true },
       { pubkey: pda([Buffer.from("gumball"), nftMint.publicKey.toBuffer()]), isSigner: false, isWritable: true },
-      { pubkey: pda([Buffer.from("svg"), nftMint.publicKey.toBuffer()]), isSigner: false, isWritable: true },
       { pubkey: SLOT_HASHES, isSigner: false, isWritable: false },
       { pubkey: pda([Buffer.from("nft_xnt_pool")]), isSigner: false, isWritable: true },
       { pubkey: pda([Buffer.from("lp_xnt_pool")]), isSigner: false, isWritable: true },
@@ -264,6 +263,22 @@ async function revealReal(reqPda, commitPda, secret) {
   check("revealed at a later slot than the simulations' base", r0.slot > sim2.slot - 1n, `reveal slot ${r0.slot}`);
   check("seed slot is after the request", ev0.seedSlot > requestSlot + REVEAL_DELAY_SLOTS);
   const gd0 = (await connection.getAccountInfo(pda([Buffer.from("gumball"), r0.nftMint.publicKey.toBuffer()]))).data;
+  // The picture is drawn from the traits: reveal no longer creates a GumballSvg PDA, so the oracle
+  // pays only the mint, ATA and GumballData rent plus the tx fee.
+  const svgAcc0 = await connection.getAccountInfo(pda([Buffer.from("svg"), r0.nftMint.publicKey.toBuffer()]));
+  check("reveal did not create the svg PDA", svgAcc0 === null);
+  {
+    const t = await connection.getTransaction(r0.sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    const oracleSpend = t.meta.preBalances[0] - t.meta.postBalances[0]; // fee payer = oracle
+    const rent = (n) => connection.getMinimumBalanceForRentExemption(n);
+    const [rMint, rAta, rGd, rSvg] = await Promise.all([rent(82), rent(165), rent(189), rent(8 + 4 + 1400)]);
+    const expected = t.meta.fee + rMint + rAta + rGd;
+    check("oracle spend per reveal = fee + mint + ATA + GumballData rent (no svg rent)", oracleSpend === expected,
+      `spent ${oracleSpend}, expected ${expected}`);
+    // the old program also created a 1412-byte GumballSvg, funded by the oracle
+    check("the dropped GumballSvg rent was more than half of the old per-reveal outlay", 2 * rSvg > oracleSpend + rSvg,
+      `old outlay would have been ${oracleSpend + rSvg} (svg rent ${rSvg}); saved ${(100 * rSvg / (oracleSpend + rSvg)).toFixed(0)}%`);
+  }
   const seed0 = sha256(secret, expectSlot.hash, userSeed, Buffer.from([0])).readBigUInt64LE(0);
   const exp0 = resolveTraits(seed0, minted0);
   check("on-chain traits equal recomputation from (secret, slot hash, user_seed, 0)",
@@ -298,7 +313,7 @@ async function revealReal(reqPda, commitPda, secret) {
   }
   await sendAndConfirmTransaction(connection, refundTx, [oracle, probeT], { commitment: "confirmed" });
   const balAfter = await connection.getBalance(minter.publicKey);
-  check("minter got the payment + rent back", balAfter - balBefore >= 0.01 * LAMPORTS_PER_SOL, `+${balAfter - balBefore} lamports`);
+  check("minter got the payment + rent back", balAfter - balBefore >= 0.03 * LAMPORTS_PER_SOL, `+${balAfter - balBefore} lamports`);
   const closed = await connection.getAccountInfo(reqT.reqPda);
   check("timed-out MintRequest no longer holds lamports", closed === null || closed.lamports === 0);
 

@@ -24,11 +24,13 @@ const SIZES = {
   nft_mint: 82,                  // SPL mint, payer oracle, can't be closed (classic SPL)
   minter_ata: 165,               // ATA, payer oracle (init_if_needed); the holder can close it once empty
   gumball_data: 8 + 181,         // GumballData::LEN, payer oracle
-  gumball_svg: 8 + 4 + 1400,     // GumballSvg::LEN (MAX_SVG_LEN 1400), payer oracle
   mint_request: 8 + 156,         // MintRequest (164 bytes), payer minter, refunded to minter at the end
 };
+// Dropped by the traits-art program: the picture is drawn from the traits, so no GumballSvg is created.
+// Legacy balls still hold one; shown only to price what each mint saves.
+const LEGACY_GUMBALL_SVG = 8 + 4 + 1400; // GumballSvg::LEN (MAX_SVG_LEN 1400), was paid by the oracle
 const TREASURY_BPS = 5000n;       // FEE_TREASURY_BPS_MINT; 40% NFT pool, 10% LP pool
-const BASE_PRICE = 10_000_000n, MAX_PRICE = 40_000_000n, MAX_SUPPLY = 10_000n;
+const BASE_PRICE = 30_000_000n, MAX_PRICE = 120_000_000n, MAX_SUPPLY = 10_000n;
 const TABLE = [10000n, 11487n, 13195n, 15157n, 17411n, 20000n, 22974n, 26390n, 30314n, 34822n, 40000n];
 function getMintPrice(n) { // port of pricing.rs get_mint_price
   if (n >= MAX_SUPPLY) return MAX_PRICE;
@@ -65,10 +67,15 @@ if (!CLUSTERS[clusterName]) { console.error("usage: node scripts/measure-mint-co
   // 1. Rent model
   const rent = {};
   for (const [k, size] of Object.entries(SIZES)) rent[k] = BigInt(await conn.getMinimumBalanceForRentExemption(size));
-  const oracleRent = rent.oracle_commit + rent.nft_mint + rent.minter_ata + rent.gumball_data + rent.gumball_svg;
+  const oracleRent = rent.oracle_commit + rent.nft_mint + rent.minter_ata + rent.gumball_data;
+  const legacySvgRent = BigInt(await conn.getMinimumBalanceForRentExemption(LEGACY_GUMBALL_SVG));
   console.log("Rent per mint (lamports locked, by payer):");
   for (const k of Object.keys(SIZES)) console.log(`  ${k.padEnd(14)} ${String(SIZES[k]).padStart(5)} B  ${xnt(rent[k])} XNT  ${k === "mint_request" ? "minter, refunded" : "oracle"}`);
-  console.log(`  oracle total                ${xnt(oracleRent)} XNT  (commit amortised 1:1; a quantity-N request shares one commit)\n`);
+  console.log(`  oracle total                ${xnt(oracleRent)} XNT  (commit amortised 1:1; a quantity-N request shares one commit)`);
+  console.log(`  (the old program also created a ${LEGACY_GUMBALL_SVG} B GumballSvg per ball: ${xnt(legacySvgRent)} XNT, total ${xnt(oracleRent + legacySvgRent)} XNT; no longer created)`);
+  // Expected on a cluster with the standard rent (3480 lamports/byte-year x 2 years): oracle total 0.007224 XNT
+  // (commit 0.001517 + mint 0.001462 + ATA 0.002039 + GumballData 0.002206), vs 0.017943 XNT with the GumballSvg.
+  console.log("");
 
   // 2. Measured from the oracle's own transactions
   // Public RPCs often keep little or no history: then only the rent model is reported (rent is fixed
@@ -111,7 +118,7 @@ if (!CLUSTERS[clusterName]) { console.error("usage: node scripts/measure-mint-co
   //    when treasury == oracle it already includes the treasury's share; separate it back out.
   const treasuryShare = (price * TREASURY_BPS) / 10000n;
   const commitsPerReveal = stats.reveal.n ? Number(stats.commit.n) / Number(stats.reveal.n) : 1;
-  const revealGross = stats.reveal.n ? avg(stats.reveal, "delta") + (oracle && treasury.equals(oracle) ? treasuryShare : 0n) : rent.nft_mint + rent.minter_ata + rent.gumball_data + rent.gumball_svg;
+  const revealGross = stats.reveal.n ? avg(stats.reveal, "delta") + (oracle && treasury.equals(oracle) ? treasuryShare : 0n) : rent.nft_mint + rent.minter_ata + rent.gumball_data;
   const commitCost = stats.commit.n ? avg(stats.commit, "delta") : rent.oracle_commit;
   const perMint = revealGross + BigInt(Math.round(Number(commitCost) * Math.min(commitsPerReveal, 1)));
   const breakEven = (perMint * 10000n) / TREASURY_BPS;
@@ -121,6 +128,7 @@ if (!CLUSTERS[clusterName]) { console.error("usage: node scripts/measure-mint-co
   console.log(`  treasury net per mint     ${xnt(treasuryShare - perMint)} XNT`);
   console.log(`  break-even price          ${xnt(breakEven)} XNT  (treasury share = oracle outlay)`);
   console.log(`  price for 2x cover        ${xnt(breakEven * 2n)} XNT`);
-  console.log("\nNotes: GumballData+GumballSvg rent comes back to the treasury only if burned balls are closed;");
+  console.log("\nNotes: GumballData (+ the GumballSvg of legacy balls) rent comes back to the treasury only if burned balls are closed;");
+  console.log("measured reveals made by the OLD program (before the upgrade) still include the GumballSvg rent.");
   console.log("OracleCommit rent is never returned by the current program; XNT price in $ is not included.");
 })().catch((e) => { console.error(e.message || String(e)); process.exit(1); });

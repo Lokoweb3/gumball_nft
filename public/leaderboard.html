@@ -284,6 +284,7 @@ header {
 }
 </style>
 <script src="js/actions.js"></script>
+<script src="js/gumball-svg.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -558,8 +559,7 @@ GumballActions.define("openRareSvg",  (el) => openSvgModal(rareFor(el)));
 GumballActions.define("openRareMeta", (el) => viewMetadata(rareFor(el)));
 GumballActions.define("viewCurrentMeta", () => { if (currentGumball) viewMetadata(currentGumball); });
 
-async function openSvgModal(g) {
-  currentGumball = g;
+function openSvgModal(g) {
   currentGumball = g;
   const modal = document.getElementById("svgModal");
   const svgDiv = document.getElementById("modalSvg");
@@ -570,36 +570,11 @@ async function openSvgModal(g) {
   modal.style.display = "flex";
   document.getElementById("modalTitle").textContent = `// GUMBALL #${String(g.serial).padStart(4,"0")}`;
   document.getElementById("modalTraits").textContent = `${flavor}  ·  ${color}  ·  ${rarity}`;
-  svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.5rem;color:#444;">LOADING SVG...</span>';
-  currentSvg = "";
   currentSerial = g.serial;
-
-  try {
-    const [gumballPda] = solanaWeb3.PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode("gumball"), new solanaWeb3.PublicKey(g.pubkey).toBytes()],
-      PROGRAM_ID
-    );
-    // pubkey in our data IS the gumball PDA already
-    const info = await connection.getAccountInfo(new solanaWeb3.PublicKey(g.pubkey));
-    if (info && info.data.length > 97) {
-      const dv = new DataView(info.data.buffer, info.data.byteOffset);
-      const svgOff = 8+32+32+8+1+1+1+1+8+1;
-      const svgLen = dv.getUint32(svgOff, true);
-      if (svgLen > 0 && svgLen <= 1400) {
-        const svgStr = new TextDecoder().decode(info.data.slice(svgOff+4, svgOff+4+svgLen));
-        currentSvg = svgStr;
-        // <img> data URI rather than innerHTML — nothing inside the SVG can execute
-        svgDiv.innerHTML = `<img src="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}" width="280" height="280" alt="" style="display:block">`;
-        const svg = svgDiv.querySelector("svg");
-        if (svg) { svg.style.width="300px"; svg.style.height="300px"; }
-      } else {
-        svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.45rem;color:#444;">OLD FORMAT / NO SVG</span>';
-      }
-    }
-  } catch(e) {
-    console.error("SVG load error:", e);
-    svgDiv.innerHTML = '<span style="font-family:monospace;font-size:0.45rem;color:#f44;">ERROR LOADING</span>';
-  }
+  // Drawn from the on-chain traits (no stored artwork, no RPC call).
+  // <img> data URI rather than innerHTML — nothing inside the SVG can execute
+  currentSvg = GumballSvg.generateSvg(g.serial, g.flavor, g.color, g.rarity, g.special);
+  svgDiv.innerHTML = `<img src="data:image/svg+xml;base64,${btoa(currentSvg)}" width="280" height="280" alt="" style="display:block">`;
 }
 
 async function openTxLink() {
@@ -667,13 +642,13 @@ function renderRarest(gumballs) {
     const rc = RARITY_COLORS[g.rarity];
     const gJson = encodeURIComponent(JSON.stringify(g));
     return `
-      <div class="rare-card fade-up" data-idx="${rareIdx}" data-click="openRareSvg" title="Click to view on-chain SVG">
+      <div class="rare-card fade-up" data-idx="${rareIdx}" data-click="openRareSvg" title="Click to view the artwork">
         <div class="rare-ball" style="background:radial-gradient(circle at 35% 30%, ${col}ff, ${col}44);box-shadow:0 0 20px ${col}44,0 0 0 2px ${rc}44;"></div>
         <div class="rare-serial" style="color:${rc};">#${String(g.serial).padStart(4,"0")}</div>
         <div class="rare-flavor">${flavor}</div>
         <div style="font-size:0.45rem;margin:3px 0;color:${rc};letter-spacing:1px;">${rarity}</div>
         <div class="rare-owner">${short}</div>
-        <div style="font-size:0.38rem;color:#00ffcc;margin-top:4px;letter-spacing:1px;">⛓ VIEW SVG</div>
+        <div style="font-size:0.38rem;color:#00ffcc;margin-top:4px;letter-spacing:1px;">⛓ VIEW ART</div>
         <div style="font-size:0.38rem;color:#666688;margin-top:2px;letter-spacing:1px;cursor:pointer;" data-click="openRareMeta">{ } METADATA</div>
       </div>
     `;
@@ -693,16 +668,11 @@ async function viewMetadata(g) {
   const rarity  = RARITY[g.rarity];
   const special = SPECIALS[g.special % SPECIALS.length];
 
-  let svgBytes = 0;
   let mintedAt = "";
   if (info && info.data.length > 93) {
     const dv = new DataView(info.data.buffer, info.data.byteOffset);
     const ts = Number(dv.getBigUint64(84, true));
     mintedAt = new Date(ts * 1000).toISOString();
-    if (info.data.length > 97) {
-      const svgLen = dv.getUint32(8+32+32+8+1+1+1+1+8+1, true);
-      svgBytes = svgLen;
-    }
   }
 
   const metadata = {
@@ -721,8 +691,6 @@ async function viewMetadata(g) {
       gumball_pda: g.pubkey,
       owner:       g.owner,
       minted_at:   mintedAt,
-      svg_stored:  svgBytes > 0,
-      svg_bytes:   svgBytes,
       network:     "X1 Testnet",
       rpc:         "https://rpc.testnet.x1.xyz",
       explorer: {
@@ -731,7 +699,7 @@ async function viewMetadata(g) {
         program:         "https://explorer.testnet.x1.xyz/account/AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy",
       },
     },
-    image_source: "on-chain SVG",
+    image_source: "drawn from the on-chain traits (public/js/gumball-svg.js)",
     oracle_verified: true,
     oracle_hash: "2e1b0193830e13728ba33ca50e812109b7604a3f7ef03b1e82cb728203a9bed1",
   };
@@ -783,7 +751,7 @@ async function viewMetadata(g) {
   </div>
   <div id="modalTraits" style="font-size:0.58rem;color:#666688;text-align:center;line-height:2;"></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
-    <div style="font-size:0.5rem;color:#00ffcc;padding:4px 12px;border:1px solid #00ffcc;">⛓ STORED ON-CHAIN · X1 BLOCKCHAIN</div>
+    <div style="font-size:0.5rem;color:#00ffcc;padding:4px 12px;border:1px solid #00ffcc;">⛓ TRAITS ON-CHAIN · X1 BLOCKCHAIN</div>
     <div style="font-size:0.5rem;color:#ffcc00;padding:4px 12px;border:1px solid #ffcc00;">🎲 ORACLE VERIFIED</div>
   </div>
   <div style="display:flex;gap:8px;">

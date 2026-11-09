@@ -190,13 +190,13 @@ const LISTING_SIZE = 8+32+32+8+8+1;
 // Pricing (mirrors on-chain)
 const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
 function getMintPrice(totalMinted) {
-  if (totalMinted >= 10000) return 0.04;
+  if (totalMinted >= 10000) return 0.12;
   const scaled = totalMinted * 10;
   const bucket = Math.floor(scaled / 10000);
   const remainder = scaled % 10000;
-  if (bucket >= 10) return 0.04;
+  if (bucket >= 10) return 0.12;
   const lo = PRICE_TABLE[bucket], hi = PRICE_TABLE[bucket + 1];
-  return 0.01 * (lo + (hi - lo) * remainder / 10000) / 10000;
+  return 0.03 * (lo + (hi - lo) * remainder / 10000) / 10000;
 }
 
 let walletPubkey = null;

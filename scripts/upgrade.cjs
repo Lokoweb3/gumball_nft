@@ -19,6 +19,14 @@ const {
 const fs  = require("fs");
 const crypto = require("crypto");
 
+// RETIRED 2026-11-09. This script builds a stale burn_to_upgrade account list (the instruction
+// has changed several times, most recently dropping the svg account) and fails on any program.
+// Upgrade through the site (index.html).
+if (!process.env.I_KNOW_UPGRADE_IS_RETIRED) {
+  console.error("scripts/upgrade.cjs is retired: use the site (index.html) to burn-to-upgrade");
+  process.exit(1);
+}
+
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const PROGRAM_ID  = new PublicKey("AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const MACHINE_PDA = new PublicKey("Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY");

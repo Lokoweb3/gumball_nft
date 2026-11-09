@@ -100,8 +100,6 @@ pub struct RevealAndMint<'info> {
     pub minter_ata: Box<Account<'info, TokenAccount>>,
     #[account(init, payer = oracle, space = 8 + GumballData::LEN, seeds = [b"gumball", nft_mint.key().as_ref()], bump)]
     pub gumball_data: Box<Account<'info, GumballData>>,
-    #[account(init, payer = oracle, space = 8 + GumballSvg::LEN, seeds = [b"svg", nft_mint.key().as_ref()], bump)]
-    pub gumball_svg: Box<Account<'info, GumballSvg>>,
     /// CHECK: slot hashes sysvar
     #[account(address = sysvar::slot_hashes::id())]
     pub slot_hashes: AccountInfo<'info>,
@@ -351,11 +349,6 @@ pub fn reveal_and_mint(
     // (no-op when the season PDA is uninitialized or expired)
     let traits = apply_season(traits, &ctx.accounts.season_config)?;
 
-    let svg_bytes = generate_svg(
-        machine.total_minted + 1,
-        traits.flavor, traits.color, traits.rarity, traits.special,
-    );
-
     let gumball             = &mut ctx.accounts.gumball_data;
     gumball.owner           = minter_key;
     gumball.machine         = machine.key();
@@ -371,8 +364,8 @@ pub fn reveal_and_mint(
     gumball.user_seed       = ctx.accounts.mint_request.user_seed;
     gumball.oracle_secret   = secret;
 
-    // Store SVG in separate PDA — keeps GumballData lean for burn instructions
-    ctx.accounts.gumball_svg.svg = svg_bytes;
+    // No artwork is stored: the picture is drawn from these traits by the
+    // site and the metadata server (public/js/gumball-svg.js).
 
     machine.total_minted = machine.total_minted
         .checked_add(1).ok_or(GumballError::MathOverflow)?;

@@ -464,7 +464,7 @@ svg#gm{width:100%;}
 <div class="stats-bar">
   <div class="stat"><span class="stat-val" id="sMinted">—</span><span class="stat-lbl">Total Minted</span></div>
   <div class="stat"><span class="stat-val" id="sRemain">—</span><span class="stat-lbl">Remaining</span></div>
-  <div class="stat"><span class="stat-val" id="sPrice">0.01</span><span class="stat-lbl">XNT / Ball</span></div>
+  <div class="stat"><span class="stat-val" id="sPrice">0.03</span><span class="stat-lbl">XNT / Ball</span></div>
   <div class="stat"><span class="stat-val" id="sBurned">0</span><span class="stat-lbl">Burned 🔥</span></div>
   <div class="stat"><span class="stat-val" id="sOwned">0</span><span class="stat-lbl">You Own</span></div>
 </div>
@@ -518,7 +518,7 @@ svg#gm{width:100%;}
         <rect x="80" y="265" width="140" height="28" rx="7" fill="rgba(255,255,255,0.1)"/>
         <rect x="92" y="300" width="76" height="44" rx="4" fill="rgba(0,0,0,0.25)" stroke="rgba(255,204,0,0.35)" stroke-width="0.8"/>
         <text x="130" y="317" text-anchor="middle" font-family="'Press Start 2P'" font-size="7.5" fill="#ffcc00">NFT</text>
-        <text x="130" y="330" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.8)" id="svgPrice">0.01 XNT</text>
+        <text x="130" y="330" text-anchor="middle" font-family="'Press Start 2P'" font-size="5" fill="rgba(255,204,0,0.8)" id="svgPrice">0.03 XNT</text>
         <text x="130" y="340" text-anchor="middle" font-family="'Press Start 2P'" font-size="4" fill="rgba(255,204,0,0.55)">PER BALL</text>
         <rect x="178" y="278" width="32" height="8" rx="4" fill="#111" stroke="#333" stroke-width="0.6"/>
         <rect x="180" y="280" width="28" height="4" rx="2" fill="#090909"/>
@@ -578,7 +578,7 @@ svg#gm{width:100%;}
         <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
       </div>
       <div class="price-row">
-        <div><div class="price-big" id="currentPrice">0.01 XNT</div><div class="price-sub">per gumball NFT</div></div>
+        <div><div class="price-big" id="currentPrice">0.03 XNT</div><div class="price-sub">per gumball NFT</div></div>
       </div>
       <div class="qty-row">
         <span class="qty-lbl">QUANTITY</span>
@@ -588,7 +588,7 @@ svg#gm{width:100%;}
           <button class="qty-btn" data-click="changeQty" data-args='[1]'>+</button>
         </div>
       </div>
-      <div class="total-cost">TOTAL: <span id="totalCost">0.0100 XNT</span></div>
+      <div class="total-cost">TOTAL: <span id="totalCost">0.0300 XNT</span></div>
       <button class="mint-btn" id="mintBtn" data-click="mintGumball" disabled>► CONNECT WALLET FIRST ◄</button>
       <div class="trait-preview" id="traitPreview">
         <div style="font-size:0.52rem;color:var(--gray);letter-spacing:2px;margin-bottom:8px;">LAST MINT TRAITS</div>
@@ -654,7 +654,7 @@ svg#gm{width:100%;}
       <a id="modalAccountLink" href="#" target="_blank" style="font-family:'Press Start 2P',cursive;font-size:0.38rem;padding:6px 10px;border:1px solid var(--gray);color:var(--gray);text-decoration:none;text-align:center;">⛓ VIEW ON-CHAIN ACCOUNT</a>
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-      <div style="font-size:0.42rem;color:var(--teal);padding:3px 8px;border:1px solid var(--teal);">✅ STORED ON-CHAIN</div>
+      <div style="font-size:0.42rem;color:var(--teal);padding:3px 8px;border:1px solid var(--teal);">✅ TRAITS ON-CHAIN</div>
       <div style="font-size:0.42rem;color:var(--gold);padding:3px 8px;border:1px solid var(--gold);">🎲 ORACLE VERIFIED</div>
     </div>
   </div>
@@ -679,6 +679,7 @@ svg#gm{width:100%;}
 </div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-svg.js"></script>
 <script src="js/gumball-rpc.js"></script>
 <script>
 // ── CONFIG (shared constants + helpers come from js/gumball-common.js) ───────
@@ -689,17 +690,17 @@ let walletPubkey = null, qty = 1, isMinting = false, collection = [];
 let _currentSvg = "", _currentSerial = 0;
 let currentMinted = 0; // updated by fetchMachineState
 
-// Exponential pricing: 0.01 * 4^(totalMinted/10000) XNT
-// Matches on-chain get_mint_price() exactly
+// Exponential pricing: 0.03 * 4^(totalMinted/10000) XNT
+// Matches on-chain get_mint_price() exactly (BASE_PRICE 30_000_000, MAX_PRICE 120_000_000 lamports)
 const PRICE_TABLE = [10000,11487,13195,15157,17411,20000,22974,26390,30314,34822,40000];
 const MAX_SUPPLY_PRICE = 10000;
-const BASE_PRICE_XNT = 0.01;
+const BASE_PRICE_XNT = 0.03;
 function getMintPrice(totalMinted) {
-  if (totalMinted >= MAX_SUPPLY_PRICE) return 0.04;
+  if (totalMinted >= MAX_SUPPLY_PRICE) return 0.12;
   const scaled = totalMinted * 10;
   const bucket = Math.floor(scaled / MAX_SUPPLY_PRICE);
   const remainder = scaled % MAX_SUPPLY_PRICE;
-  if (bucket >= 10) return 0.04;
+  if (bucket >= 10) return 0.12;
   const lo = PRICE_TABLE[bucket];
   const hi = PRICE_TABLE[bucket + 1];
   const interp = lo + (hi - lo) * remainder / MAX_SUPPLY_PRICE;
@@ -941,6 +942,7 @@ async function fetchWalletGumballs() {
       const flavor = data[8+32+32+8];
       const color  = data[8+32+32+8+1];
       const rarity = data[8+32+32+8+2];
+      const special = data[8+32+32+8+3];
 
       const colorName = COLORS[color]  || "Berry Blue";
       const ballColor = BALL_COLORS[colorName] || "#2266ee";
@@ -948,7 +950,7 @@ async function fetchWalletGumballs() {
       addToCollection({
         serial, flavorName: FLAVORS[flavor]||"Mystery", colorName,
         rarName: RARITY[rarity]||"Common", ballColor, rarity, gbPda: gumballPda,
-        svgStr: null, // SVG loaded on demand from separate GumballSvg PDA
+        svgStr: GumballSvg.generateSvg(serial, flavor, color, rarity, special), // drawn from the on-chain traits
         mintPubkey, ataPubkey,
         // GumballData.owner (bytes 8..40) only changes via update_owner; a ball received by plain
         // transfer still names the sender, and burns check it. Burns sync it first (see burnToUpgrade).
@@ -1200,8 +1202,8 @@ async function mintGumball() {
         const color   = data[8+32+32+8+1];
         const rarity  = data[8+32+32+8+2];
         const special = data[8+32+32+8+3];
-        // V3: SVG is in separate GumballSvg PDA, loaded on demand when modal opens
-        const svgStr = null;
+        // No stored artwork: the picture is drawn from the traits
+        const svgStr = GumballSvg.generateSvg(serial, flavor, color, rarity, special);
 
         const colorName   = COLORS[color]   || "Berry Blue";
         const ballColor   = BALL_COLORS[colorName] || "#2266ee";
@@ -1340,7 +1342,7 @@ function showLastMinted(g) {
     <div class="trait-row"><span class="trait-key">COLOR</span><span>${g.colorName}</span></div>
     <div class="trait-row"><span class="trait-key">SPECIAL</span><span>${g.specialName}</span></div>
     <div class="trait-row"><span class="trait-key">RARITY</span><span class="rarity-badge r-${g.rarName.toLowerCase()}">${g.rarName}</span></div>
-    ${g.svgStr?'<div class="trait-row"><span class="trait-key">IMAGE</span><span style="color:var(--teal)">✅ ON-CHAIN SVG</span></div>':''}
+    ${g.svgStr?'<div class="trait-row"><span class="trait-key">IMAGE</span><span style="color:var(--teal)">✅ DRAWN FROM ON-CHAIN TRAITS</span></div>':''}
     ${g.oracleVerified?'<div class="trait-row"><span class="trait-key">RANDOM</span><span style="color:var(--gold)">🎲 ORACLE VERIFIED</span></div>':''}
   `;
 }
@@ -1405,24 +1407,6 @@ function filterCollection(rarity, btn) {
   document.getElementById("collCount").textContent = `${visible} gumball${visible!==1?'s':''}`;
 }
 
-// ── SVG HELPERS ───────────────────────────────────────────────────────────────
-async function fetchGumballSvg(mintPubkey) {
-  try {
-    const [svgPda] = PublicKey.findProgramAddressSync(
-      [new TextEncoder().encode("svg"), mintPubkey.toBytes()], PROGRAM_ID
-    );
-    const info = await connection.getAccountInfo(svgPda);
-    if (!info || info.data.length < 12) return null;
-    // GumballSvg: disc(8) + vec_len(4) + svg_bytes
-    const dv = new DataView(info.data.buffer, info.data.byteOffset);
-    const svgLen = dv.getUint32(8, true);
-    if (svgLen > 0 && svgLen <= 1400) {
-      return new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
-    }
-  } catch(e) {}
-  return null;
-}
-
 // ── GUM SINK: cosmetic re-roll ───────────────────────────────────────────────
 // Burns 25 GUM to re-randomize flavor/color/special (rarity untouched).
 const GUM_MINT_PK = new PublicKey("2KjdBhiWdCFoFcNNUbpSWqb67tGWnQpPjcMEYnescyy1");
@@ -1434,7 +1418,6 @@ async function rerollCosmetics() {
     const provider = getProvider();
     const mintKey = g.mintPubkey;
     const [gumballPda]  = PublicKey.findProgramAddressSync([strToU8("gumball"), mintKey.toBytes()], PROGRAM_ID);
-    const [svgPda]      = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
     const [stakeConfig] = PublicKey.findProgramAddressSync([strToU8("stake_config_v2")], PROGRAM_ID);
     const [seasonPda]   = PublicKey.findProgramAddressSync([strToU8("season")], PROGRAM_ID);
     const ownerNftAta = getAta(mintKey, walletPubkey);
@@ -1452,7 +1435,6 @@ async function rerollCosmetics() {
         { pubkey: mintKey,             isSigner: false, isWritable: false }, // nft_mint
         { pubkey: ownerNftAta,         isSigner: false, isWritable: false }, // owner_nft_ata
         { pubkey: gumballPda,          isSigner: false, isWritable: true  }, // gumball_data
-        { pubkey: svgPda,              isSigner: false, isWritable: true  }, // gumball_svg
         { pubkey: stakeConfig,         isSigner: false, isWritable: false }, // stake_config
         { pubkey: GUM_MINT_PK,         isSigner: false, isWritable: true  }, // gum_mint (burn)
         { pubkey: ownerGumAta,         isSigner: false, isWritable: true  }, // owner_gum_ata
@@ -1471,7 +1453,7 @@ async function rerollCosmetics() {
     await connection.confirmTransaction(sig, "confirmed");
     toast("RE-ROLLED! Refreshing...", "success");
     document.getElementById("svgModal").style.display = "none";
-    fetchWalletGumballs(); // re-render with the new traits + SVG
+    fetchWalletGumballs(); // re-render with the new traits (the picture is redrawn from them)
   } catch(e) {
     console.error("reroll error:", e);
     toast("RE-ROLL FAILED: " + (e.message || "").slice(0, 60), "error");
@@ -1482,7 +1464,7 @@ async function rerollCosmetics() {
 let _modalGumball = null;
 function openSvgModal(g) {
   _modalGumball = g;
-  _currentSvg = g.svgStr || "";
+  _currentSvg = g.svgStr;
   _currentSerial = g.serial;
   const modal = document.getElementById("svgModal");
   modal.style.display = "flex";
@@ -1510,7 +1492,7 @@ function openSvgModal(g) {
       const d = info.data;
       // GumballData layout: disc(8) + owner(32) + machine(32) + serial(8) +
       //   flavor(1) + color(1) + rarity(1) + special(1) + minted_at(8) + bump(1) +
-      //   commitment(32) + user_seed(32) + svg_len(4) + svg(...)
+      //   commitment(32) + user_seed(32) + oracle_secret(32)
       const commitOffset   = 8+32+32+8+1+1+1+1+8+1;      // 93
       const userSeedOffset = commitOffset + 32;             // 125
       const commitment = Array.from(d.slice(commitOffset, commitOffset+32))
@@ -1546,32 +1528,7 @@ function openSvgModal(g) {
   }
 
   const svgDiv = document.getElementById("modalSvg");
-  if (g.svgStr) {
-    svgDiv.innerHTML = svgImgHtml(g.svgStr, 280);
-  } else if (g.mintPubkey) {
-    // Fetch SVG from separate GumballSvg PDA
-    svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">LOADING SVG...</span></div>`;
-    fetchGumballSvg(g.mintPubkey).then(svgStr => {
-      if (svgStr) {
-        g.svgStr = svgStr; // cache it
-        _currentSvg = svgStr; // enable copy/download/source
-        svgDiv.innerHTML = svgImgHtml(svgStr, 280);
-        // Also update the collection card
-        const cards = document.querySelectorAll('.coll-card');
-        cards.forEach(card => {
-          const serialEl = card.querySelector('.coll-serial');
-          if (serialEl && serialEl.textContent === `#${String(g.serial).padStart(4,'0')}`) {
-            const ballDiv = card.querySelector('div[style*="border-radius:50%"]');
-            if (ballDiv) {
-              ballDiv.innerHTML = svgImgHtml(svgStr, 60, { clip: true });
-            }
-          }
-        });
-      }
-    });
-  } else {
-    svgDiv.innerHTML = `<div style="width:280px;height:280px;border-radius:12px;background:${ballGrad(g.ballColor)};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Press Start 2P',cursive;font-size:0.4rem;color:rgba(255,255,255,0.5);">NO SVG</span></div>`;
-  }
+  svgDiv.innerHTML = svgImgHtml(g.svgStr, 280);
 }
 function copyOnChainSvg() {
   if (!_currentSvg) return;
@@ -1680,7 +1637,6 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
     const [machineAuthority] = PublicKey.findProgramAddressSync([strToU8("machine_authority")], PROGRAM_ID);
     const newMint = Keypair.generate();
     const [newGumballPda] = PublicKey.findProgramAddressSync([strToU8("gumball"), newMint.publicKey.toBytes()], PROGRAM_ID);
-    const [newGumballSvgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), newMint.publicKey.toBytes()], PROGRAM_ID);
     const newAta = getAta(newMint.publicKey, walletPubkey);
 
     // Read treasury from Machine PDA for upgrade fee
@@ -1711,7 +1667,6 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
         { pubkey: newMint.publicKey,       isSigner: true,  isWritable: true  }, // new_mint
         { pubkey: newAta,                  isSigner: false, isWritable: true  }, // new_ata
         { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
-        { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
         { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
         { pubkey: nftXntPool,              isSigner: false, isWritable: true  }, // nft_xnt_pool (Phase 2)
         { pubkey: lpXntPool,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (Phase 2)
@@ -1736,7 +1691,6 @@ async function burnToUpgrade(fromRarity, toRarity, burnsNeeded) {
         { pubkey: newMint.publicKey,       isSigner: true,  isWritable: true  }, // new_mint
         { pubkey: newAta,                  isSigner: false, isWritable: true  }, // new_ata
         { pubkey: newGumballPda,           isSigner: false, isWritable: true  }, // new_gumball_data
-        { pubkey: newGumballSvgPda,        isSigner: false, isWritable: true  }, // new_gumball_svg
         { pubkey: SLOT_HASHES_PID,         isSigner: false, isWritable: false }, // slot_hashes
         { pubkey: nftXntPool,              isSigner: false, isWritable: true  }, // nft_xnt_pool (Phase 2)
         { pubkey: lpXntPool,               isSigner: false, isWritable: true  }, // lp_xnt_pool  (Phase 2)

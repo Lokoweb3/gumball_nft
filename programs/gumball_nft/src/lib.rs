@@ -16,6 +16,7 @@ pub mod instructions;
 pub mod pricing;
 pub mod randomness;
 pub mod state;
+#[cfg(test)]
 pub mod svg;
 
 pub(crate) use accumulators::*;
@@ -30,6 +31,7 @@ pub use instructions::*;
 pub(crate) use pricing::*;
 pub(crate) use randomness::*;
 pub use state::*;
+#[cfg(test)]
 pub(crate) use svg::*;
 
 // ─── Program ──────────────────────────────────────────────────────────────────
@@ -124,8 +126,9 @@ pub mod gumball_nft {
         instructions::burn_multi(ctx, user_seed)
     }
 
-    /// Permissionless: close ONE burned ball's GumballData + GumballSvg PDAs and
-    /// send all their lamports to machine.treasury (never to the caller).
+    /// Permissionless: close ONE burned ball's GumballData (+ the GumballSvg of a
+    /// legacy ball, if it has one) and send all their lamports to machine.treasury
+    /// (never to the caller).
     pub fn close_burned(ctx: Context<CloseBurned>) -> Result<()> {
         instructions::close_burned(ctx)
     }
@@ -151,8 +154,8 @@ pub mod gumball_nft {
 
     /// Permissionless: attach Metaplex metadata to an existing gumball NFT so
     /// wallets display it (name + image). Name derives from on-chain serial;
-    /// the URI points at the metadata API, which serves the on-chain SVG as a
-    /// data-URI image — no off-chain storage of the artwork itself.
+    /// the URI points at the metadata API, which draws the image from the
+    /// ball's on-chain traits (shared renderer, public/js/gumball-svg.js).
     /// Anyone can pay to attach; Metaplex rejects the CPI if metadata exists.
     pub fn attach_metadata(ctx: Context<AttachMetadata>) -> Result<()> {
         instructions::attach_metadata(ctx)
@@ -249,7 +252,7 @@ pub mod gumball_nft {
     /// Burn a flat GUM fee to re-randomize a gumball's COSMETICS (flavor,
     /// color, special) — rarity never changes. Entropy is the slot hash mixed
     /// with a caller-supplied seed (prevents validator grinding, same model as
-    /// burns). Respects any active season window; the on-chain SVG regenerates.
+    /// burns). Respects any active season window; the picture follows the new traits.
     /// This is GUM's demand sink: supply is fixed, burned GUM is gone forever.
     pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> Result<()> {
         instructions::reroll_cosmetics(ctx, user_seed)

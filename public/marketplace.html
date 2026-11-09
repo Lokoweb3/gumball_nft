@@ -238,6 +238,7 @@ header{
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/gumball-common.js"></script>
+<script src="js/gumball-svg.js"></script>
 <script src="js/gumball-rpc.js"></script>
 <script>
 // Shared constants + helpers come from js/gumball-common.js
@@ -585,7 +586,7 @@ function listingCard(l, isMine) {
 
   return `
     <div class="card">
-      <div class="card-svg" id="svg-${l.serial}" data-mint="${mintKey}"></div>
+      <div class="card-svg">${cardArt(l)}</div>
       <div class="card-serial">#${String(l.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName} - ${colorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
@@ -605,7 +606,6 @@ function renderAuctions(el) {
     return;
   }
   el.innerHTML = `<div class="grid">${allAuctions.map(a => auctionCard(a)).join('')}</div>`;
-  loadSvgs();
 }
 
 function auctionCard(a) {
@@ -639,7 +639,7 @@ function auctionCard(a) {
 
   return `
     <div class="card">
-      <div class="card-svg" id="svg-a-${a.serial}" data-mint="${mintKey}"></div>
+      <div class="card-svg">${cardArt(a)}</div>
       <div class="card-serial">#${String(a.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
@@ -657,7 +657,7 @@ function collectionCard(g) {
 
   return `
     <div class="card">
-      <div class="card-svg" id="svg-c-${g.serial}" data-mint="${mintKey}"></div>
+      <div class="card-svg">${cardArt(g)}</div>
       <div class="card-serial">#${String(g.serial).padStart(4,'0')}</div>
       <div class="card-name">${flavorName}</div>
       <span class="card-rarity" style="color:${rarColor};border:1px solid ${rarColor};background:${rarColor}22;">${rarName}</span>
@@ -680,36 +680,12 @@ function offerRow(o) {
     </div>`;
 }
 
-// ── SVG LOADING ──────────────────────────────────────────────────────────────
-
-async function loadSvgs() {
-  const svgEls = [...document.querySelectorAll('.card-svg[data-mint]:not([data-loaded])')]
-    .filter(el => el.dataset.mint);
-  const items = [];
-  for (const el of svgEls) {
-    el.dataset.loaded = "1"; // prevent re-fetch
-    try {
-      const mintKey = new PublicKey(el.dataset.mint);
-      const [svgPda] = PublicKey.findProgramAddressSync([strToU8("svg"), mintKey.toBytes()], PROGRAM_ID);
-      items.push({ el, svgPda });
-    } catch(e) {}
-  }
-  let infos;
-  try { infos = await getMultipleAccountsChunked(items.map(i => i.svgPda)); } catch(e) { return; }
-  items.forEach(({ el }, idx) => {
-    const info = infos[idx];
-    if (!info) return;
-    try {
-      const dv = new DataView(info.data.buffer, info.data.byteOffset);
-      const svgLen = dv.getUint32(8, true);
-      if (svgLen > 0 && svgLen <= 1400) {
-        const svgStr = new TextDecoder().decode(info.data.slice(12, 12 + svgLen));
-        // <img> data URI: nothing inside the SVG can execute, and gradient ids
-        // can't collide across cards (each image is its own document)
-        el.innerHTML = svgImgHtml(svgStr, "100%");
-      }
-    } catch(e) {}
-  });
+// ── CARD ART ─────────────────────────────────────────────────────────────────
+// Drawn locally from the ball's on-chain traits (no per-card RPC fetch). The <img> data URI
+// keeps anything inside the SVG from executing, and each image is its own document so gradient
+// ids can't collide across cards.
+function cardArt(t) {
+  return svgImgHtml(GumballSvg.generateSvg(t.serial, t.flavor, t.color, t.rarity, t.special), "100%");
 }
 
 // ── MARKETPLACE ACTIONS ──────────────────────────────────────────────────────
@@ -1231,22 +1207,8 @@ async function acceptOffer(nftMintStr, buyerStr, minAmountLamports) {
 setVisibleInterval(async () => {
   if (walletPubkey) {
     await loadAll();
-    loadSvgs();
   }
 }, 30000);
-
-// Load SVGs after render — debounced to prevent infinite loop
-let _svgTimeout = null;
-const observer = new MutationObserver(() => {
-  if (_svgTimeout) clearTimeout(_svgTimeout);
-  _svgTimeout = setTimeout(() => {
-    observer.disconnect();
-    loadSvgs().then(() => {
-      observer.observe(document.getElementById('content'), { childList: true });
-    });
-  }, 500);
-});
-observer.observe(document.getElementById('content'), { childList: true });
 
 </script>
 </body>

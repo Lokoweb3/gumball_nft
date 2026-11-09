@@ -134,6 +134,7 @@ header{
 }
 </style>
 <script src="js/actions.js"></script>
+<script src="js/gumball-svg.js"></script>
 </head>
 <body>
 
@@ -243,45 +244,6 @@ function toHex(bytes) {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Find the NFT mint key from a gumball PDA by scanning transactions
-async function findNftMintFromGumball(gumballPda, ownerPubkey) {
-  // Method 1: scan owner's token accounts for the mint whose gumball PDA matches
-  try {
-    const owner = ownerPubkey || null;
-    if (owner) {
-      const tokenAccounts = await connection.getTokenAccountsByOwner(
-        new PublicKey(owner),
-        { programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }
-      );
-      for (const { account } of tokenAccounts.value) {
-        const mintKey = new PublicKey(account.data.slice(0, 32));
-        const [pda] = PublicKey.findProgramAddressSync(
-          [new TextEncoder().encode("gumball"), mintKey.toBuffer()],
-          PROGRAM_ID
-        );
-        if (pda.equals(gumballPda)) return mintKey;
-      }
-    }
-  } catch(e) { console.error('findNftMint via owner error:', e); }
-
-  // Method 2: fallback to transaction parsing (unreliable on X1)
-  try {
-    const sigs = await connection.getSignaturesForAddress(gumballPda, { limit: 10 });
-    if (sigs.length === 0) return null;
-    const tx = await connection.getTransaction(sigs[sigs.length - 1].signature);
-    if (!tx) return null;
-    const keys = tx.transaction.message.accountKeys;
-    for (const key of keys) {
-      const [pda] = PublicKey.findProgramAddressSync(
-        [new TextEncoder().encode("gumball"), key.toBuffer()],
-        PROGRAM_ID
-      );
-      if (pda.equals(gumballPda)) return key;
-    }
-  } catch(e) { console.error('findNftMint via tx error:', e); }
-  return null;
-}
-
 function showError(msg) {
   const el = document.getElementById('errorMsg');
   el.textContent = msg;
@@ -363,20 +325,8 @@ async function verify() {
     const hasProofFields = commitmentHash && !commitmentHash.every(b => b === 0);
     const hasOracleSecret = oracleSecret && !oracleSecret.every(b => b === 0);
 
-    // SVG is in separate GumballSvg PDA
-    let svgStr = null;
-    try {
-      const nftMintKey = await findNftMintFromGumball(gumballPda, owner);
-      if (nftMintKey) {
-        const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), nftMintKey.toBuffer()], PROGRAM_ID);
-        const svgInfo = await connection.getAccountInfo(svgPda);
-        if (svgInfo) {
-          const svgDv = new DataView(svgInfo.data.buffer, svgInfo.data.byteOffset);
-          const svgLen = svgDv.getUint32(8, true);
-          if (svgLen > 0 && svgLen <= 1400) svgStr = new TextDecoder().decode(svgInfo.data.slice(8+4, 8+4+svgLen));
-        }
-      }
-    } catch(e) { console.error('SVG fetch error:', e); }
+    // No stored artwork: the picture is drawn from the traits just read (same renderer as the site)
+    const svgStr = GumballSvg.generateSvg(serial, flavor, color, rarity, special);
 
     const flavorName  = FLAVORS[flavor]  || "Mystery";
     const colorName   = COLORS[color]    || "Berry Blue";
@@ -396,6 +346,9 @@ async function verify() {
     const svgWrap = document.getElementById('gbSvg');
     svgWrap.style.background = `radial-gradient(circle at 35% 30%, ${ballColor}ff, ${ballColor}44)`;
     svgWrap.style.boxShadow = `0 4px 16px rgba(0,0,0,0.5), 0 0 20px ${ballColor}33`;
+    // <img> data URI: nothing inside the SVG can execute. The viewBox crop hides the text bar.
+    const artSrc = "data:image/svg+xml;base64," + btoa(svgStr.replace('viewBox="0 0 300 300"', 'viewBox="0 0 300 248"'));
+    svgWrap.innerHTML = `<img src="${artSrc}" width="160" height="160" alt="" draggable="false" style="display:block;width:100%;height:100%">`;
 
     document.getElementById('gbTraits').innerHTML = `
       <div class="trait-item"><span class="trait-key">FLAVOR</span><span class="trait-val">${flavorName}</span></div>

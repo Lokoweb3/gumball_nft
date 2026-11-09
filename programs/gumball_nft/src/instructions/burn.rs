@@ -33,8 +33,6 @@ pub struct BurnToUpgrade<'info> {
     pub new_ata: Box<Account<'info, TokenAccount>>,
     #[account(init, payer = burner, space = 8 + GumballData::LEN, seeds = [b"gumball", new_mint.key().as_ref()], bump)]
     pub new_gumball_data: Box<Account<'info, GumballData>>,
-    #[account(init, payer = burner, space = 8 + GumballSvg::LEN, seeds = [b"svg", new_mint.key().as_ref()], bump)]
-    pub new_gumball_svg: Box<Account<'info, GumballSvg>>,
     /// CHECK: slot hashes sysvar
     #[account(address = sysvar::slot_hashes::id())]
     pub slot_hashes: AccountInfo<'info>,
@@ -75,8 +73,6 @@ pub struct BurnMulti<'info> {
     pub new_ata: Box<Account<'info, TokenAccount>>,
     #[account(init, payer = burner, space = 8 + GumballData::LEN, seeds = [b"gumball", new_mint.key().as_ref()], bump)]
     pub new_gumball_data: Box<Account<'info, GumballData>>,
-    #[account(init, payer = burner, space = 8 + GumballSvg::LEN, seeds = [b"svg", new_mint.key().as_ref()], bump)]
-    pub new_gumball_svg: Box<Account<'info, GumballSvg>>,
     /// CHECK: slot hashes sysvar
     #[account(address = sysvar::slot_hashes::id())]
     pub slot_hashes: AccountInfo<'info>,
@@ -107,8 +103,6 @@ pub struct RerollCosmetics<'info> {
     pub owner_nft_ata: Account<'info, TokenAccount>,
     #[account(mut, seeds = [b"gumball", nft_mint.key().as_ref()], bump = gumball_data.bump)]
     pub gumball_data: Account<'info, GumballData>,
-    #[account(mut, seeds = [b"svg", nft_mint.key().as_ref()], bump)]
-    pub gumball_svg: Account<'info, GumballSvg>,
     #[account(seeds = [b"stake_config_v2"], bump = stake_config.bump)]
     pub stake_config: Account<'info, StakeConfig>,
     #[account(mut, constraint = gum_mint.key() == stake_config.gum_mint @ GumballError::InvalidAccount)]
@@ -222,11 +216,6 @@ pub fn burn_to_upgrade(ctx: Context<BurnToUpgrade>, user_seed: [u8; 32]) -> Resu
     let color   = lcg_next(&mut seed, COLORS.len()   as u64) as u8;
     let special = lcg_next(&mut seed, SPECIALS.len() as u64) as u8;
 
-    let svg_bytes = generate_svg(
-        machine.total_minted + 1,
-        flavor, color, new_rarity, special,
-    );
-
     let auth_seeds = &[b"machine_authority".as_ref(), &[ctx.bumps.machine_authority]];
     mint_to(CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
@@ -251,8 +240,6 @@ pub fn burn_to_upgrade(ctx: Context<BurnToUpgrade>, user_seed: [u8; 32]) -> Resu
     ng.commitment_hash  = [0u8; 32]; // upgrade — no commit-reveal
     ng.user_seed        = [0u8; 32];
     ng.oracle_secret    = [0u8; 32];
-
-    ctx.accounts.new_gumball_svg.svg = svg_bytes;
 
     machine.total_minted = machine.total_minted
         .checked_add(1).ok_or(GumballError::MathOverflow)?;
@@ -399,8 +386,6 @@ pub fn burn_multi<'info>(ctx: Context<'_, '_, 'info, 'info, BurnMulti<'info>>, u
     let color   = lcg_next(&mut seed, COLORS.len()   as u64) as u8;
     let special = lcg_next(&mut seed, SPECIALS.len() as u64) as u8;
 
-    let svg_bytes = generate_svg(machine.total_minted + 1, flavor, color, new_rarity, special);
-
     let auth_seeds = &[b"machine_authority".as_ref(), &[ctx.bumps.machine_authority]];
     mint_to(CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
@@ -425,8 +410,6 @@ pub fn burn_multi<'info>(ctx: Context<'_, '_, 'info, 'info, BurnMulti<'info>>, u
     ng.commitment_hash  = [0u8; 32]; // upgrade — no commit-reveal
     ng.user_seed        = [0u8; 32];
     ng.oracle_secret    = [0u8; 32];
-
-    ctx.accounts.new_gumball_svg.svg = svg_bytes;
 
     machine.total_minted = machine.total_minted
         .checked_add(1).ok_or(GumballError::MathOverflow)?;
@@ -482,7 +465,6 @@ pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> R
         &ctx.accounts.season_config,
     )?;
 
-    let svg_bytes = generate_svg(serial, t.flavor, t.color, rarity, t.special);
     let gd = &mut ctx.accounts.gumball_data;
     gd.flavor  = t.flavor;
     gd.color   = t.color;
@@ -490,7 +472,6 @@ pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> R
     // The ATA constraint proved the caller holds the token — sync the
     // tracked owner too (same effect as update_owner)
     gd.owner   = ctx.accounts.owner.key();
-    ctx.accounts.gumball_svg.svg = svg_bytes;
 
     emit!(CosmeticsRerolledEvent {
         owner: ctx.accounts.owner.key(),
@@ -500,8 +481,8 @@ pub fn reroll_cosmetics(ctx: Context<RerollCosmetics>, user_seed: [u8; 32]) -> R
     Ok(())
 }
 
-/// Permissionless cleanup of ONE burned ball: closes its GumballData and
-/// GumballSvg PDAs and sends ALL their lamports to `machine.treasury` (never to
+/// Permissionless cleanup of ONE burned ball: closes its GumballData (and, for legacy balls
+/// minted before the artwork moved off chain, its GumballSvg) and sends ALL their lamports to `machine.treasury` (never to
 /// the caller: the oracle or the burner paid that rent, not the caller, and a
 /// refund to the burner would pay users to mint-and-burn). Takes no signer
 /// account of its own, so anyone (a bot, the site, the owner) can send it.
@@ -564,20 +545,38 @@ pub fn close_burned(ctx: Context<CloseBurned>) -> Result<()> {
             GumballError::NotBurned
         );
     }
-    {
+    // The svg PDA exists only for LEGACY balls (new balls never create it). Three states:
+    //   program-owned + GumballSvg discriminator -> legacy, close it too
+    //   system-owned + empty data                -> new ball (or already closed): leave it alone
+    //   anything else (foreign owner, wrong discriminator) -> refuse
+    // The address is seed-checked, so a legacy ball's real svg PDA cannot be swapped for an empty
+    // one. The GumballData checks above never depend on this branch. Lamports sitting on an empty
+    // system-owned address are NOT ours (the program cannot debit them, and moving them is not our
+    // call): they are ignored, so a donation can neither block the close nor be swept.
+    let close_svg = {
         let svg = &ctx.accounts.gumball_svg;
-        require!(svg.owner == ctx.program_id, GumballError::InvalidAccount);
-        let data = svg.try_borrow_data()?;
-        require!(data.len() >= 8 && data[..8] == *GumballSvg::DISCRIMINATOR, GumballError::InvalidAccount);
-    }
+        if svg.owner == ctx.program_id {
+            let data = svg.try_borrow_data()?;
+            require!(data.len() >= 8 && data[..8] == *GumballSvg::DISCRIMINATOR, GumballError::InvalidAccount);
+            true
+        } else {
+            require!(*svg.owner == System::id() && svg.data_is_empty(), GumballError::InvalidAccount);
+            false
+        }
+    };
 
-    let lamports = ctx.accounts.gumball_data.lamports()
-        .checked_add(ctx.accounts.gumball_svg.lamports())
-        .ok_or(GumballError::MathOverflow)?;
+    let mut lamports = ctx.accounts.gumball_data.lamports();
+    if close_svg {
+        lamports = lamports
+            .checked_add(ctx.accounts.gumball_svg.lamports())
+            .ok_or(GumballError::MathOverflow)?;
+    }
     let treasury = ctx.accounts.treasury.to_account_info();
     // Same steps as Anchor `close = treasury`: every lamport moves, owner becomes the system program, data is zero-sized
     close_to(&ctx.accounts.gumball_data.to_account_info(), &treasury)?;
-    close_to(&ctx.accounts.gumball_svg.to_account_info(), &treasury)?;
+    if close_svg {
+        close_to(&ctx.accounts.gumball_svg.to_account_info(), &treasury)?;
+    }
 
     emit!(BurnedClosedEvent { nft_mint: ctx.accounts.nft_mint.key(), lamports });
     Ok(())
