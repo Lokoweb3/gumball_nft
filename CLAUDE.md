@@ -6,7 +6,7 @@ This file helps Claude understand the project context, architecture decisions, a
 
 ## Project Purpose
 
-An NFT gumball machine on X1 with on-chain traits (Solana-compatible) blockchain. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
+An NFT gumball machine on the X1 (Solana-compatible) blockchain, with traits stored on-chain and the art drawn from them. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
 
 **Key properties:**
 - Traits stored on-chain; the SVG picture is drawn from them by one shared renderer (`public/js/gumball-svg.js`), not stored (no IPFS, no stored image)
