@@ -8,7 +8,7 @@ pub(crate) fn stake_weight(rarity: u8, serial: u64) -> u64 {
     base * (BPS_DENOMINATOR + bonus_bps) / BPS_DENOMINATOR
 }
 
-/// Exponential mint price: 0.01 * 4^(total_minted / 10000) XNT (testnet)
+/// Exponential mint price: 0.03 * 4^(total_minted / 10000) XNT
 /// Uses a 11-point lookup table of 4^(x/10) scaled by 10000, with linear
 /// interpolation between points. No floating point needed.
 /// Returns price in lamports.
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn mint_price_curve_endpoints_and_monotonic() {
-        assert_eq!(get_mint_price(0), BASE_PRICE);              // 0.01 XNT at mint #1
+        assert_eq!(get_mint_price(0), BASE_PRICE);              // 0.03 XNT at mint #1
         assert_eq!(get_mint_price(MAX_SUPPLY), MAX_PRICE);      // capped at supply
         assert_eq!(get_mint_price(u64::MAX), MAX_PRICE);        // overflow-safe
         let mut last = 0u64;

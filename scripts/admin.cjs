@@ -100,7 +100,7 @@ async function build(conn) {
     // ProgramData: u32 tag(3) | u64 slot | u8 option | [32] authority
     const upgradeAuth = pdInfo.data[12] === 1 ? new PublicKey(pdInfo.data.subarray(13, 45)) : null;
     if (!upgradeAuth || !upgradeAuth.equals(signer.publicKey)) fail(`signer is not the upgrade authority (${upgradeAuth ? upgradeAuth.toBase58() : "none"})`);
-    const price = Buffer.alloc(8); price.writeBigUInt64LE(10_000_000n); // stored but unused: pricing is get_mint_price()
+    const price = Buffer.alloc(8); price.writeBigUInt64LE(30_000_000n); // stored but unused: pricing is get_mint_price()
     return {
       what: `initialize_machine(treasury ${treasury.toBase58()})`,
       ix: new TransactionInstruction({ programId: PROGRAM_ID, keys: [

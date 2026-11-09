@@ -48,17 +48,19 @@ These are committed to `main` but **not on chain** yet:
 | `buy_gumball(max_price)` / `accept_offer(min_amount)` | closes the delist-relist front-run (H1). **Breaking**: `marketplace.html` now sends the argument — deploy page + program in the same window |
 | `accept_offer` CPI reorder | the offer flow was **unusable** (UnbalancedInstruction) on the current binary |
 | `withdraw` removed | could never work once treasury ≠ authority |
-| `generate_svg` rewrite | −86 % heap allocations on the burn path; golden-tested byte-identical |
+| `generate_svg` rewrite | −86 % heap allocations on the burn path; golden-tested byte-identical (superseded: see the next row) |
+| **traits-art**: no on-chain SVG | `reveal_and_mint`, `burn_to_upgrade`, `burn_multi` no longer create a `GumballSvg`; `reroll_cosmetics` no longer writes one. **Breaking**: each of those four instructions lost one account (`gumball_svg` / `new_gumball_svg`), so the old oracle and old pages cannot call the new program. The picture is drawn from the traits by `public/js/gumball-svg.js` (site + `/api/metadata`). Saves ~0.0107 XNT of rent per mint (oracle outlay ~0.0179 → ~0.0072 XNT) |
+| price 0.01 → 0.03 XNT base | `BASE_PRICE` 30,000,000, `MAX_PRICE` 120,000,000; the site computes it from the same curve |
 
-- [ ] `cargo test` green (11 passed on 2026-11-08 at security-fixes HEAD 0855f78, incl. the SVG golden test)
-- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Counts from the lead's run and an independent fresh-clone run on 2026-11-08: staking 35, fairseed 22, legacy refund 15, close-burned 45 (added on branch close-burned), auction 11+6, init-gate 8
+- [ ] `cargo test` green (11 passed + 1 ignored fixture writer on branch traits-art, incl. the SVG golden test and the 0.03/0.12 price curve); `node scripts/test-svg-identity.cjs` green (JS renderer equals the Rust one on 79,008 cases + 18 golden hashes)
+- [ ] `bash scripts/ci-e2e.sh` green with the 3.1 Solana tools (LiteSVM 0.7 cannot load 4.3-built binaries). Counts from the lead's run and an independent fresh-clone run on 2026-11-08 (before traits-art): staking 35, fairseed 22, legacy refund 15, close-burned 45, auction 11+6, init-gate 8. Agent run on branch traits-art (2026-11-09, not yet re-run by the lead): staking 35, fairseed 25, legacy refund 15, close-burned 58, auction 11+6, init-gate 8
 - [ ] marketplace suite guard scenarios report **6025 / 6026** on the fresh build (codes unchanged: new errors were appended, 6027 InvalidLpMint, 6028 SeedSlotNotReached)
 - [ ] Verifiable build hash recorded (Phase 3)
 
 ### 0.3 Decide the mainnet economics (all in `programs/gumball_nft/src/constants.rs` — need a rebuild)
 | constant | testnet value | constants.rs line | decide |
 |---|---|---|---|
-| `BASE_PRICE` / `MAX_PRICE` | 0.01 → 0.04 XNT | 39–41 | mainnet curve (testnet was set low for the faucet) |
+| `BASE_PRICE` / `MAX_PRICE` | 0.03 → 0.12 XNT (set 2026-11-09 by the owner: 30,000,000 / 120,000,000 lamports; was 0.01 → 0.04) | 39–41 | final for mainnet? Upgrade fees follow the same curve |
 | `MAX_SUPPLY` | 10 000 | 11 | final |
 | `MAX_PER_TX` | 10 | 13 | final |
 | `MINT_TIMEOUT` | 150 s | 25 | refund window; oracle SLA must beat it |
@@ -73,7 +75,7 @@ These are committed to `main` but **not on chain** yet:
 every wallet shows a broken image forever.
 - [ ] Point it at a domain **you own** (not `*.up.railway.app`) with a plan to keep it up, **or**
 - [ ] add an authority-gated `update_metadata_uri` instruction, **or**
-- [ ] embed the on-chain SVG as a `data:` URI at attach time (fully on-chain, no host)
+- [ ] (no longer an option as written: the program stores no SVG any more, so there is nothing on chain to embed as a `data:` URI; the image is drawn from the on-chain traits by the host's `/api/metadata/<mint>`, so the permanent host dependency is stronger than before)
 
 ### 0.5 Security batch on branch `security-fixes`: FIXED IN CODE, PENDING DEPLOY
 None of these is on chain until the program is redeployed (steps in 0.6).
@@ -116,8 +118,16 @@ Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_I
       mainnet LP mint here before launch; D2bJ… is the testnet value only. `set-lp-mint` cannot tell a real LP
       mint from any other mint, so the value you pass is the check. Any other mint in the
       output means a position staked with a fake mint: stop and investigate before deploy.
-- [ ] **(c) Deploy program + oracle + frontend together** (MintRequest grew to 164 bytes; the old oracle
-      and frontends cannot read it; `stake_lp` callers must pass the new trailing `lp_mint_config`).
+- [ ] **(c) Deploy program + oracle + frontend + metadata server together** (MintRequest grew to 164 bytes; the old oracle
+      and frontends cannot read it; `stake_lp` callers must pass the new trailing `lp_mint_config`; with the
+      traits-art change the account lists of `reveal_and_mint`, `burn_to_upgrade`, `burn_multi` and
+      `reroll_cosmetics` shrank by the svg account, so the oracle (`scripts/oracle.cjs`) and every page that
+      builds those instructions (`index.html`) must be the new versions, and the Express server
+      (`server.cjs`, which needs `public/js/gumball-svg.js`) must be the new one for `/api/metadata` to
+      render images; any page or bot still sending the old account list fails on the new program).
+      Legacy balls keep their `GumballSvg` PDAs; they are still closable with `close_burned`, and
+      `scripts/close-burned.cjs` handles both kinds. Re-check after the deploy that
+      `/api/metadata/<mint>` returns an image for one legacy and one new ball.
 - [ ] **(d) Immediately call `set_lp_mint(<real LP mint>)`** (signer: `stake_config.authority`; accounts:
       authority, `stake_config_v2`, `lp_mint_config` PDA, system program). `stake_lp` is **off** until this
       is done. `node scripts/admin.cjs --cluster <testnet|mainnet> set-lp-mint <LP_MINT>` (preview, then `--live`;

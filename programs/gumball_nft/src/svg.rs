@@ -1,6 +1,12 @@
 use crate::*;
 
-// ─── SVG Generator ────────────────────────────────────────────────────────────
+// ─── SVG reference renderer (test-only) ───────────────────────────────────────
+//
+// The program NO LONGER stores or generates artwork: the site and the metadata
+// server draw each ball from its on-chain traits with public/js/gumball-svg.js.
+// This file is compiled only for `cargo test`, as the reference the JS port is
+// proven byte-identical against (`dump_svg_matrix`, driven by
+// scripts/test-svg-identity.cjs) and to keep the golden hashes of the artwork.
 
 pub(crate) fn generate_svg(serial: u64, flavor: u8, color: u8, rarity: u8, special: u8) -> Vec<u8> {
     use core::fmt::Write as _;
@@ -121,6 +127,40 @@ mod tests {
             assert!(svg.len() <= MAX_SVG_LEN, "SVG exceeds the GumballSvg account cap");
             assert!(svg.starts_with(b"<svg "), "missing opening tag");
             assert!(svg.ends_with(b"</svg>"), "missing closing tag");
+        }
+    }
+
+    /// Writes one line per case, `serial flavor color rarity special len sha256hex`, to the
+    /// file named by SVG_MATRIX_OUT. Run by scripts/test-svg-identity.cjs, which compares
+    /// every line with the JS renderer. Ignored by default (it is a fixture writer).
+    #[test]
+    #[ignore]
+    fn dump_svg_matrix() {
+        use std::io::Write as _;
+        let path = std::env::var("SVG_MATRIX_OUT").expect("set SVG_MATRIX_OUT");
+        let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        let mut cases: Vec<(u64, u8, u8, u8, u8)> = Vec::new();
+        // every flavor/color/rarity/special combination, for serials of every width
+        for serial in [1u64, 42, 999, 1000, 9999, 10_000, 12_345, 123_456_789] {
+            for f in 0..20u8 { for c in 0..12u8 { for r in 0..5u8 { for sp in 0..8u8 {
+                cases.push((serial, f, c, r, sp));
+            }}}}
+        }
+        // u64 extremes: all color/rarity/special, plus
+        // every u8 value of every trait byte (modulo wrap)
+        for serial in [2u64, 10_000_000_000, u64::MAX] {
+            for c in 0..12u8 { for r in 0..5u8 { for sp in 0..8u8 {
+                cases.push((serial, (c + r + sp) % 20, c, r, sp));
+            }}}
+            for v in 0..=255u8 {
+                cases.push((serial, v, v.wrapping_mul(7), v.wrapping_mul(3), v.wrapping_mul(5)));
+            }
+        }
+        for (serial, f, c, r, sp) in &cases {
+            let svg = generate_svg(*serial, *f, *c, *r, *sp);
+            let h = anchor_lang::solana_program::hash::hash(&svg).to_bytes();
+            let hex: String = h.iter().map(|b| format!("{b:02x}")).collect();
+            writeln!(out, "{serial} {f} {c} {r} {sp} {} {hex}", svg.len()).unwrap();
         }
     }
 }

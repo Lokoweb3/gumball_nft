@@ -5,6 +5,7 @@ const fs = require("fs");
 const { fork } = require("child_process");
 const { Connection, Keypair, SystemProgram, Transaction, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 const { applySecurity, negativeGet, negativeSet } = require("./server-security.cjs");
+const { generateSvg } = require("./public/js/gumball-svg.js"); // shared with the site: the picture is drawn from on-chain traits
 
 const PORT = process.env.PORT || 3000;
 
@@ -342,7 +343,8 @@ app.get("/api/leaderboard", (req, res) => {
 
 // ── Wallet metadata (attach_metadata URIs point here) ───────────────────────
 // Serves Metaplex-standard JSON for a gumball mint, with the image built from
-// the ON-CHAIN GumballSvg PDA as a data URI — no off-chain artwork storage.
+// the picture drawn from the ball's ON-CHAIN traits (shared renderer, same file the
+// site uses) as a data URI. No artwork is stored anywhere.
 const NFT_FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lemon","Lime","Orange","Bubblegum","Cotton Candy","Peach","Pineapple","Raspberry","Mint","Cinnamon","Root Beer","Banana","Green Apple","Mango","Mystery"];
 const NFT_COLORS = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
 const NFT_SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
@@ -360,31 +362,24 @@ app.get("/api/metadata/:mint", async (req, res) => {
     try { mint = new PublicKey(req.params.mint); }
     catch { negativeSet(req.params.mint); return res.status(400).json({ error: "bad mint" }); }
     const [gdPda] = PublicKey.findProgramAddressSync([Buffer.from("gumball"), mint.toBuffer()], GUMBALL_PROGRAM);
-    const [svgPda] = PublicKey.findProgramAddressSync([Buffer.from("svg"), mint.toBuffer()], GUMBALL_PROGRAM);
-    const [gd, svgAcc] = await Promise.all([
-      faucetConnection.getAccountInfo(gdPda),
-      faucetConnection.getAccountInfo(svgPda),
-    ]);
+    const gd = await faucetConnection.getAccountInfo(gdPda);
     if (!gd || gd.data.length !== 189) {
       negativeSet(req.params.mint);
       return res.status(404).json({ error: "not a gumball" });
     }
 
-    const serial = Number(gd.data.readBigUInt64LE(72));
+    const serialBig = gd.data.readBigUInt64LE(72);
+    const serial = Number(serialBig);
     const flavor = gd.data.readUInt8(80), color = gd.data.readUInt8(81);
     const rarity = gd.data.readUInt8(82), special = gd.data.readUInt8(83);
 
-    let image;
-    if (svgAcc) {
-      const svgLen = svgAcc.data.readUInt32LE(8);
-      const svg = svgAcc.data.subarray(12, 12 + svgLen);
-      image = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
-    }
+    const image = "data:image/svg+xml;base64," +
+      Buffer.from(generateSvg(serialBig, flavor, color, rarity, special)).toString("base64");
 
     const json = {
       name: `Gumball #${serial}`,
       symbol: "GMBL",
-      description: "Fully on-chain SVG gumball with provably fair traits (commit-reveal oracle) on X1.",
+      description: "Gumball drawn from its on-chain traits, provably fair (commit-reveal oracle) on X1.",
       image,
       attributes: [
         { trait_type: "Flavor", value: NFT_FLAVORS[flavor % NFT_FLAVORS.length] },

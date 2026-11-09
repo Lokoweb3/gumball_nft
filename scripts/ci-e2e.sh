@@ -118,7 +118,7 @@ if ! RPC="$RPC_URL" LEGACY_DIR="$LEGACY_DIR" node scripts/validate-legacy-refund
   exit 1
 fi
 
-# close_burned: closes burned balls' GumballData + GumballSvg into machine.treasury. Burns real balls
+# close_burned: closes burned balls' GumballData (+ the GumballSvg of legacy balls) into machine.treasury. Burns real balls
 # (burn_to_upgrade, burn_multi) first, so it changes Machine counters and the fee pools: keep it after
 # the suites that read those.
 if ! RPC="$RPC_URL" CB_DIR="$CB_DIR" node scripts/validate-close-burned-localnet.cjs; then

@@ -8,7 +8,7 @@
 //               <script>; Turnstile injects its api.js from Cloudflare.
 //   connect-src the X1 RPC over https AND wss — web3.js confirmTransaction
 //               subscribes on the websocket it derives from the RPC URL.
-//   img-src     data: — on-chain SVG is rendered as <img> data URIs (N2).
+//   img-src     data: — gumball art (drawn from on-chain traits) is rendered as <img> data URIs (N2).
 //   frame-src   the Turnstile challenge iframe.
 //   style/font  Google Fonts (Press Start 2P) + inline styles.
 // Wallet extensions (Backpack, Phantom) inject via content scripts, which

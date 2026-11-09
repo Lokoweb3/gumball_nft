@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Closes the GumballData + GumballSvg of every burned ball and sends their rent to machine.treasury
+// Closes the GumballData (+ GumballSvg, for legacy balls that have one) of every burned ball and sends their rent to machine.treasury
 // (close_burned is permissionless; the signer only pays fees). Preview by default; --live sends.
 //
 //   node scripts/close-burned.cjs --cluster testnet            # list burned balls, total reclaimable, simulate
@@ -19,7 +19,7 @@ const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const bs58 = require("bs58");
-const { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } = require("@solana/web3.js");
+const { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction } = require("@solana/web3.js");
 
 const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || "AEahf37KaS548ErtW6RnDtwYrTxxJqkMgg79W9dSNhCy");
 const TOKEN_PID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -88,13 +88,16 @@ async function scan(conn) {
   let alreadyClosed = 0;
   mints.forEach((mint, i) => {
     const gd = gds[i], svg = svgs[i];
-    if (!gd && !svg) { alreadyClosed++; return; }
-    const ok = gd && svg && gd.owner.equals(PROGRAM_ID) && svg.owner.equals(PROGRAM_ID)
+    // svg PDA: a program-owned GumballSvg (legacy ball), or absent / an empty system account (new ball:
+    // the program no longer creates one; lamports donated to the empty address are not ours and stay)
+    const legacySvg = svg && svg.owner.equals(PROGRAM_ID) && svg.data.length >= 8 && svg.data.subarray(0, 8).equals(disc("GumballSvg", "account"));
+    const noSvg = !svg || (svg.owner.equals(SystemProgram.programId) && svg.data.length === 0);
+    if (!gd && noSvg) { alreadyClosed++; return; }
+    const ok = gd && (legacySvg || noSvg) && gd.owner.equals(PROGRAM_ID)
       && gd.data.length >= 72 && gd.data.subarray(0, 8).equals(disc("GumballData", "account"))
-      && gd.data.subarray(8, 40).every((b) => b === 0) && gd.data.subarray(40, 72).equals(machine.toBuffer())
-      && svg.data.length >= 8 && svg.data.subarray(0, 8).equals(disc("GumballSvg", "account"));
+      && gd.data.subarray(8, 40).every((b) => b === 0) && gd.data.subarray(40, 72).equals(machine.toBuffer());
     if (!ok) { console.log(`skipping ${mint.toBase58()}: GumballData/GumballSvg missing or not as expected`); return; }
-    balls.push({ mint, lamports: gd.lamports + svg.lamports });
+    balls.push({ mint, hasSvg: !!legacySvg, lamports: gd.lamports + (legacySvg ? svg.lamports : 0) });
   });
   // Cross-check: GumballData with a zeroed owner on this machine, whatever its size (legacy layouts included)
   const zeroed = await conn.getProgramAccounts(PROGRAM_ID, { dataSlice: { offset: 0, length: 0 }, filters: [
@@ -150,7 +153,7 @@ async function scan(conn) {
     const before = await conn.getBalance(treasury);
     const sig = await sendAndConfirmTransaction(conn, await buildTx(batch), [signer]);
     const want = batch.reduce((s, b) => s + b.lamports, 0);
-    const left = (await getMultiple(conn, batch.flatMap((b) => [pda("gumball", b.mint.toBuffer()), pda("svg", b.mint.toBuffer())]))).filter(Boolean).length;
+    const left = (await getMultiple(conn, batch.flatMap((b) => [pda("gumball", b.mint.toBuffer()), ...(b.hasSvg ? [pda("svg", b.mint.toBuffer())] : [])]))).filter(Boolean).length;
     const gained = (await conn.getBalance(treasury)) - before;
     console.log(`sent ${sig}: ${batch.length} balls, treasury +${gained} (expected ${want}), ${left} account(s) still open`);
     // the treasury may also receive unrelated deposits, so only a shortfall is an error

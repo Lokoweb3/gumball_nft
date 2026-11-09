@@ -1526,10 +1526,6 @@
               "writable": true
             },
             {
-              "name": "gumball_svg",
-              "writable": true
-            },
-            {
               "name": "slot_hashes"
             },
             {
@@ -1720,10 +1716,6 @@
               "writable": true
             },
             {
-              "name": "new_gumball_svg",
-              "writable": true
-            },
-            {
               "name": "slot_hashes"
             },
             {
@@ -1826,10 +1818,6 @@
               "writable": true
             },
             {
-              "name": "new_gumball_svg",
-              "writable": true
-            },
-            {
               "name": "slot_hashes"
             },
             {
@@ -1874,8 +1862,9 @@
         {
           "name": "close_burned",
           "docs": [
-            "Permissionless: close ONE burned ball's GumballData + GumballSvg PDAs and",
-            "send all their lamports to machine.treasury (never to the caller)."
+            "Permissionless: close ONE burned ball's GumballData (+ the GumballSvg of a",
+            "legacy ball, if it has one) and send all their lamports to machine.treasury",
+            "(never to the caller)."
           ],
           "discriminator": [
             150,
@@ -2019,8 +2008,8 @@
           "docs": [
             "Permissionless: attach Metaplex metadata to an existing gumball NFT so",
             "wallets display it (name + image). Name derives from on-chain serial;",
-            "the URI points at the metadata API, which serves the on-chain SVG as a",
-            "data-URI image — no off-chain storage of the artwork itself.",
+            "the URI points at the metadata API, which draws the image from the",
+            "ball's on-chain traits (shared renderer, public/js/gumball-svg.js).",
             "Anyone can pay to attach; Metaplex rejects the CPI if metadata exists."
           ],
           "discriminator": [
@@ -2536,7 +2525,7 @@
             "Burn a flat GUM fee to re-randomize a gumball's COSMETICS (flavor,",
             "color, special) — rarity never changes. Entropy is the slot hash mixed",
             "with a caller-supplied seed (prevents validator grinding, same model as",
-            "burns). Respects any active season window; the on-chain SVG regenerates.",
+            "burns). Respects any active season window; the picture follows the new traits.",
             "This is GUM's demand sink: supply is fixed, burned GUM is gone forever."
           ],
           "discriminator": [
@@ -2567,10 +2556,6 @@
             },
             {
               "name": "gumball_data",
-              "writable": true
-            },
-            {
-              "name": "gumball_svg",
               "writable": true
             },
             {
@@ -3830,19 +3815,6 @@
           ]
         },
         {
-          "name": "GumballSvg",
-          "discriminator": [
-            221,
-            206,
-            206,
-            19,
-            30,
-            212,
-            28,
-            100
-          ]
-        },
-        {
           "name": "Listing",
           "discriminator": [
             218,
@@ -4124,21 +4096,6 @@
                     32
                   ]
                 }
-              }
-            ]
-          }
-        },
-        {
-          "name": "GumballSvg",
-          "docs": [
-            "Separate PDA holding the on-chain SVG — not loaded by burn instructions"
-          ],
-          "type": {
-            "kind": "struct",
-            "fields": [
-              {
-                "name": "svg",
-                "type": "bytes"
               }
             ]
           }

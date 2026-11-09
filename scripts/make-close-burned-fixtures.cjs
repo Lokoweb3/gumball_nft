@@ -5,10 +5,16 @@
 // (no `pubkey`, so ci-e2e skips it as an account). Every ball is built in the on-chain layout
 // (GumballData 189 bytes, GumballSvg 8+4+1400 bytes) with the Machine from <fixturesDir>:
 //   burned balls   mint supply 0, authority machine_authority, GumballData.owner zeroed
-//     b1 (+1000 donated lamports), b3, b4 .... closable (b2 is the 93-byte legacy GumballData)
+//     b1 (+1000 donated lamports), b3, b4 .... closable LEGACY balls (they have a GumballSvg;
+//       b2 is the 93-byte legacy GumballData)
+//     n1 ............ closable NEW-style ball: the program no longer creates a GumballSvg, so the
+//       svg address does not exist at all
+//     n2 ............ new-style ball whose svg address holds 777 DONATED lamports (system-owned,
+//       empty): closable, the donation is not ours and must not move
 //   refusal cases  live ball (supply 1), supply 0 with a non-zero owner, mint authority not
 //     machine_authority / none, forged GumballData (system-owned, other machine, bad
-//     discriminator), forged GumballSvg (system-owned, bad discriminator)
+//     discriminator), forged svg address (system-owned with data, bad discriminator, foreign-owned
+//     empty, program-owned but empty)
 //   live balls     7 balls owned by the wallet (rarity 2 x2 for burn_to_upgrade, rarity 0 x5 for
 //     burn_multi) that the suite burns on-chain, so the closed balls come from the real burn paths
 //
@@ -88,14 +94,19 @@ let serial = 9000;
 
 // kind: how the ball looks. Returns the mint/gd/svg addresses and the lamports each holds.
 function ball(name, { supply = 0, authority = machineAuth, owner = null, gdOwner = PROGRAM_ID, gdSize = GD_SIZE,
-  gdMachine = machine, gdDisc, svgOwner = PROGRAM_ID, svgDisc, extra = 0, rarity = 0, held = false } = {}) {
+  gdMachine = machine, gdDisc, svgOwner = PROGRAM_ID, svgDisc, svgKind = "legacy", extra = 0, rarity = 0, held = false } = {}) {
   const mint = Keypair.generate().publicKey;
   const [gd, gdBump] = pda([Buffer.from("gumball"), mint.toBuffer()]);
   const [svg] = pda([Buffer.from("svg"), mint.toBuffer()]);
   save(`cb-${name}-mint`, mint, TOKEN_PID, mintData(supply, authority), 1461600);
-  const gdLamports = rent(gdSize) + extra, svgLamports = rent(SVG_SIZE);
+  // svgKind: "legacy" (full GumballSvg), "none" (no account: a new-style ball), "donated" (empty
+  // system-owned account holding 777 lamports), "emptyOwned" (empty, owner svgOwner)
+  const gdLamports = rent(gdSize) + extra;
+  const svgLamports = svgKind === "legacy" ? rent(SVG_SIZE) : svgKind === "donated" ? 777 : svgKind === "emptyOwned" ? 1000000 : 0;
   save(`cb-${name}-gd`, gd, gdOwner, gdData({ owner, machineKey: gdMachine, serial: serial++, rarity, bump: gdBump, size: gdSize, disc: gdDisc }), gdLamports);
-  save(`cb-${name}-svg`, svg, svgOwner, svgData(svgDisc), svgLamports);
+  if (svgKind === "legacy") save(`cb-${name}-svg`, svg, svgOwner, svgData(svgDisc), svgLamports);
+  else if (svgKind === "donated") save(`cb-${name}-svg`, svg, SYSTEM_PID, Buffer.alloc(0), svgLamports);
+  else if (svgKind === "emptyOwned") save(`cb-${name}-svg`, svg, svgOwner, Buffer.alloc(0), svgLamports);
   if (held) save(`cb-${name}-ata`, ata(mint, wallet.publicKey), TOKEN_PID, tokenData(mint, wallet.publicKey, 1), 2039280);
   const c = { mint: mint.toBase58(), gd: gd.toBase58(), svg: svg.toBase58(), gdLamports, svgLamports, rarity };
   if (held) c.ata = ata(mint, wallet.publicKey).toBase58();
@@ -109,6 +120,8 @@ ball("b2", { gdSize: GD_LEGACY_SIZE });      // legacy GumballData layout
 ball("b3");                                  // closed by a caller that is not the burner
 ball("b4");                                  // closed in a multi-ball batch with b5
 ball("b5");
+ball("n1", { svgKind: "none" });             // new-style ball: no svg account
+ball("n2", { svgKind: "donated" });          // new-style ball, 777 lamports donated to the empty svg address
 // refusals
 ball("live", { supply: 1, owner: wallet.publicKey, held: true }); // not burned: supply 1, owner set
 ball("stale", { supply: 0, owner: wallet.publicKey });            // token gone, owner field still set
@@ -119,6 +132,8 @@ ball("fgd_machine", { gdMachine: Keypair.generate().publicKey });  // GumballDat
 ball("fgd_disc", { gdDisc: accDisc("GumballSvg") });               // wrong discriminator
 ball("fsvg_sys", { svgOwner: SYSTEM_PID });                        // GumballSvg not program-owned
 ball("fsvg_disc", { svgDisc: accDisc("GumballData") });            // wrong discriminator
+ball("fsvg_foreign", { svgKind: "emptyOwned", svgOwner: TOKEN_PID });  // empty but owned by another program
+ball("fsvg_prog", { svgKind: "emptyOwned" });                      // owned by this program but empty (no discriminator)
 // live balls the suite burns through the real instructions
 for (let i = 0; i < 2; i++) info.rare.push(ball(`rare${i}`, { supply: 1, owner: wallet.publicKey, rarity: 2, held: true, authority: machineAuth }));
 for (let i = 0; i < 5; i++) info.common.push(ball(`common${i}`, { supply: 1, owner: wallet.publicKey, rarity: 0, held: true, authority: machineAuth }));

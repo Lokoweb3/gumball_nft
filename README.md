@@ -1,6 +1,6 @@
 # Gumball Machine NFT — X1
 
-A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SVG gumball with randomized traits, generated and verified entirely on-chain via a commit-reveal oracle.
+A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SVG gumball with randomized traits, generated and verified on-chain via a commit-reveal oracle. The traits live on-chain; the picture is not stored but drawn from them by one shared, deterministic renderer (`public/js/gumball-svg.js`).
 
 **Security Grade: A-** — 5 rounds of core audit plus a dedicated staking/XNT fee-sharing audit and follow-up review round; all findings resolved and validated end-to-end against cloned live state.
 
@@ -27,7 +27,7 @@ A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SV
 | **Machine PDA** | `Ge8524seSpQ2BLRiMAnk5tg7YRKCTxVscQSxBvPvoyxY` |
 | **Network** | X1 Testnet (`https://rpc.testnet.x1.xyz`) |
 | **Explorer** | `https://explorer.testnet.x1.xyz` |
-| **Mint Price** | 0.01 – 0.04 XNT testnet (exponential curve) |
+| **Mint Price** | 0.03 – 0.12 XNT (exponential curve, `BASE_PRICE` 30,000,000 / `MAX_PRICE` 120,000,000 lamports) |
 | **Faucet** | 0.1 XNT per wallet per 24h |
 | **Max Supply** | 10,000 |
 | **Max Per Tx** | 10 mints per transaction |
@@ -72,7 +72,7 @@ sequenceDiagram
     O->>P: reveal_and_mint(secret)
     P->>P: verify sha256(secret + oracle_pubkey) == commitment
     P->>P: traits = sha256(secret + slot_hash + user_seed + mint_index)
-    P->>U: mint GumballData + GumballSvg — proof fields stored on-chain
+    P->>U: mint GumballData — traits and proof fields stored on-chain
     Note over U: if no reveal within 150 s, refund_mint reclaims the XNT
 ```
 
@@ -117,7 +117,7 @@ All four upgrade paths are fully implemented and tested:
 
 Each upgrade charges an **upgrade fee** equal to the current dynamic mint price, sent to treasury. Upgrading costs the same as minting a new NFT — but you get a **guaranteed** rarity increase instead of random odds.
 
-Burned gumballs' `GumballData` and `GumballSvg` accounts stay on chain with a zeroed owner. The burn itself moves no lamports, and the old `reclaim_burned` instruction and reclaim UI are gone. The rent is recovered only by the permissionless `close_burned`, which closes one burned ball's two accounts and sends **all** their lamports to `machine.treasury` (never to the caller or the burner, so minting-and-burning cannot be farmed for rent). It requires the mint supply to be 0, a mint authority of the program's `machine_authority` PDA, and a zeroed owner in `GumballData`. Sweep them in bulk with `scripts/close-burned.cjs` (see Admin and ops scripts).
+Burned gumballs' `GumballData` (and, for balls minted before the artwork moved off chain, their `GumballSvg`) stay on chain with a zeroed owner. The burn itself moves no lamports, and the old `reclaim_burned` instruction and reclaim UI are gone. The rent is recovered only by the permissionless `close_burned`, which closes one burned ball's `GumballData` (plus its `GumballSvg` if it is a legacy ball that still has one) and sends **all** their lamports to `machine.treasury` (never to the caller or the burner, so minting-and-burning cannot be farmed for rent). It requires the mint supply to be 0, a mint authority of the program's `machine_authority` PDA, and a zeroed owner in `GumballData`. Sweep them in bulk with `scripts/close-burned.cjs` (see Admin and ops scripts).
 
 Burns are blocked once `total_minted >= max_supply` — no new serial numbers can be issued when sold out.
 
@@ -216,7 +216,7 @@ Fee-sharing guarantees (hardened in the 2026-07 review round):
 | `refund_legacy_mint` | Anyone | Refund a pre-fair-seed 156-byte MintRequest after the timeout; lamports always go to the stored minter |
 | `burn_to_upgrade` | User | Burn 2 gumballs + fee (Rare to Epic or Epic to Legendary) |
 | `burn_multi` | User | Burn 3-5 gumballs + fee (Common to Uncommon or Uncommon to Rare) |
-| `close_burned` | Anyone | Close one burned ball's `GumballData` + `GumballSvg`; all rent goes to `machine.treasury` |
+| `close_burned` | Anyone | Close one burned ball's `GumballData` (+ the `GumballSvg` of a legacy ball); all rent goes to `machine.treasury`. The svg account is still passed, seed-checked: a program-owned `GumballSvg` is closed too, an absent / empty system-owned address (every new ball) is left alone, anything else is refused |
 | `update_owner` | Anyone | Sync gumball owner to current token holder after trade |
 | `list_gumball` | User | List NFT for sale at fixed price (escrowed) |
 | `delist_gumball` | Seller | Cancel listing, NFT returned |
@@ -452,7 +452,7 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 
 - Batch minting — up to 10 NFTs with a single wallet approval
 - Dynamic pricing — live price display updates from on-chain state
-- Live collection — on-chain SVG rendering with rarity-colored glow effects
+- Live collection — SVG drawn from each ball's on-chain traits, with rarity-colored glow effects
 - Rarity filters — filter by Common / Uncommon / Rare / Epic / Legendary
 - Burn to upgrade — all 4 upgrade paths with upgrade fee display and pre-simulation
 - Wallet view lists every gumball the wallet holds, including ones received by plain transfer (burning one first syncs its stored owner in a separate transaction)
@@ -480,12 +480,12 @@ Open `https://localhost:3001` and connect your X1 Wallet or Phantom.
 
 - Total supply: 10,000 hard cap enforced on-chain
 - Treasury: 50% of mint and upgrade-fee proceeds (the rest goes to the NFT and LP XNT pools, see the fee table)
-- Burns: reduce circulating supply; total_burned tracked on-chain. A burn does not return rent; the burned ball's `GumballData` + `GumballSvg` rent reaches the treasury only through `close_burned`
+- Burns: reduce circulating supply; total_burned tracked on-chain. A burn does not return rent; the burned ball's `GumballData` (+ legacy `GumballSvg`) rent reaches the treasury only through `close_burned`
 - Upgrades: consume input tokens + upgrade fee, mint new serial at higher rarity; blocked at max supply
 
 ### Per-mint cost to the oracle
 
-The oracle wallet pays the rent for each mint's accounts (OracleCommit, mint, ATA, `GumballData`, `GumballSvg`), while the treasury receives 50% of the mint price. Run `node scripts/measure-mint-cost.cjs --cluster testnet` for the current figures. Last run (2026-11-08, testnet, total_minted 413; rent model, because the public RPC returned no oracle transaction history; fees add about 0.00001 XNT): oracle outlay 0.017943 XNT per mint vs treasury share 0.005307 XNT, break-even price about 0.0359 XNT. None of this rent returns to the oracle: `GumballData` + `GumballSvg` rent reaches the **treasury** only when a burned ball is closed with `close_burned`; the mint account can never be closed, the ATA can be closed only by its holder, and OracleCommit rent is never returned by the current program.
+The oracle wallet pays the rent for each mint's accounts (OracleCommit, mint, ATA, `GumballData`), while the treasury receives 50% of the mint price. Since the artwork is drawn from the traits instead of stored, `reveal_and_mint` no longer creates a 1,412-byte `GumballSvg` (about 0.0107 XNT of rent, 60% of the old outlay). Expected rent model at the standard rent rate (3,480 lamports per byte-year, 2 years): OracleCommit 0.001517 + mint 0.001462 + ATA 0.002039 + `GumballData` 0.002206 = **0.007224 XNT per mint** (it was 0.017943 XNT with the `GumballSvg`), plus about 0.00001 XNT of fees. At the new 0.03 XNT base price the treasury share is 0.015 XNT, so the break-even price is about 0.0144 XNT. Checked: `scripts/validate-fairseed-localnet.cjs` asserts on a local validator that one reveal costs the oracle exactly the fee plus the mint, ATA and `GumballData` rent and creates no svg account. `node scripts/measure-mint-cost.cjs --cluster testnet` prints the rent model above; it was not re-run against testnet for this change (localhost-only work), and its measured section only reflects the new program once reveals made by it are in the oracle's history. None of this rent returns to the oracle: `GumballData` (plus the `GumballSvg` of legacy balls) rent reaches the **treasury** only when a burned ball is closed with `close_burned`; the mint account can never be closed, the ATA can be closed only by its holder, and OracleCommit rent is never returned by the current program.
 
 ### Dynamic Mint Pricing
 
@@ -493,14 +493,14 @@ Mint price follows an exponential curve: `price = BASE_PRICE * 4^(total_minted /
 
 Early minters pay less. Price increases as supply fills up.
 
-**Testnet pricing:**
+**Pricing (`BASE_PRICE` 0.03 XNT, `MAX_PRICE` 4x = 0.12 XNT):**
 | Mint # | Price |
 |---|---|
-| 1 | 0.01 XNT |
-| 2,500 | 0.014 XNT |
-| 5,000 | 0.02 XNT |
-| 7,500 | 0.028 XNT |
-| 10,000 | 0.04 XNT |
+| 1 | 0.03 XNT |
+| 2,500 | 0.0425 XNT |
+| 5,000 | 0.06 XNT |
+| 7,500 | 0.0851 XNT |
+| 10,000 | 0.12 XNT |
 
 Batch mints (up to 10) sum each mint's individual price. Upgrade fees also follow this curve.
 
@@ -518,12 +518,13 @@ For v5 gumballs, the commitment hash, user seed, and oracle secret are all store
 
 ```
 GumballData  seeds: [b"gumball", mint.key()]  — 189 bytes (v5, traits + proof fields + oracle_secret)
-GumballSvg   seeds: [b"svg", mint.key()]       — 1,412 bytes (8 disc + 4 Vec len + MAX_SVG_LEN 1,400; on-chain SVG artwork)
 Listing      seeds: [b"listing", mint.key()]  — 89 bytes (marketplace listing)
 Offer        seeds: [b"offer", mint, buyer]   — 97 bytes (marketplace offer)
 ```
 
-SVG is stored in a separate PDA to keep GumballData lean for burn instructions (32KB SBF heap limit). Burns load 3-5 GumballData accounts simultaneously — at 189 bytes each, well within limits.
+No artwork is stored. A ball's picture is a pure function of the traits in `GumballData` (serial, flavor, color, rarity, special) and is drawn by `public/js/gumball-svg.js`, a byte-for-byte port of the Rust reference renderer in `programs/gumball_nft/src/svg.rs` (compiled for tests only; `scripts/test-svg-identity.cjs` proves the two identical). The site and `/api/metadata/<mint>` both use that one file. Balls minted before this change still have a legacy `GumballSvg` PDA (`seeds: [b"svg", mint.key()]`, 1,412 bytes); nothing reads it any more and `close_burned` still closes it for burned balls.
+
+Burns load 3-5 GumballData accounts simultaneously — at 189 bytes each, well within the 32KB SBF heap limit.
 
 ### Staking Accounts
 
@@ -625,7 +626,7 @@ Live URL: `https://gumballnft-production.up.railway.app`
 - [x] Public Telegram announcement bot (mints, upgrades, sales)
 - [x] CI — Rust unit tests + full e2e validation suite on every push; oracle RPC failover + heartbeat monitoring
 - [x] Indexer API — `/api/activity` (event feed) and `/api/leaderboard` (cached holder rankings) served by the Express server
-- [x] Wallet-visible gumballs — permissionless `attach_metadata` + `/api/metadata/<mint>` serving the on-chain SVG (backfill: `scripts/attach-metadata.cjs`)
+- [x] Wallet-visible gumballs — permissionless `attach_metadata` + `/api/metadata/<mint>` serving an image drawn from the on-chain traits (backfill: `scripts/attach-metadata.cjs`)
 - [x] Seasonal trait drops — `set_season` windows flavor/color for new mints (`scripts/set-season.cjs`)
 - [x] English auctions — create/bid/settle with anti-snipe and pool-routed royalties, AUCTIONS tab in the marketplace
 - [x] GUM sink — `reroll_cosmetics` burns 25 GUM to re-randomize a gumball's looks (🎲 button in the collection modal)
@@ -641,7 +642,8 @@ programs/gumball_nft/src/
   lib.rs            declare_id!, module declarations, #[program] wrappers
   instructions/     handlers + account structs: admin, mint, burn, market, auction, staking, lp, xnt, metadata
   state/            account structs (machine, mint, gumball, market, auction, staking, xnt, season, lp_mint_config)
-  constants.rs errors.rs events.rs pricing.rs randomness.rs svg.rs accumulators.rs
+  constants.rs errors.rs events.rs pricing.rs randomness.rs accumulators.rs
+  svg.rs            test-only reference renderer (the program stores no artwork)
 scripts/            oracle, monitor, admin/ops scripts, localnet fixtures + validate-*-localnet suites, ci-e2e.sh, check-idl.sh
 public/             frontend (js/css, shared RPC helpers in public/js/gumball-rpc.js)
 tests/              idl.golden.json, cu-baseline.txt
@@ -657,7 +659,10 @@ server.cjs          Express server (frontend, oracle, monitor, faucet API)
 | `programs/gumball_nft/src/lib.rs` | Anchor program entry: `declare_id!`, module declarations, thin `#[program]` wrappers |
 | `programs/gumball_nft/src/instructions/` | Handlers and account structs by domain (admin, mint, burn, market, auction, staking, lp, xnt, metadata) |
 | `programs/gumball_nft/src/state/` | Account structs |
-| `programs/gumball_nft/src/{constants,errors,events,pricing,randomness,svg,accumulators}.rs` | Constants, error enum, events, price curve, randomness, SVG, reward accumulators |
+| `programs/gumball_nft/src/{constants,errors,events,pricing,randomness,accumulators}.rs` | Constants, error enum, events, price curve, randomness, reward accumulators |
+| `programs/gumball_nft/src/svg.rs` | Reference SVG renderer, compiled for `cargo test` only; pins the artwork with golden hashes and feeds the JS identity test |
+| `public/js/gumball-svg.js` | The one renderer used by the site and `server.cjs`: draws a ball from its on-chain traits, byte-identical to `svg.rs` |
+| `scripts/test-svg-identity.cjs` | Runs the Rust renderer over 79,008 trait/serial combinations and the golden hashes, compares with `gumball-svg.js` |
 | `scripts/check-idl.sh` | Interface-unchanged check against `tests/idl.golden.json` (names, args, account lists, discriminators, errors, events; not constraints or logic). `--update` only for an intended interface change |
 | `public/js/gumball-rpc.js` | Shared frontend RPC helpers (wallet gumball loading, commitment picking) |
 | `scripts/oracle.cjs` | Commit-reveal oracle (encrypted secrets) |

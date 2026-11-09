@@ -2203,8 +2203,8 @@ function updateAnalytics() {
   // Since NFTs don't have a fixed price, show yield in GUM terms
   if (gumPrice > 0 && nftDaily > 0) {
     const nftYearlyXnt = nftDaily * 365 * gumPrice;
-    // Estimate NFT value as mint price (0.01 XNT)
-    const nftValue = stakedGumballs.length * 0.01;
+    // Estimate NFT value as the base mint price (0.03 XNT)
+    const nftValue = stakedGumballs.length * 0.03;
     const nftApr = nftValue > 0 ? (nftYearlyXnt / nftValue * 100) : 0;
     document.getElementById('aNftApr').textContent = nftApr > 1000 ? nftApr.toFixed(0) + '%' : nftApr.toFixed(1) + '%';
     document.getElementById('aNftAprDetail').textContent = `${nftDaily} GUM/day → ${(nftDaily * 365 * gumPrice).toFixed(2)} XNT/yr`;
@@ -2236,7 +2236,7 @@ function updateAnalytics() {
 
   // TVL
   if (gumPrice > 0) {
-    const nftTvl = totalStakedCount * 0.01; // NFTs at mint price
+    const nftTvl = totalStakedCount * 0.03; // NFTs at the base mint price
     let lpTvlXnt = 0;
     lpPositions.forEach(p => {
       if (poolLpSupply > 0) lpTvlXnt += (p.amount / poolLpSupply) * (xntReserve / 1e9) * 2;

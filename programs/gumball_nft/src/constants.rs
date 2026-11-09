@@ -32,13 +32,13 @@ pub(crate) const LEGACY_MINT_REQUEST_LEN: usize = 156;
 /// holds slots < R) and cannot be known to the minter or oracle at request time.
 pub(crate) const REVEAL_DELAY_SLOTS: u64 = 2;
 
-// Exponential pricing: 0.01 XNT at mint #0, 0.04 XNT at mint #10,000
+// Exponential pricing: 0.03 XNT at mint #0, 0.12 XNT at mint #10,000
 // Formula: price = BASE_PRICE * 4^(total_minted / MAX_SUPPLY)
 // Implemented via integer approximation using linear interpolation over
 // a precomputed table of 4^(x/10) for x = 0..10
-pub(crate) const BASE_PRICE: u64 = 10_000_000; // 0.01 XNT in lamports
+pub(crate) const BASE_PRICE: u64 = 30_000_000; // 0.03 XNT in lamports
 
-pub(crate) const MAX_PRICE:  u64 = 40_000_000; // 0.04 XNT in lamports
+pub(crate) const MAX_PRICE:  u64 = 120_000_000; // 0.12 XNT in lamports
 
 pub(crate) const RARITY_LEGENDARY: u8 = 4;
 
@@ -59,8 +59,8 @@ pub(crate) const RARITY_WEIGHT: [u64; 5] = [1, 9, 47, 156, 591];
 // enough to matter at volume.
 pub(crate) const REROLL_COST_GUM: u64 = 25_000_000; // 25 GUM
 
-// Base URI for wallet metadata (attach_metadata) — the API serves the
-// on-chain SVG as a data-URI image. Mutable metadata + PDA update authority
+// Base URI for wallet metadata (attach_metadata) — the API draws the image from the
+// ball's on-chain traits (shared renderer). Mutable metadata + PDA update authority
 // mean this can be repointed if the host ever changes.
 pub(crate) const METADATA_BASE_URI: &str = "https://gumballnft-production.up.railway.app/api/metadata/";
 
@@ -160,24 +160,29 @@ pub(crate) const RARITY_NAMES: [&str; 5] = ["Common","Uncommon","Rare","Epic","L
 
 pub(crate) const RARITY_CUTS:  [u8; 5]   = [60, 85, 95, 99, 100];
 
+#[cfg(test)] // artwork palette: only the test-only reference renderer (svg.rs) uses it; the site draws with public/js/gumball-svg.js
 pub(crate) const BALL_HI: [&str; 12] = [
     "#ff6688","#c077ff","#ffbbdd","#66aaff",
     "#ffc4b0","#fff099","#88ff88","#ffbb77",
     "#ffffff","#4455aa","#eeeeff","#ff88ff",
 ];
 
+#[cfg(test)] // artwork palette: only the test-only reference renderer (svg.rs) uses it; the site draws with public/js/gumball-svg.js
 pub(crate) const BALL_SH: [&str; 12] = [
     "#8a0020","#4a1a6b","#cc3377","#0033aa",
     "#9a4433","#b8960a","#228822","#cc5500",
     "#aaaaaa","#000011","#777788","#8800aa",
 ];
 
+#[cfg(test)] // artwork palette: only the test-only reference renderer (svg.rs) uses it; the site draws with public/js/gumball-svg.js
 pub(crate) const BALL_GL: [&str; 12] = [
     "#ff2244","#aa55ff","#ff44aa","#4488ff",
     "#ffaa88","#ffdd44","#66ee66","#ffaa44",
     "#cccccc","#3344aa","#ccccdd","#ff44ff",
 ];
 
+#[cfg(test)] // artwork palette: only the test-only reference renderer (svg.rs) uses it; the site draws with public/js/gumball-svg.js
 pub(crate) const RARITY_RC: [&str; 5] = ["#aaaacc","#44ff88","#44aaff","#cc88ff","#ffcc00"];
 
+#[cfg(test)] // artwork palette: only the test-only reference renderer (svg.rs) uses it; the site draws with public/js/gumball-svg.js
 pub(crate) const RARITY_BG: [&str; 5] = ["#0a0a14","#0a140a","#0a0a1e","#140a1e","#141000"];

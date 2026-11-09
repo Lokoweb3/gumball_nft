@@ -39,6 +39,9 @@ jobs:
         # dev deps included: litesvm powers the marketplace/auction suite
         run: npm install
 
+      - name: Renderer identity (JS gumball-svg.js equals the Rust reference renderer, byte for byte)
+        run: node scripts/test-svg-identity.cjs
+
       - name: Build program
         run: cd programs/gumball_nft && cargo build-sbf
 
