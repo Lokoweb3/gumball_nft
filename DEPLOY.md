@@ -125,7 +125,7 @@ Use the same RPC and program id for every step (`RPC=<RPC>`, program `<PROGRAM_I
       builds those instructions (`index.html`) must be the new versions, and the Express server
       (`server.cjs`, which needs `public/js/gumball-svg.js`) must be the new one for `/api/metadata` to
       render images; any page or bot still sending the old account list fails on the new program).
-      Legacy balls keep their `GumballSvg` PDAs; they are still closable with `close_burned`, and
+      Legacy balls keep their `GumballSvg` PDAs, frozen at the pre-upgrade picture (a later `reroll_cosmetics` no longer rewrites them, so third-party readers of the svg PDA may show an old image; our site and `/api/metadata` always draw from the traits); they are still closable with `close_burned`, and
       `scripts/close-burned.cjs` handles both kinds. Re-check after the deploy that
       `/api/metadata/<mint>` returns an image for one legacy and one new ball.
 - [ ] **(d) Immediately call `set_lp_mint(<real LP mint>)`** (signer: `stake_config.authority`; accounts:

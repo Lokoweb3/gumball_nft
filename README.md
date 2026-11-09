@@ -1,6 +1,6 @@
 # Gumball Machine NFT — X1
 
-A fully on-chain NFT gumball machine built on Solana/X1. Each NFT is a unique SVG gumball with randomized traits, generated and verified on-chain via a commit-reveal oracle. The traits live on-chain; the picture is not stored but drawn from them by one shared, deterministic renderer (`public/js/gumball-svg.js`).
+An NFT gumball machine built on Solana/X1 with on-chain traits. Each NFT is a unique SVG gumball with randomized traits, generated and verified on-chain via a commit-reveal oracle. The traits live on-chain; the picture is not stored but drawn from them by one shared, deterministic renderer (`public/js/gumball-svg.js`).
 
 **Security Grade: A-** — 5 rounds of core audit plus a dedicated staking/XNT fee-sharing audit and follow-up review round; all findings resolved and validated end-to-end against cloned live state.
 

@@ -6,7 +6,7 @@ This file helps Claude understand the project context, architecture decisions, a
 
 ## Project Purpose
 
-A fully on-chain NFT gumball machine on X1 (Solana-compatible) blockchain. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
+An NFT gumball machine on X1 with on-chain traits (Solana-compatible) blockchain. Users pay XNT to mint randomized SVG gumballs with provably fair randomness via a commit-reveal oracle. Gumballs can be burned to upgrade rarity.
 
 **Key properties:**
 - Traits stored on-chain; the SVG picture is drawn from them by one shared renderer (`public/js/gumball-svg.js`), not stored (no IPFS, no stored image)
@@ -441,7 +441,7 @@ the separate PDA when a user opens the modal.
 **Why:** Burn instructions load 3–5 GumballData accounts simultaneously. With inline SVG
 (~865 bytes each), this caused heap overflow (OOM) at ~5K compute units before any logic
 ran. Separating the SVG shrinks GumballData to 93 bytes, making burns fast and reliable.
-The SVG is still 100% on-chain — just in a sibling PDA.
+(Superseded 2026-11-09: no SVG is stored any more; see Architecture decision 1.)
 
 ---
 

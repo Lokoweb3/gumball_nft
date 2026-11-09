@@ -42,7 +42,7 @@ check("Number and BigInt serials render the same", generateSvg(42, 3, 5, 2, 4) =
 // The golden table in svg.rs pins the exact bytes the OLD program wrote on chain for these
 // traits (base58 sha256). The repo holds no real on-chain GumballSvg dumps, so this is the link
 // to what live legacy accounts contain: JS must reproduce every golden entry too.
-const bs58 = require("bs58");
+const bs58 = require("bs58").default || require("bs58");
 const src = fs.readFileSync(path.join(root, "programs/gumball_nft/src/svg.rs"), "utf8");
 const golden = [...src.matchAll(/\(([\d_]+), (\d+), (\d+), (\d+), (\d+), (\d+), "([1-9A-HJ-NP-Za-km-z]+)"\)/g)];
 let goldenBad = 0;

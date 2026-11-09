@@ -349,12 +349,13 @@ const NFT_FLAVORS = ["Cherry","Grape","Watermelon","Blueberry","Strawberry","Lem
 const NFT_COLORS = ["Cherry Red","Grape Purple","Melon Pink","Berry Blue","Rose Gold","Citrus Yellow","Lime Green","Tangerine","Cotton White","Midnight Black","Shimmer Silver","Rainbow"];
 const NFT_SPECIALS = ["None","None","None","None","Glitter","Double Bubble","Holographic","Crystal"];
 const NFT_RARITY = ["Common","Uncommon","Rare","Epic","Legendary"];
-const metadataCache = new Map(); // mint -> json (immutable on-chain data)
+const metadataCache = new Map(); // mint -> { json, at }; traits change on reroll_cosmetics, so entries expire
+const METADATA_TTL_MS = 5 * 60 * 1000;
 
 app.get("/api/metadata/:mint", async (req, res) => {
   try {
     const cached = metadataCache.get(req.params.mint);
-    if (cached) return res.json(cached);
+    if (cached && Date.now() - cached.at < METADATA_TTL_MS) return res.json(cached.json);
     // Negative memo: a miss used to cost two RPC calls every single time.
     if (negativeGet(req.params.mint)) return res.status(404).json({ error: "not a gumball" });
 
@@ -391,7 +392,7 @@ app.get("/api/metadata/:mint", async (req, res) => {
       external_url: "https://gumballnft-production.up.railway.app",
     };
     if (metadataCache.size > 20000) metadataCache.clear(); // crude cap
-    metadataCache.set(req.params.mint, json);
+    metadataCache.set(req.params.mint, { json, at: Date.now() });
     res.json(json);
   } catch (e) {
     res.status(500).json({ error: e.message });

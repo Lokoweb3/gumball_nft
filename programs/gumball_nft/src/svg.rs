@@ -75,9 +75,9 @@ mod tests {
 
     /// Golden fixtures for `generate_svg`.
     ///
-    /// The on-chain SVG IS the artwork — a byte that changes here changes what
-    /// every holder sees, and `reroll_cosmetics` rewrites live accounts in
-    /// place. These hashes pin the exact output of every branch (each special,
+    /// Historical: this output used to be stored on chain as the artwork; it is now the
+    /// reference that public/js/gumball-svg.js must match byte for byte, and a byte that
+    /// changes here changes what every holder sees. These hashes pin the exact output of every branch (each special,
     /// each rarity, the Legendary ring, the Holographic gradient, serial-width
     /// formatting and the modulo-wrap defence) so the generator can be
     /// optimized without altering a single rendered pixel.

@@ -74,7 +74,7 @@ SVG at all: `reveal_and_mint`, `burn_to_upgrade` and `burn_multi` create only `G
 drawn by `public/js/gumball-svg.js` (site and `/api/metadata`), proven byte-identical to the Rust
 reference renderer in `programs/gumball_nft/src/svg.rs` (test-only). Reason: the `GumballSvg` rent
 (1,412 bytes, ~0.0107 XNT) was 60% of the ~0.0179 XNT the oracle paid per mint. Balls minted
-earlier keep their legacy `GumballSvg` until it is closed with `close_burned`; nothing reads it.
+earlier keep their legacy `GumballSvg` until it is closed with `close_burned`; nothing reads it. A legacy ball's on-chain GumballSvg is frozen at its pre-upgrade picture (it is not rewritten by `reroll_cosmetics`), so third-party readers of the svg PDA may show an old image; our site and `/api/metadata` always draw from the traits.
 The text below is the history of why the SVG was split out.
 
 Burn instructions now load: 85 bytes x 5 accounts = 425 bytes. Well within heap limits.
